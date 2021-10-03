@@ -1,5 +1,7 @@
 'use strict'
 
+const { assertAsync } = require('./util')
+
 exports.open = function (test, testCommon) {
   test('test database open, no options', function (t) {
     const db = testCommon.factory()
@@ -73,6 +75,164 @@ exports.open = function (test, testCommon) {
         }).catch(t.fail.bind(t))
       })
     }).catch(t.fail.bind(t))
+  })
+
+  test('test database open and close in same tick', assertAsync.ctx(function (t) {
+    t.plan(10)
+
+    const db = testCommon.factory()
+    const order = []
+
+    db.open(assertAsync(function (err) {
+      order.push('A')
+      t.is(err && err.message, 'Database is not open', 'got open() error')
+      t.is(db.status, 'closed', 'is closed')
+    }))
+
+    t.is(db.status, 'opening', 'is opening')
+
+    // This wins from the open() call
+    db.close(assertAsync(function (err) {
+      order.push('B')
+      t.same(order, ['A', 'closed event', 'B'], 'order is correct')
+      t.ifError(err, 'no close() error')
+      t.is(db.status, 'closed', 'is closed')
+    }))
+
+    // But open() is still in control
+    t.is(db.status, 'opening', 'is still opening')
+
+    // Should not emit 'open', because close() wins
+    db.on('open', t.fail.bind(t))
+    db.on('closed', assertAsync(() => { order.push('closed event') }))
+  }))
+
+  test('test database open, close and open in same tick', assertAsync.ctx(function (t) {
+    t.plan(14)
+
+    const db = testCommon.factory()
+    const order = []
+
+    db.open(assertAsync(function (err) {
+      order.push('A')
+      t.ifError(err, 'no open() error (1)')
+      t.is(db.status, 'open', 'is open')
+    }))
+
+    t.is(db.status, 'opening', 'is opening')
+
+    // This wins from the open() call
+    db.close(assertAsync(function (err) {
+      order.push('B')
+      t.is(err && err.message, 'Database is not closed')
+      t.is(db.status, 'open', 'is open')
+    }))
+
+    t.is(db.status, 'opening', 'is still opening')
+
+    // This wins from the close() call
+    db.open(assertAsync(function (err) {
+      order.push('C')
+      t.same(order, ['A', 'B', 'open event', 'C'], 'callback order is the same as call order')
+      t.ifError(err, 'no open() error (2)')
+      t.is(db.status, 'open', 'is open')
+    }))
+
+    // Should not emit 'closed', because open() wins
+    db.on('closed', t.fail.bind(t))
+    db.on('open', assertAsync(() => { order.push('open event') }))
+
+    t.is(db.status, 'opening', 'is still opening')
+  }))
+
+  test('test database open if already open', function (t) {
+    t.plan(7)
+
+    const db = testCommon.factory()
+
+    db.open(assertAsync(function (err) {
+      t.ifError(err, 'no open() error (1)')
+      t.is(db.status, 'open', 'is open')
+
+      db.open(assertAsync(function (err) {
+        t.ifError(err, 'no open() error (2)')
+        t.is(db.status, 'open', 'is open')
+      }))
+
+      t.is(db.status, 'open', 'is open', 'not reopening')
+      db.on('open', t.fail.bind(t))
+      assertAsync.end(t)
+    }))
+
+    assertAsync.end(t)
+  })
+
+  test('test database close if already closed', function (t) {
+    t.plan(8)
+
+    const db = testCommon.factory()
+
+    db.open(function (err) {
+      t.ifError(err, 'no open() error')
+
+      db.close(assertAsync(function (err) {
+        t.ifError(err, 'no close() error (1)')
+        t.is(db.status, 'closed', 'is closed')
+
+        db.close(assertAsync(function (err) {
+          t.ifError(err, 'no close() error (2)')
+          t.is(db.status, 'closed', 'is closed')
+        }))
+
+        t.is(db.status, 'closed', 'is closed', 'not reclosing')
+        db.on('closed', t.fail.bind(t))
+        assertAsync.end(t)
+      }))
+
+      assertAsync.end(t)
+    })
+  })
+
+  test('test database close if new', assertAsync.ctx(function (t) {
+    t.plan(5)
+
+    const db = testCommon.factory()
+    const expectedStatus = testCommon.deferredOpen ? 'opening' : 'new'
+
+    t.is(db.status, expectedStatus, 'status ok')
+
+    db.close(assertAsync(function (err) {
+      t.ifError(err, 'no close() error')
+      t.is(db.status, expectedStatus, 'status unchanged')
+    }))
+
+    t.is(db.status, expectedStatus, 'status unchanged')
+    db.on('closed', t.fail.bind(t))
+  }))
+
+  test('test database close on open event', function (t) {
+    t.plan(5)
+
+    const db = testCommon.factory()
+    const order = []
+
+    db.open(function (err) {
+      order.push('A')
+      t.is(err && err.message, 'Database is not open', 'got open() error')
+      t.is(db.status, 'closed', 'is closed')
+    })
+
+    db.on('open', function () {
+      // This wins from the (still in progress) open() call
+      db.close(function (err) {
+        order.push('B')
+        t.same(order, ['A', 'closed event', 'B'], 'order is correct')
+        t.ifError(err, 'no close() error')
+        t.is(db.status, 'closed', 'is closed')
+      })
+    })
+
+    db.on('closed', () => { order.push('closed event') })
   })
 }
 

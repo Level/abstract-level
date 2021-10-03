@@ -215,6 +215,111 @@ test('test close() extensibility when new', function (t) {
   t.equal(spy.callCount, 0, 'did not get _close() call')
 })
 
+test('test open(), close(), open() with twice failed open', function (t) {
+  t.plan(6)
+
+  const db = testCommon.factory()
+  const order = []
+
+  let opens = 0
+
+  db.on('open', t.fail.bind(t))
+  db.on('closed', t.fail.bind(t))
+
+  db._open = function (options, callback) {
+    t.pass('called')
+    this._nextTick(callback, new Error('test' + (++opens)))
+  }
+
+  db.open(function (err) {
+    t.is(err && err.message, 'test1')
+    order.push('A')
+  })
+
+  db.close(function (err) {
+    t.ifError(err)
+    order.push('B')
+  })
+
+  db.open(function (err) {
+    t.is(err && err.message, 'test2')
+    order.push('C')
+    t.same(order, ['A', 'B', 'C'], 'order is ok')
+  })
+})
+
+test('test open(), close(), open() with first failed open', function (t) {
+  t.plan(9)
+
+  const db = testCommon.factory()
+  const order = []
+
+  let opens = 0
+
+  db.on('open', () => { order.push('open event') })
+  db.on('closed', t.fail.bind(t))
+
+  db._open = function (options, callback) {
+    t.pass('called')
+    this._nextTick(callback, opens++ ? null : new Error('test'))
+  }
+
+  db.open(function (err) {
+    t.ifError(err)
+    t.is(db.status, 'open')
+    order.push('A')
+  })
+
+  db.close(function (err) {
+    t.is(err && err.message, 'Database is not closed')
+    t.is(db.status, 'open')
+    order.push('B')
+  })
+
+  db.open(function (err) {
+    t.ifError(err)
+    t.is(db.status, 'open')
+    order.push('C')
+    t.same(order, ['A', 'B', 'open event', 'C'], 'order is ok')
+  })
+})
+
+test('test open(), close(), open() with second failed open', function (t) {
+  t.plan(9)
+
+  const db = testCommon.factory()
+  const order = []
+
+  let opens = 0
+
+  db.on('open', t.fail.bind(t))
+  db.on('closed', t.fail.bind(t))
+
+  db._open = function (options, callback) {
+    t.pass('called')
+    this._nextTick(callback, opens++ ? new Error('test') : null)
+  }
+
+  db.open(function (err) {
+    t.is(err && err.message, 'Database is not open')
+    t.is(db.status, 'closed')
+    order.push('A')
+  })
+
+  db.close(function (err) {
+    t.ifError(err)
+    t.is(db.status, 'closed')
+    order.push('B')
+  })
+
+  db.open(function (err) {
+    t.is(err && err.message, 'test')
+    t.is(db.status, 'closed')
+    order.push('C')
+    t.same(order, ['A', 'B', 'C'], 'order is ok')
+  })
+})
+
 test('test get() extensibility', function (t) {
   const spy = sinon.spy()
   const expectedCb = function () {}

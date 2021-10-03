@@ -11,6 +11,7 @@ const { getCallback, getOptions } = require('./lib/common')
 const hasOwnProperty = Object.prototype.hasOwnProperty
 const rangeOptions = ['lt', 'lte', 'gt', 'gte']
 const kPromise = Symbol('promise')
+const kLanded = Symbol('landed')
 
 function AbstractLevelDOWN (manifest) {
   EventEmitter.call(this)
@@ -34,22 +35,42 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
   options.createIfMissing = options.createIfMissing !== false
   options.errorIfExists = !!options.errorIfExists
 
+  const maybeOpened = (err) => {
+    if (this.status === 'closing' || this.status === 'opening') {
+      // Wait until pending state changes are done
+      this.once(kLanded, err ? () => maybeOpened(err) : maybeOpened)
+    } else if (this.status !== 'open') {
+      callback(err || new Error('Database is not open'))
+    } else {
+      callback()
+    }
+  }
+
   if (this.status === 'new' || this.status === 'closed') {
     const oldStatus = this.status
+
     this.status = 'opening'
+    this.emit('opening')
+
     this._open(options, (err) => {
       if (err) {
         this.status = oldStatus
-        return callback(err)
+        this.emit(kLanded)
+        return maybeOpened(err)
       }
+
       this.status = 'open'
-      callback()
+      this.emit(kLanded)
+
+      // Only emit public event if pending state changes are done
+      if (this.status === 'open') this.emit('open')
+
+      maybeOpened()
     })
   } else if (this.status === 'open') {
-    this._nextTick(callback)
+    this._nextTick(maybeOpened)
   } else {
-    // Cannot handle yet for lack of events
-    this._nextTick(callback, new Error('Database is not open'))
+    this.once(kLanded, () => this.open(options, callback))
   }
 
   return callback[kPromise]
@@ -62,21 +83,40 @@ AbstractLevelDOWN.prototype._open = function (options, callback) {
 AbstractLevelDOWN.prototype.close = function (callback) {
   callback = fromCallback(callback, kPromise)
 
+  const maybeClosed = (err) => {
+    if (this.status === 'opening' || this.status === 'closing') {
+      // Wait until pending state changes are done
+      this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
+    } else if (this.status !== 'closed' && this.status !== 'new') {
+      callback(err || new Error('Database is not closed'))
+    } else {
+      callback()
+    }
+  }
+
   if (this.status === 'open') {
     this.status = 'closing'
+    this.emit('closing')
+
     this._close((err) => {
       if (err) {
         this.status = 'open'
-        return callback(err)
+        this.emit(kLanded)
+        return maybeClosed(err)
       }
+
       this.status = 'closed'
-      callback()
+      this.emit(kLanded)
+
+      // Only emit public event if pending state changes are done
+      if (this.status === 'closed') this.emit('closed')
+
+      maybeClosed()
     })
   } else if (this.status === 'closed' || this.status === 'new') {
-    this._nextTick(callback)
+    this._nextTick(maybeClosed)
   } else {
-    // Cannot handle yet for lack of events
-    this._nextTick(callback, new Error('Database is not open'))
+    this.once(kLanded, () => this.close(callback))
   }
 
   return callback[kPromise]

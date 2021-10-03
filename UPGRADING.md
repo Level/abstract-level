@@ -43,7 +43,7 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 All methods that take a callback now also support promises. They return a promise if no callback is provided, the same as `levelup`.
 
-The prototype of `require('abstract-leveldown').AbstractLevelDOWN` has changed. It now inherits from `require('events').EventEmitter`.
+The prototype of `require('abstract-leveldown').AbstractLevelDOWN` has changed. It now inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and emits the same events as `levelup` would (with the exception of the 'ready' alias that `levelup` has for the 'open' event - `abstract-leveldown` only emits 'open').
 
 On any operation, `abstract-leveldown` now checks if it's open. If not, it will either throw an error (if the relevant API is synchronous) or asynchronously yield an error. For example:
 
