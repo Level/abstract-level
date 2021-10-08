@@ -154,7 +154,7 @@ exports.args = function (test, testCommon) {
     t.end()
   })
 
-  testCommon.serialize && test('test serialize object', function (t) {
+  testCommon.supports.serialize && test('test serialize object', function (t) {
     const batch = db.batch()
     const ops = collectBatchOps(batch)
 
@@ -218,7 +218,7 @@ exports.batch = function (test, testCommon) {
       batch.write(function (err) {
         t.error(err)
 
-        const opts = testCommon.encodings
+        const opts = db.supports.encodings
           ? { keyEncoding: 'utf8', valueEncoding: 'utf8' }
           : { keyAsBuffer: false, valueAsBuffer: false }
 
@@ -250,7 +250,7 @@ exports.batch = function (test, testCommon) {
         .put('2', 'two')
         .put('3', 'three')
         .write().then(function () {
-          const opts = testCommon.encodings
+          const opts = db.supports.encodings
             ? { keyEncoding: 'utf8', valueEncoding: 'utf8' }
             : { keyAsBuffer: false, valueAsBuffer: false }
 

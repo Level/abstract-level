@@ -15,7 +15,7 @@ function makePutGetDelSuccessfulTest (test, testCommon, type, key, value, expect
 
         let result
 
-        if (!testCommon.encodings) {
+        if (!db.supports.encodings) {
           t.ok(Buffer.isBuffer(_value), 'is a Buffer')
           result = _value
         } else {
@@ -70,7 +70,7 @@ exports.nonErrorKeys = function (test, testCommon) {
     , 'foo'
   )
 
-  if (testCommon.bufferKeys) {
+  if (testCommon.supports.bufferKeys) {
     makePutGetDelSuccessfulTest(test, testCommon, 'Buffer key', testBuffer, 'foo')
   }
 

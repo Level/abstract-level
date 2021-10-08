@@ -13,6 +13,9 @@ module.exports = function (test, testCommon) {
     t.is(db.supports.clear, true)
     t.is(db.supports.getMany, true)
 
+    testCommon.supports = db.supports
+    t.ok(testCommon.supports, 'can be accessed via testCommon')
+
     db.close(t.end.bind(t))
   })
 }

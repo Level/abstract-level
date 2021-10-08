@@ -9,7 +9,6 @@ const AbstractChainedBatch = require('../').AbstractChainedBatch
 
 const testCommon = require('./common')({
   test: test,
-  clear: true,
   factory: function () {
     return new AbstractLevelDOWN()
   }

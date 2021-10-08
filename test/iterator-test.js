@@ -102,7 +102,7 @@ exports.iterator = function (test, testCommon) {
       const fn = function (err, key, value) {
         t.error(err)
         if (key && value) {
-          if (testCommon.encodings) {
+          if (db.supports.encodings) {
             t.is(typeof key, 'string', 'key argument is a string')
             t.is(typeof value, 'string', 'value argument is a string')
           } else {

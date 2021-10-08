@@ -40,7 +40,7 @@ exports.get = function (test, testCommon) {
 
         let result
 
-        if (!testCommon.encodings) {
+        if (!db.supports.encodings) {
           t.isNot(typeof value, 'string', 'should not be string by default')
 
           if (isTypedArray(value)) {
@@ -64,7 +64,7 @@ exports.get = function (test, testCommon) {
 
           let result
 
-          if (!testCommon.encodings) {
+          if (!db.supports.encodings) {
             t.ok(typeof value !== 'string', 'should not be string by default')
 
             if (isTypedArray(value)) {
@@ -105,7 +105,7 @@ exports.get = function (test, testCommon) {
           t.ok(err, 'should error')
           t.ok(verifyNotFoundError(err), 'should have correct error message')
 
-          const opts = testCommon.encodings ? { valueEncoding: 'utf8' } : { asBuffer: false }
+          const opts = db.supports.encodings ? { valueEncoding: 'utf8' } : { asBuffer: false }
 
           db.get('promises', opts).then(function (value) {
             t.is(value, 'yes', 'got value with string options')

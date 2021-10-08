@@ -1,5 +1,8 @@
 'use strict'
 
+const kNone = Symbol('none')
+const kProtected = Symbol('protected')
+
 function testCommon (options) {
   const factory = options.factory
   const test = options.test
@@ -16,28 +19,65 @@ function testCommon (options) {
     throw new Error('The legacyRange option has been removed')
   }
 
-  return {
+  let supports = kNone
+
+  return protect(options, {
     test: test,
     factory: factory,
 
-    // TODO (next major): use db.supports instead
-    bufferKeys: options.bufferKeys !== false,
-    createIfMissing: options.createIfMissing !== false,
-    errorIfExists: options.errorIfExists !== false,
-    snapshots: options.snapshots !== false,
-    seek: options.seek !== false,
+    // Expose manifest through testCommon to more easily skip tests based on
+    // supported features. Use a getter to only create a db once. Implicitly
+    // we also test that the manifest doesn't change after the db constructor.
+    get supports () {
+      if (supports === kNone) this.supports = this.factory().supports
+      return supports
+    },
 
-    // Support running test suite on a levelup db. All options below this line
-    // are undocumented and should not be used by abstract-leveldown db's.
-    serialize: options.serialize !== false,
-
-    // If true, the test suite assumes a default encoding of utf8 (like levelup)
-    // and that operations return strings rather than buffers by default.
-    encodings: !!options.encodings,
-
-    deferredOpen: !!options.deferredOpen,
-    streams: !!options.streams
-  }
+    // Prefer assigning early via manifest-test unless test.only() is used
+    // in which case we create the manifest on-demand. Copy it to be safe.
+    set supports (value) {
+      if (supports === kNone) supports = JSON.parse(JSON.stringify(value))
+    }
+  })
 }
 
 module.exports = testCommon
+
+// Throw if test suite options are used instead of db.supports
+function protect (options, testCommon) {
+  const legacyOptions = [
+    'bufferKeys',
+    'createIfMissing',
+    'errorIfExists',
+    'snapshots',
+    'seek',
+    'serialize',
+    'encodings',
+    'deferredOpen',
+    'streams',
+    'clear',
+    'getMany'
+  ]
+
+  Object.defineProperty(testCommon, kProtected, {
+    value: true
+  })
+
+  for (const k of legacyOptions) {
+    // Options may be a testCommon instance
+    if (!options[kProtected] && k in options) {
+      throw new Error(`The test suite option '${k}' has moved to db.supports`)
+    }
+
+    Object.defineProperty(testCommon, k, {
+      get () {
+        throw new Error(`The test suite option '${k}' has moved to db.supports`)
+      },
+      set () {
+        throw new Error(`The test suite option '${k}' has moved to db.supports`)
+      }
+    })
+  }
+
+  return testCommon
+}

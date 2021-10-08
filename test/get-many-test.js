@@ -91,7 +91,7 @@ exports.getMany = function (test, testCommon) {
         const value = values[0]
         let result
 
-        if (!testCommon.encodings) {
+        if (!db.supports.encodings) {
           t.isNot(typeof value, 'string', 'should not be string by default')
 
           if (isTypedArray(value)) {

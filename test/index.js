@@ -11,11 +11,11 @@ function suite (options) {
   require('./open-test').all(test, testCommon)
   require('./close-test').all(test, testCommon)
 
-  if (testCommon.createIfMissing) {
+  if (testCommon.supports.createIfMissing) {
     require('./open-create-if-missing-test').all(test, testCommon)
   }
 
-  if (testCommon.errorIfExists) {
+  if (testCommon.supports.errorIfExists) {
     require('./open-error-if-exists-test').all(test, testCommon)
   }
 
@@ -32,11 +32,11 @@ function suite (options) {
   require('./iterator-range-test').all(test, testCommon)
   require('./async-iterator-test').all(test, testCommon)
 
-  if (testCommon.seek) {
+  if (testCommon.supports.seek) {
     require('./iterator-seek-test').all(test, testCommon)
   }
 
-  if (testCommon.snapshots) {
+  if (testCommon.supports.snapshots) {
     require('./iterator-snapshot-test').all(test, testCommon)
   } else {
     require('./iterator-no-snapshot-test').all(test, testCommon)

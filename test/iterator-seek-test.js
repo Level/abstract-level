@@ -115,7 +115,7 @@ exports.seek = function (test, testCommon) {
     })
   })
 
-  if (testCommon.bufferKeys) {
+  if (testCommon.supports.bufferKeys) {
     make('iterator#seek() to buffer target', function (db, t, done) {
       const ite = db.iterator()
       ite.seek(Buffer.from('two'))

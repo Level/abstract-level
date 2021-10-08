@@ -87,8 +87,10 @@ LevelDOWN.prototype.approximateSize = function (start, end, callback) {
 
 ### Changes to test suite
 
+- Options to skip tests have been removed in favor of `db.supports`
 - Support of `db.clear()` and `db.getMany()` is now mandatory
 - The `setUp` and `tearDown` functions have been removed from the test suite and `suite.common()`.
+- Added ability to access manifests via `testCommon.supports`, by lazily copying it from `testCommon.factory().supports`. This requires that the manifest does not change during the lifetime of a `db`.
 
 ## 7.0.0
 

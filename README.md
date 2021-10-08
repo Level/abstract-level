@@ -565,7 +565,7 @@ suite({
 })
 ```
 
-This is the most minimal setup. The `test` option _must_ be a function that is API-compatible with `tape`. The `factory` option _must_ be a function that returns a unique and isolated database instance. The factory will be called many times by the test suite.
+The `test` option _must_ be a function that is API-compatible with `tape`. The `factory` option _must_ be a function that returns a unique and isolated database instance. The factory will be called many times by the test suite.
 
 If your implementation is disk-based we recommend using [`tempy`](https://github.com/sindresorhus/tempy) (or similar) to create unique temporary directories. Your setup could look something like:
 
@@ -585,25 +585,20 @@ suite({
 
 ### Excluding tests
 
-As not every implementation can be fully compliant due to limitations of its underlying storage, some tests may be skipped. For example, to skip snapshot tests:
+As not every implementation can be fully compliant due to limitations of its underlying storage, some tests may be skipped. This must be done via `db.supports`. For example, to skip snapshot tests:
 
 ```js
-suite({
-  // ..
-  snapshots: false
-})
+const { AbstractLevelDOWN } = require('abstract-leveldown')
+
+// Constructor
+function MyLevelDOWN () {
+  AbstractLevelDOWN.call(this, {
+    snapshots: false
+  })
+}
 ```
 
-This also serves as a signal to users of your implementation. The following options are available:
-
-- `bufferKeys`: set to `false` if binary keys are not supported by the underlying storage
-- `seek`: set to `false` if your `iterator` does not implement `_seek`
-- `snapshots`: set to `false` if any of the following is true:
-  - Reads don't operate on a [snapshot](#iterator)
-  - Snapshots are created asynchronously
-- `createIfMissing` and `errorIfExists`: set to `false` if `db._open()` does not support these options.
-
-This metadata will be moved to manifests (`db.supports`) in the future.
+This also serves as a signal to users of your implementation.
 
 ### Reusing `testCommon`
 
@@ -624,7 +619,7 @@ const testCommon = suite.common({
 suite(testCommon)
 ```
 
-The `testCommon` object will have all the properties describe above: `test`, `factory` and the skip options. You might use it like so:
+The `testCommon` object will have the `test` and `factory` properties described above, as well as a convenience `supports` property that is lazily copied from a `factory().supports`. You might use it like so:
 
 ```js
 test('custom test', function (t) {
@@ -632,7 +627,7 @@ test('custom test', function (t) {
   // ..
 })
 
-test('another custom test', function (t) {
+testCommon.supports.seek && test('another test', function (t) {
   const db = testCommon.factory()
   // ..
 })

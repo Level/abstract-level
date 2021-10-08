@@ -22,7 +22,8 @@ function AbstractLevelDOWN (manifest) {
     promises: true,
     clear: true,
     getMany: true,
-    idempotentOpen: true
+    idempotentOpen: true,
+    serialize: true
   })
 }
 

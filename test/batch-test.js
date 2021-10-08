@@ -219,7 +219,7 @@ exports.batch = function (test, testCommon) {
         t.error(err)
         let result
 
-        if (testCommon.encodings) {
+        if (db.supports.encodings) {
           t.is(typeof value, 'string')
           result = value
         } else if (isTypedArray(value)) {
@@ -240,7 +240,7 @@ exports.batch = function (test, testCommon) {
     await db.open()
     await db.batch([{ type: 'put', key: 'foo', value: 'bar' }])
 
-    const opts = testCommon.encodings
+    const opts = db.supports.encodings
       ? { valueEncoding: 'utf8' }
       : { asBuffer: false }
 
@@ -265,7 +265,7 @@ exports.batch = function (test, testCommon) {
       db.get('foobatch1', function (err, value) {
         t.error(err)
         let result
-        if (testCommon.encodings) {
+        if (db.supports.encodings) {
           t.is(typeof value, 'string')
           result = value
         } else if (isTypedArray(value)) {
@@ -288,7 +288,7 @@ exports.batch = function (test, testCommon) {
       db.get('foobatch3', function (err, value) {
         t.error(err)
         let result
-        if (testCommon.encodings) {
+        if (db.supports.encodings) {
           t.is(typeof value, 'string')
           result = value
         } else if (isTypedArray(value)) {

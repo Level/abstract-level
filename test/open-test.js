@@ -77,7 +77,7 @@ exports.open = function (test, testCommon) {
     }).catch(t.fail.bind(t))
   })
 
-  test('test database open and close in same tick', assertAsync.ctx(function (t) {
+  testCommon.supports.idempotentOpen && test('test database open and close in same tick', assertAsync.ctx(function (t) {
     t.plan(10)
 
     const db = testCommon.factory()
@@ -107,7 +107,7 @@ exports.open = function (test, testCommon) {
     db.on('closed', assertAsync(() => { order.push('closed event') }))
   }))
 
-  test('test database open, close and open in same tick', assertAsync.ctx(function (t) {
+  testCommon.supports.idempotentOpen && test('test database open, close and open in same tick', assertAsync.ctx(function (t) {
     t.plan(14)
 
     const db = testCommon.factory()
@@ -213,7 +213,7 @@ exports.open = function (test, testCommon) {
     }
   }))
 
-  test('test database close on open event', function (t) {
+  testCommon.supports.idempotentOpen && test('test database close on open event', function (t) {
     t.plan(5)
 
     const db = testCommon.factory()

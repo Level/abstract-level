@@ -31,7 +31,7 @@ exports.args = function (test, testCommon) {
 exports.clear = function (test, testCommon) {
   makeTest('string', ['a', 'b'])
 
-  if (testCommon.bufferKeys) {
+  if (testCommon.supports.bufferKeys) {
     makeTest('buffer', [Buffer.from('a'), Buffer.from('b')])
     makeTest('mixed', [Buffer.from('a'), 'b'])
 
