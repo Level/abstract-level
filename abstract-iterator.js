@@ -1,12 +1,19 @@
 'use strict'
 
 const { fromCallback } = require('catering')
+
 const kPromise = Symbol('promise')
+const kFinishEnd = Symbol('finishEnd')
+const kEndFinished = Symbol('endFinished')
+const kEndCallbacks = Symbol('endCallbacks')
 
 function AbstractIterator (db) {
   if (typeof db !== 'object' || db === null) {
     throw new TypeError('First argument must be an abstract-leveldown compliant store')
   }
+
+  this[kEndFinished] = false
+  this[kEndCallbacks] = []
 
   this.db = db
   this._ended = false
@@ -47,6 +54,7 @@ AbstractIterator.prototype.next = function (callback) {
   this._nexting = true
   this._next((err, ...rest) => {
     this._nexting = false
+    if (this[kEndCallbacks].length > 0) this._end(this[kFinishEnd].bind(this))
     callback(err, ...rest)
   })
 
@@ -79,26 +87,43 @@ AbstractIterator.prototype._seek = function (target) {}
 AbstractIterator.prototype.end = function (callback) {
   callback = fromCallback(callback, kPromise)
 
-  // Allow status to be 'closing' if db ends its iterators on
-  // close. See multileveldown.
-  if (!this.db.isOperational() && this.db.status !== 'closing') {
+  if (this._ended && !this[kEndFinished]) {
+    this[kEndCallbacks].push(callback)
+  } else if (this._ended) {
+    this._nextTick(callback)
+  } else if (!this.db.isOperational() && this.db.status !== 'closing') {
     this._nextTick(callback, new Error('Database is not open'))
-    return callback[kPromise]
-  }
+  } else {
+    this._ended = true
+    this[kEndCallbacks].push(callback)
 
-  if (this._ended) {
-    this._nextTick(callback, new Error('end() already called on iterator'))
-    return callback[kPromise]
+    if (!this._nexting) {
+      this._end(this[kFinishEnd].bind(this))
+    }
   }
-
-  this._ended = true
-  this._end(callback)
 
   return callback[kPromise]
 }
 
 AbstractIterator.prototype._end = function (callback) {
   this._nextTick(callback)
+}
+
+AbstractIterator.prototype[kFinishEnd] = function (err) {
+  this[kEndFinished] = true
+  this.db.detachIterator(this)
+
+  const callbacks = this[kEndCallbacks]
+  this[kEndCallbacks] = []
+
+  for (const cb of callbacks) {
+    cb(err)
+  }
+
+  /* istanbul ignore if: assertion */
+  if (this[kEndCallbacks].length > 0) {
+    throw new Error('Expected no further end() calls')
+  }
 }
 
 AbstractIterator.prototype[Symbol.asyncIterator] = async function * () {

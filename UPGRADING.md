@@ -41,7 +41,7 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 ### Increased API parity with `levelup`
 
-All methods that take a callback now also support promises. They return a promise if no callback is provided, the same as `levelup`.
+All methods that take a callback now also support promises. They return a promise if no callback is provided, the same as `levelup`. Implementations that override public (non-underscored) methods must do the same.
 
 The prototype of `require('abstract-leveldown').AbstractLevelDOWN` now inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and emits the same events as `levelup` would (with the exception of the 'ready' alias that `levelup` has for the 'open' event - `abstract-leveldown` only emits 'open').
 
@@ -78,14 +78,18 @@ Implementations that have additional methods, like `leveldown` that has an `appr
 ```js
 LevelDOWN.prototype.approximateSize = function (start, end, callback) {
   if (!this.isOperational()) {
-    throw new Error('Database is not open')
+    return this._nextTick(callback, new Error('Database is not open'))
   }
 
   // ...
 }
 ```
 
-### Changes to test suite
+### Ending iterators is idempotent
+
+On `db.close()`, non-ended iterators are automatically ended. This may be a breaking change but only if an implementation has (at their own risk) overridden the public `end()` method, because `end()` is now idempotent rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, ending and thus closing will wait for that.
+
+### Breaking changes to test suite
 
 - Options to skip tests have been removed in favor of `db.supports`
 - Support of `db.clear()` and `db.getMany()` is now mandatory

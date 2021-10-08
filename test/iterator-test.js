@@ -26,17 +26,15 @@ exports.args = function (test, testCommon) {
 }
 
 exports.sequence = function (test, testCommon) {
-  test('test twice iterator#end() callback with error', function (t) {
+  test('test twice iterator#end() is idempotent', function (t) {
     const iterator = db.iterator()
     iterator.end(function (err) {
       t.error(err)
 
       let async = false
 
-      iterator.end(function (err2) {
-        t.ok(err2, 'returned error')
-        t.is(err2.name, 'Error', 'correct error')
-        t.is(err2.message, 'end() already called on iterator')
+      iterator.end(function (err) {
+        t.error(err)
         t.ok(async, 'callback is asynchronous')
         t.end()
       })

@@ -12,9 +12,13 @@ const hasOwnProperty = Object.prototype.hasOwnProperty
 const rangeOptions = ['lt', 'lte', 'gt', 'gte']
 const kPromise = Symbol('promise')
 const kLanded = Symbol('landed')
+const kIterators = Symbol('iterators')
+const kEndIterators = Symbol('endIterators')
 
 function AbstractLevelDOWN (manifest) {
   EventEmitter.call(this)
+
+  this[kIterators] = new Set()
 
   this.status = 'closed'
   this.supports = supports(manifest, {
@@ -100,20 +104,27 @@ AbstractLevelDOWN.prototype.close = function (callback) {
     this.status = 'closing'
     this.emit('closing')
 
-    this._close((err) => {
-      if (err) {
-        this.status = 'open'
-        this.emit(kLanded)
-        return maybeClosed(err)
-      }
-
-      this.status = 'closed'
+    const cancel = (err) => {
+      this.status = 'open'
       this.emit(kLanded)
+      maybeClosed(err)
+    }
 
-      // Only emit public event if pending state changes are done
-      if (this.status === 'closed') this.emit('closed')
+    // TODO: "close" chained batches as well
+    this[kEndIterators]((err) => {
+      if (err) return cancel(err)
 
-      maybeClosed()
+      this._close((err) => {
+        if (err) return cancel(err)
+
+        this.status = 'closed'
+        this.emit(kLanded)
+
+        // Only emit public event if pending state changes are done
+        if (this.status === 'closed') this.emit('closed')
+
+        maybeClosed()
+      })
     })
   } else if (this.status === 'closed') {
     this._nextTick(maybeClosed)
@@ -122,6 +133,32 @@ AbstractLevelDOWN.prototype.close = function (callback) {
   }
 
   return callback[kPromise]
+}
+
+AbstractLevelDOWN.prototype[kEndIterators] = function (callback) {
+  // No need to dezalgo this internal method unless an error happens
+  if (this[kIterators].size === 0) return callback()
+
+  let pending = this[kIterators].size
+  let error = null
+
+  const next = (err) => {
+    // TODO: aggregate
+    error = error || err
+
+    if (--pending === 0) {
+      /* istanbul ignore if: assertion */
+      if (this[kIterators].size > 0) {
+        throw new Error('Expected cleanup of iterators')
+      }
+
+      callback(error)
+    }
+  }
+
+  for (const iterator of this[kIterators]) {
+    iterator.end(next)
+  }
 }
 
 AbstractLevelDOWN.prototype._close = function (callback) {
@@ -416,11 +453,18 @@ AbstractLevelDOWN.prototype.iterator = function (options) {
   if (!this.isOperational()) throw new Error('Database is not open')
   if (typeof options !== 'object' || options === null) options = {}
   options = this._setupIteratorOptions(options)
-  return this._iterator(options)
+  const iterator = this._iterator(options)
+  this[kIterators].add(iterator)
+  return iterator
 }
 
 AbstractLevelDOWN.prototype._iterator = function (options) {
   return new AbstractIterator(this)
+}
+
+// Undocumented and internal for now, may get removed at any time
+AbstractLevelDOWN.prototype.detachIterator = function (iterator) {
+  this[kIterators].delete(iterator)
 }
 
 AbstractLevelDOWN.prototype._chainedBatch = function () {

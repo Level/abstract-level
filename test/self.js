@@ -690,7 +690,8 @@ test('test AbstractChainedBatch#clear() extensibility', function (t) {
 })
 
 test('test iterator() extensibility', function (t) {
-  const spy = sinon.spy()
+  const TestIterator = implement(AbstractIterator)
+  const spy = sinon.spy(function () { return new TestIterator(this) })
   const expectedOptions = {
     options: 1,
     reverse: false,
@@ -751,7 +752,7 @@ test('test AbstractIterator#end() extensibility', function (t) {
   t.equal(spy.callCount, 1, 'got _end() call')
   t.equal(spy.getCall(0).thisValue, test, '`this` on _end() was correct')
   t.equal(spy.getCall(0).args.length, 1, 'got one arguments')
-  t.equal(spy.getCall(0).args[0], expectedCb, 'got expected cb argument')
+  t.is(typeof spy.getCall(0).args[0], 'function', 'got cb argument')
   t.end()
 })
 
