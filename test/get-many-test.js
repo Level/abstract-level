@@ -214,10 +214,10 @@ exports.getMany = function (test, testCommon) {
       for (const open of [true, false]) {
         const db = testCommon.factory()
 
-        t.is(db.status, testCommon.deferredOpen ? 'opening' : 'new')
+        t.is(db.status, db.supports.deferredOpen ? 'opening' : 'closed')
 
         // Must be true if db supports deferredOpen
-        const operational = testCommon.deferredOpen || db.isOperational()
+        const operational = db.supports.deferredOpen || db.isOperational()
 
         db.getMany(keys, assertAsync(function (err, values) {
           if (operational) {
@@ -249,7 +249,7 @@ exports.getMany = function (test, testCommon) {
       db.open(assertAsync(t.error.bind(t), 'open'))
 
       // Must be true if db supports deferredOpen
-      const operational = testCommon.deferredOpen || db.isOperational()
+      const operational = db.supports.deferredOpen || db.isOperational()
 
       db.getMany(keys, assertAsync(function (err, values) {
         if (operational) {

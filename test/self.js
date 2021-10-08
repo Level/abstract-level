@@ -131,7 +131,7 @@ test('async generator', async function (t) {
 test('test core extensibility', function (t) {
   const Test = implement(AbstractLevelDOWN)
   const test = new Test()
-  t.equal(test.status, 'new', 'status is new')
+  t.equal(test.status, 'closed', 'status is closed')
   t.end()
 })
 
@@ -1115,7 +1115,7 @@ test('.status', function (t) {
     const Test = implement(AbstractLevelDOWN)
     const test = new Test('foobar')
 
-    t.equal(test.status, 'new')
+    t.equal(test.status, 'closed')
 
     test.open(function (err) {
       t.error(err)
@@ -1142,7 +1142,7 @@ test('.status', function (t) {
 
     test.open(function (err) {
       t.ok(err)
-      t.equal(test.status, 'new')
+      t.equal(test.status, 'closed')
       t.end()
     })
   })

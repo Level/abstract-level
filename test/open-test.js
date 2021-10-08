@@ -197,17 +197,20 @@ exports.open = function (test, testCommon) {
     t.plan(5)
 
     const db = testCommon.factory()
-    const expectedStatus = testCommon.deferredOpen ? 'opening' : 'new'
+    const expectedStatus = db.supports.deferredOpen ? 'opening' : 'closed'
 
     t.is(db.status, expectedStatus, 'status ok')
 
     db.close(assertAsync(function (err) {
       t.ifError(err, 'no close() error')
-      t.is(db.status, expectedStatus, 'status unchanged')
+      t.is(db.status, 'closed', 'status ok')
     }))
 
     t.is(db.status, expectedStatus, 'status unchanged')
-    db.on('closed', t.fail.bind(t))
+
+    if (!db.supports.deferredOpen) {
+      db.on('closed', t.fail.bind(t, 'should not emit closed'))
+    }
   }))
 
   test('test database close on open event', function (t) {

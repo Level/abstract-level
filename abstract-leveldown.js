@@ -16,12 +16,13 @@ const kLanded = Symbol('landed')
 function AbstractLevelDOWN (manifest) {
   EventEmitter.call(this)
 
-  this.status = 'new'
+  this.status = 'closed'
   this.supports = supports(manifest, {
     status: true,
     promises: true,
     clear: true,
-    getMany: true
+    getMany: true,
+    idempotentOpen: true
   })
 }
 
@@ -46,7 +47,7 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
     }
   }
 
-  if (this.status === 'new' || this.status === 'closed') {
+  if (this.status === 'closed') {
     const oldStatus = this.status
 
     this.status = 'opening'
@@ -87,7 +88,7 @@ AbstractLevelDOWN.prototype.close = function (callback) {
     if (this.status === 'opening' || this.status === 'closing') {
       // Wait until pending state changes are done
       this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
-    } else if (this.status !== 'closed' && this.status !== 'new') {
+    } else if (this.status !== 'closed') {
       callback(err || new Error('Database is not closed'))
     } else {
       callback()
@@ -113,7 +114,7 @@ AbstractLevelDOWN.prototype.close = function (callback) {
 
       maybeClosed()
     })
-  } else if (this.status === 'closed' || this.status === 'new') {
+  } else if (this.status === 'closed') {
     this._nextTick(maybeClosed)
   } else {
     this.once(kLanded, () => this.close(callback))
