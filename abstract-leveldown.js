@@ -12,13 +12,13 @@ const hasOwnProperty = Object.prototype.hasOwnProperty
 const rangeOptions = ['lt', 'lte', 'gt', 'gte']
 const kPromise = Symbol('promise')
 const kLanded = Symbol('landed')
-const kIterators = Symbol('iterators')
-const kEndIterators = Symbol('endIterators')
+const kResources = Symbol('resources')
+const kCloseResources = Symbol('closeResources')
 
 function AbstractLevelDOWN (manifest) {
   EventEmitter.call(this)
 
-  this[kIterators] = new Set()
+  this[kResources] = new Set()
 
   this.status = 'closed'
   this.supports = supports(manifest, {
@@ -110,8 +110,7 @@ AbstractLevelDOWN.prototype.close = function (callback) {
       maybeClosed(err)
     }
 
-    // TODO: "close" chained batches as well
-    this[kEndIterators]((err) => {
+    this[kCloseResources]((err) => {
       if (err) return cancel(err)
 
       this._close((err) => {
@@ -135,11 +134,11 @@ AbstractLevelDOWN.prototype.close = function (callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype[kEndIterators] = function (callback) {
+AbstractLevelDOWN.prototype[kCloseResources] = function (callback) {
   // No need to dezalgo this internal method unless an error happens
-  if (this[kIterators].size === 0) return callback()
+  if (this[kResources].size === 0) return callback()
 
-  let pending = this[kIterators].size
+  let pending = this[kResources].size
   let error = null
 
   const next = (err) => {
@@ -147,18 +146,15 @@ AbstractLevelDOWN.prototype[kEndIterators] = function (callback) {
     error = error || err
 
     if (--pending === 0) {
-      /* istanbul ignore if: assertion */
-      if (this[kIterators].size > 0) {
-        throw new Error('Expected cleanup of iterators')
-      }
-
       callback(error)
     }
   }
 
-  for (const iterator of this[kIterators]) {
-    iterator.end(next)
+  for (const resource of this[kResources]) {
+    resource.close(next)
   }
+
+  this[kResources].clear()
 }
 
 AbstractLevelDOWN.prototype._close = function (callback) {
@@ -290,9 +286,12 @@ AbstractLevelDOWN.prototype._del = function (key, options, callback) {
 }
 
 AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
+  // TODO: deprecate in favor of an explicit db.chainedBatch() method
   if (!arguments.length) {
     if (!this.isOperational()) throw new Error('Database is not open')
-    return this._chainedBatch()
+    const batch = this._chainedBatch()
+    this.attachResource(batch)
+    return batch
   }
 
   if (typeof array === 'function') callback = array
@@ -454,7 +453,7 @@ AbstractLevelDOWN.prototype.iterator = function (options) {
   if (typeof options !== 'object' || options === null) options = {}
   options = this._setupIteratorOptions(options)
   const iterator = this._iterator(options)
-  this[kIterators].add(iterator)
+  this.attachResource(iterator)
   return iterator
 }
 
@@ -462,9 +461,14 @@ AbstractLevelDOWN.prototype._iterator = function (options) {
   return new AbstractIterator(this)
 }
 
-// Undocumented and internal for now, may get removed at any time
-AbstractLevelDOWN.prototype.detachIterator = function (iterator) {
-  this[kIterators].delete(iterator)
+// TODO: docs
+AbstractLevelDOWN.prototype.attachResource = function (resource) {
+  this[kResources].add(resource)
+}
+
+// TODO: docs
+AbstractLevelDOWN.prototype.detachResource = function (resource) {
+  this[kResources].delete(resource)
 }
 
 AbstractLevelDOWN.prototype._chainedBatch = function () {

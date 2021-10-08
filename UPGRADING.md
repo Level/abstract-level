@@ -87,7 +87,13 @@ LevelDOWN.prototype.approximateSize = function (start, end, callback) {
 
 ### Ending iterators is idempotent
 
-On `db.close()`, non-ended iterators are automatically ended. This may be a breaking change but only if an implementation has (at their own risk) overridden the public `end()` method, because `end()` is now idempotent rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, ending and thus closing will wait for that.
+On `db.close()`, non-ended iterators are automatically ended. This may be a breaking change but only if an implementation has (at its own risk) overridden the public `end()` method, because `end()` is now idempotent rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, ending and thus closing will wait for that.
+
+### Chained batch can be closed
+
+Chained batch has a new method `close()` which is idempotent and automatically called after `write()` (for backwards compatibility) or on `db.close()`. This to ensure batches can't be used after closing and reopening a db. If a `write()` is in progress, closing will wait for that.
+
+These changes could be breaking for an implementation that has (at its own risk) overridden the public `write()` method. In addition, the `_written`, `_checkWritten` and `_operations` properties have been removed. The error message `write() already called on this batch` has been replaced with `Batch is not open`.
 
 ### Breaking changes to test suite
 

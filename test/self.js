@@ -519,7 +519,7 @@ test('test chained batch() extensibility', function (t) {
   t.deepEqual(spy.getCall(0).args[0][0], { type: 'put', key: 'foo', value: 'bar' }, 'got expected array argument[0]')
   t.deepEqual(spy.getCall(0).args[0][1], { type: 'del', key: 'bang' }, 'got expected array argument[1]')
   t.deepEqual(spy.getCall(0).args[1], {}, 'got expected options argument')
-  t.equal(spy.getCall(0).args[2], expectedCb, 'got expected callback argument')
+  t.is(typeof spy.getCall(0).args[2], 'function', 'got callback argument')
 
   test.batch().put('foo', 'bar', expectedOptions).del('bang', expectedOptions).write(expectedOptions, expectedCb)
 
@@ -530,7 +530,7 @@ test('test chained batch() extensibility', function (t) {
   t.deepEqual(spy.getCall(1).args[0][0], { type: 'put', key: 'foo', value: 'bar', options: 1 }, 'got expected array argument[0]')
   t.deepEqual(spy.getCall(1).args[0][1], { type: 'del', key: 'bang', options: 1 }, 'got expected array argument[1]')
   t.deepEqual(spy.getCall(1).args[1], expectedOptions, 'got expected options argument')
-  t.equal(spy.getCall(1).args[2], expectedCb, 'got expected callback argument')
+  t.is(typeof spy.getCall(1).args[2], 'function', 'got callback argument')
 
   t.end()
 })
@@ -590,47 +590,57 @@ test('test AbstractChainedBatch expects a db', function (t) {
 })
 
 test('test AbstractChainedBatch#write() extensibility', function (t) {
-  const spy = sinon.spy()
-  const spycb = sinon.spy()
-  const Test = implement(AbstractChainedBatch, { _write: spy })
-  const test = new Test({ test: true, isOperational: () => true })
+  t.plan(3)
 
-  test.write(spycb)
+  const Test = implement(AbstractChainedBatch, {
+    _write: function (options, callback) {
+      t.same(options, {})
+      t.is(this, test, 'thisArg on _write() is correct')
+      this._nextTick(callback)
+    }
+  })
 
-  t.equal(spy.callCount, 1, 'got _write() call')
-  t.equal(spy.getCall(0).thisValue, test, '`this` on _write() was correct')
-  t.equal(spy.getCall(0).args.length, 2, 'got two arguments')
-  t.same(spy.getCall(0).args[0], {}, 'got options')
-  // awkward here cause of nextTick & an internal wrapped cb
-  t.equal(typeof spy.getCall(0).args[1], 'function', 'got a callback function')
-  t.equal(spycb.callCount, 0, 'spycb not called')
-  spy.getCall(0).args[1]()
-  t.equal(spycb.callCount, 1, 'spycb called, i.e. was our cb argument')
-  t.end()
+  const test = new Test({ isOperational: () => true, detachResource: () => {} })
+
+  test.write(function (err) {
+    t.ifError(err)
+  })
 })
 
 test('test AbstractChainedBatch#write() extensibility with null options', function (t) {
-  const spy = sinon.spy()
-  const Test = implement(AbstractChainedBatch, { _write: spy })
-  const test = new Test({ test: true, isOperational: () => true })
+  t.plan(3)
 
-  test.write(null, function () {})
+  const Test = implement(AbstractChainedBatch, {
+    _write: function (options, callback) {
+      t.same(options, {})
+      t.is(this, test, 'thisArg on _write() is correct')
+      this._nextTick(callback)
+    }
+  })
 
-  t.equal(spy.callCount, 1, 'got _write() call')
-  t.same(spy.getCall(0).args[0], {}, 'got options')
-  t.end()
+  const test = new Test({ isOperational: () => true, detachResource: () => {} })
+
+  test.write(null, function (err) {
+    t.ifError(err)
+  })
 })
 
 test('test AbstractChainedBatch#write() extensibility with options', function (t) {
-  const spy = sinon.spy()
-  const Test = implement(AbstractChainedBatch, { _write: spy })
-  const test = new Test({ test: true, isOperational: () => true })
+  t.plan(3)
 
-  test.write({ test: true }, function () {})
+  const Test = implement(AbstractChainedBatch, {
+    _write: function (options, callback) {
+      t.same(options, { test: true })
+      t.is(this, test, 'thisArg on _write() is correct')
+      this._nextTick(callback)
+    }
+  })
 
-  t.equal(spy.callCount, 1, 'got _write() call')
-  t.same(spy.getCall(0).args[0], { test: true }, 'got options')
-  t.end()
+  const test = new Test({ isOperational: () => true, detachResource: () => {} })
+
+  test.write({ test: true }, function (err) {
+    t.ifError(err)
+  })
 })
 
 test('test AbstractChainedBatch#put() extensibility', function (t) {

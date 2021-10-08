@@ -108,7 +108,7 @@ exports.args = function (test, testCommon) {
     try {
       batch.put('boom', 'bang')
     } catch (err) {
-      t.equal(err.message, 'write() already called on this batch', 'correct error message')
+      t.equal(err.message, 'Batch is not open', 'correct error message')
       return t.end()
     }
     t.fail('should have thrown')
@@ -121,7 +121,7 @@ exports.args = function (test, testCommon) {
     try {
       batch.del('foo')
     } catch (err) {
-      t.equal(err.message, 'write() already called on this batch', 'correct error message')
+      t.equal(err.message, 'Batch is not open', 'correct error message')
       return t.end()
     }
     t.fail('should have thrown')
@@ -134,7 +134,7 @@ exports.args = function (test, testCommon) {
     try {
       batch.clear()
     } catch (err) {
-      t.equal(err.message, 'write() already called on this batch', 'correct error message')
+      t.equal(err.message, 'Batch is not open', 'correct error message')
       return t.end()
     }
     t.fail('should have thrown')
@@ -142,16 +142,12 @@ exports.args = function (test, testCommon) {
   })
 
   test('test batch#write() after write()', function (t) {
+    t.plan(1)
     const batch = db.batch().put('foo', 'bar')
     batch.write(function () {})
-    try {
-      batch.write(function () {})
-    } catch (err) {
-      t.equal(err.message, 'write() already called on this batch', 'correct error message')
-      return t.end()
-    }
-    t.fail('should have thrown')
-    t.end()
+    batch.write(function (err) {
+      t.is(err && err.message, 'Batch is not open', 'correct error message')
+    })
   })
 
   testCommon.supports.serialize && test('test serialize object', function (t) {

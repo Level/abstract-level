@@ -22,6 +22,7 @@ function AbstractIterator (db) {
 
 AbstractIterator.prototype.next = function (callback) {
   // In callback mode, we return `this`
+  // TODO: remove that in a future major
   let ret = this
 
   if (callback === undefined) {
@@ -109,20 +110,20 @@ AbstractIterator.prototype._end = function (callback) {
   this._nextTick(callback)
 }
 
+// TODO: deprecate end() in favor of close()
+AbstractIterator.prototype.close = function (callback) {
+  return this.end(callback)
+}
+
 AbstractIterator.prototype[kFinishEnd] = function (err) {
   this[kEndFinished] = true
-  this.db.detachIterator(this)
+  this.db.detachResource(this)
 
   const callbacks = this[kEndCallbacks]
   this[kEndCallbacks] = []
 
   for (const cb of callbacks) {
     cb(err)
-  }
-
-  /* istanbul ignore if: assertion */
-  if (this[kEndCallbacks].length > 0) {
-    throw new Error('Expected no further end() calls')
   }
 }
 
