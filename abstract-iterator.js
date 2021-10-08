@@ -79,7 +79,9 @@ AbstractIterator.prototype._seek = function (target) {}
 AbstractIterator.prototype.end = function (callback) {
   callback = fromCallback(callback, kPromise)
 
-  if (!this.db.isOperational()) {
+  // Allow status to be 'closing' if db ends its iterators on
+  // close. See multileveldown.
+  if (!this.db.isOperational() && this.db.status !== 'closing') {
     this._nextTick(callback, new Error('Database is not open'))
     return callback[kPromise]
   }
