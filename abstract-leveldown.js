@@ -27,6 +27,7 @@ function AbstractLevelDOWN (manifest) {
     clear: true,
     getMany: true,
     idempotentOpen: true,
+    passiveOpen: true,
     serialize: true
   })
 }
@@ -52,7 +53,13 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
     }
   }
 
-  if (this.status === 'closed') {
+  if (options.passive) {
+    if (this.status === 'opening') {
+      this.once(kLanded, maybeOpened)
+    } else {
+      this._nextTick(maybeOpened)
+    }
+  } else if (this.status === 'closed') {
     const oldStatus = this.status
 
     this.status = 'opening'
