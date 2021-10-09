@@ -28,7 +28,17 @@ function AbstractLevelDOWN (manifest) {
     getMany: true,
     idempotentOpen: true,
     passiveOpen: true,
-    serialize: true
+    serialize: true,
+    events: {
+      opening: true,
+      open: true,
+      closing: true,
+      closed: true,
+      put: false,
+      del: false,
+      batch: false,
+      clear: false
+    }
   })
 }
 
