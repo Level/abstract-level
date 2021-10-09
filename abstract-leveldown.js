@@ -370,7 +370,7 @@ AbstractLevelDOWN.prototype.clear = function (options, callback) {
 
   options = cleanRangeOptions(this, options)
   options.reverse = !!options.reverse
-  options.limit = 'limit' in options ? options.limit : -1
+  options.limit = typeof options.limit === 'number' && options.limit !== Infinity ? options.limit : -1
 
   this._clear(options, callback)
   return callback[kPromise]
@@ -413,7 +413,7 @@ AbstractLevelDOWN.prototype._setupIteratorOptions = function (options) {
   options.reverse = !!options.reverse
   options.keys = options.keys !== false
   options.values = options.values !== false
-  options.limit = 'limit' in options ? options.limit : -1
+  options.limit = typeof options.limit === 'number' && options.limit !== Infinity ? options.limit : -1
   options.keyAsBuffer = options.keyAsBuffer !== false
   options.valueAsBuffer = options.valueAsBuffer !== false
 
