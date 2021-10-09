@@ -4,10 +4,10 @@ const { fromCallback } = require('catering')
 const { getCallback, getOptions } = require('./lib/common')
 
 const emptyOptions = Object.freeze({})
-const kLength = Symbol('length')
 const kPromise = Symbol('promise')
 const kStatus = Symbol('status')
 const kOperations = Symbol('operations')
+const kPublicOperations = Symbol('publicOperations')
 const kFinishClose = Symbol('finishClose')
 const kCloseCallbacks = Symbol('closeCallbacks')
 
@@ -18,7 +18,7 @@ function AbstractChainedBatch (db) {
 
   this.db = db
   this[kOperations] = []
-  this[kLength] = 0
+  this[kPublicOperations] = []
   this[kCloseCallbacks] = []
   this[kStatus] = 'open'
 }
@@ -28,7 +28,7 @@ Object.defineProperty(AbstractChainedBatch.prototype, 'length', {
   configurable: true,
   enumerable: true,
   get () {
-    return this[kLength]
+    return this[kPublicOperations].length
   }
 })
 
@@ -42,11 +42,11 @@ AbstractChainedBatch.prototype.put = function (key, value, options) {
   const err = this.db._checkKey(key) || this.db._checkValue(value)
   if (err) throw err
 
-  key = this.db._serializeKey(key)
-  value = this.db._serializeValue(value)
+  const skey = this.db._serializeKey(key)
+  const svalue = this.db._serializeValue(value)
 
-  this._put(key, value, options != null ? options : emptyOptions)
-  this[kLength]++
+  this._put(skey, svalue, options != null ? options : emptyOptions)
+  this[kPublicOperations].push({ ...options, type: 'put', key, value })
 
   return this
 }
@@ -65,9 +65,8 @@ AbstractChainedBatch.prototype.del = function (key, options) {
   const err = this.db._checkKey(key)
   if (err) throw err
 
-  key = this.db._serializeKey(key)
-  this._del(key, options != null ? options : emptyOptions)
-  this[kLength]++
+  this._del(this.db._serializeKey(key), options != null ? options : emptyOptions)
+  this[kPublicOperations].push({ ...options, type: 'del', key })
 
   return this
 }
@@ -84,7 +83,7 @@ AbstractChainedBatch.prototype.clear = function () {
   }
 
   this._clear()
-  this[kLength] = 0
+  this[kPublicOperations] = []
 
   return this
 }
@@ -107,6 +106,10 @@ AbstractChainedBatch.prototype.write = function (options, callback) {
     this._write(options, (err) => {
       this[kStatus] = 'closing'
       this[kCloseCallbacks].push((err2) => callback(err || err2))
+
+      // Emit after setting 'closing' status, because event may trigger a
+      // db close which in turn triggers (idempotently) closing this batch.
+      if (!err) this.db.emit('batch', this[kPublicOperations])
 
       // Avoid an extra tick for backwards compatibility with < 8.0.0
       if (this._close === defaultClose) {

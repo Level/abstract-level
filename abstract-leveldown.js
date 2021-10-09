@@ -34,10 +34,10 @@ function AbstractLevelDOWN (manifest) {
       open: true,
       closing: true,
       closed: true,
-      put: false,
-      del: false,
-      batch: false,
-      clear: false
+      put: true,
+      del: true,
+      batch: true,
+      clear: true
     }
   })
 }
@@ -266,10 +266,12 @@ AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
     return callback[kPromise]
   }
 
-  key = this._serializeKey(key)
-  value = this._serializeValue(value)
+  this._put(this._serializeKey(key), this._serializeValue(value), options, (err) => {
+    if (err) return callback(err)
+    this.emit('put', key, value)
+    callback()
+  })
 
-  this._put(key, value, options, callback)
   return callback[kPromise]
 }
 
@@ -293,8 +295,12 @@ AbstractLevelDOWN.prototype.del = function (key, options, callback) {
     return callback[kPromise]
   }
 
-  key = this._serializeKey(key)
-  this._del(key, options, callback)
+  this._del(this._serializeKey(key), options, (err) => {
+    if (err) return callback(err)
+    this.emit('del', key)
+    callback()
+  })
+
   return callback[kPromise]
 }
 
@@ -369,7 +375,12 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
     serialized[i] = e
   }
 
-  this._batch(serialized, options, callback)
+  this._batch(serialized, options, (err) => {
+    if (err) return callback(err)
+    this.emit('batch', array)
+    callback()
+  })
+
   return callback[kPromise]
 }
 
@@ -385,11 +396,18 @@ AbstractLevelDOWN.prototype.clear = function (options, callback) {
     return callback[kPromise]
   }
 
+  const originalOptions = options || {}
+
   options = cleanRangeOptions(this, options)
   options.reverse = !!options.reverse
   options.limit = typeof options.limit === 'number' && options.limit !== Infinity ? options.limit : -1
 
-  this._clear(options, callback)
+  this._clear(options, (err) => {
+    if (err) return callback(err)
+    this.emit('clear', originalOptions)
+    callback()
+  })
+
   return callback[kPromise]
 }
 
@@ -462,7 +480,7 @@ function cleanRangeOptions (db, options) {
 }
 
 function isRangeOption (k) {
-  return rangeOptions.indexOf(k) !== -1
+  return rangeOptions.includes(k)
 }
 
 AbstractLevelDOWN.prototype.iterator = function (options) {

@@ -1,6 +1,6 @@
 'use strict'
 
-const { verifyNotFoundError, illegalKeys, assertAsync } = require('./util')
+const { verifyNotFoundError, illegalKeys, assertAsync, isSelf } = require('./util')
 
 let db
 
@@ -73,6 +73,41 @@ exports.del = function (test, testCommon) {
   })
 }
 
+exports.events = function (test, testCommon) {
+  test('test del() emits del event', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    t.ok(db.supports.events.del)
+
+    if (isSelf(db)) {
+      db._serializeKey = (x) => x.toUpperCase()
+    }
+
+    db.on('del', function (key) {
+      t.is(key, 'a')
+    })
+
+    await db.del('a')
+    await db.close()
+  })
+
+  test('test close() on del event', async function (t) {
+    t.plan(1)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    db.on('del', function () {
+      db.close(t.ifError.bind(t))
+    })
+
+    await db.del('a')
+  })
+}
+
 exports.tearDown = function (test, testCommon) {
   test('tearDown', function (t) {
     db.close(t.end.bind(t))
@@ -83,5 +118,6 @@ exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)
   exports.del(test, testCommon)
+  exports.events(test, testCommon)
   exports.tearDown(test, testCommon)
 }

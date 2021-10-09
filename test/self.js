@@ -6,6 +6,7 @@ const inherits = require('util').inherits
 const AbstractLevelDOWN = require('../').AbstractLevelDOWN
 const AbstractIterator = require('../').AbstractIterator
 const AbstractChainedBatch = require('../').AbstractChainedBatch
+const { isSelf } = require('./util')
 
 const testCommon = require('./common')({
   test: test,
@@ -25,24 +26,33 @@ require('./open-test').all(test, testCommon)
 
 require('./del-test').setUp(test, testCommon)
 require('./del-test').args(test, testCommon)
+require('./del-test').events(test, testCommon)
+require('./del-test').tearDown(test, testCommon)
 
 require('./get-test').setUp(test, testCommon)
 require('./get-test').args(test, testCommon)
+require('./get-test').tearDown(test, testCommon)
 
 require('./get-many-test').setUp(test, testCommon)
 require('./get-many-test').args(test, testCommon)
+require('./get-many-test').tearDown(test, testCommon)
 
 require('./put-test').setUp(test, testCommon)
 require('./put-test').args(test, testCommon)
+require('./put-test').events(test, testCommon)
+require('./put-test').tearDown(test, testCommon)
 
 require('./put-get-del-test').setUp(test, testCommon)
 require('./put-get-del-test').tearDown(test, testCommon)
 
 require('./batch-test').setUp(test, testCommon)
 require('./batch-test').args(test, testCommon)
+require('./batch-test').events(test, testCommon)
+require('./batch-test').tearDown(test, testCommon)
 
 require('./chained-batch-test').setUp(test, testCommon)
 require('./chained-batch-test').args(test, testCommon)
+require('./chained-batch-test').events(test, testCommon)
 require('./chained-batch-test').tearDown(test, testCommon)
 
 require('./close-test').all(test, testCommon)
@@ -61,6 +71,7 @@ require('./async-iterator-test').teardown(test, testCommon)
 require('./iterator-seek-test').sequence(test, testCommon)
 
 require('./clear-test').args(test, testCommon)
+require('./clear-test').events(test, testCommon)
 
 function implement (ctor, methods) {
   function Test () {
@@ -131,6 +142,8 @@ test('test core extensibility', function (t) {
   const Test = implement(AbstractLevelDOWN)
   const test = new Test()
   t.equal(test.status, 'closed', 'status is closed')
+  t.is(isSelf(test), false, 'isSelf utility works')
+  t.is(isSelf(new AbstractLevelDOWN()), true, 'isSelf utility works')
   t.end()
 })
 
@@ -397,7 +410,7 @@ test('test del() extensibility', function (t) {
   t.equal(spy.getCall(0).args.length, 3, 'got three arguments')
   t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
   t.deepEqual(spy.getCall(0).args[1], {}, 'got blank options argument')
-  t.equal(spy.getCall(0).args[2], expectedCb, 'got expected cb argument')
+  t.equal(typeof spy.getCall(0).args[2], 'function', 'got cb argument')
 
   test.del(expectedKey, expectedOptions, expectedCb)
 
@@ -406,7 +419,7 @@ test('test del() extensibility', function (t) {
   t.equal(spy.getCall(1).args.length, 3, 'got three arguments')
   t.equal(spy.getCall(1).args[0], expectedKey, 'got expected key argument')
   t.deepEqual(spy.getCall(1).args[1], expectedOptions, 'got expected options argument')
-  t.equal(spy.getCall(1).args[2], expectedCb, 'got expected cb argument')
+  t.equal(typeof spy.getCall(1).args[2], 'function', 'got cb argument')
   t.end()
 })
 
@@ -428,7 +441,7 @@ test('test put() extensibility', function (t) {
   t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
   t.equal(spy.getCall(0).args[1], expectedValue, 'got expected value argument')
   t.deepEqual(spy.getCall(0).args[2], {}, 'got blank options argument')
-  t.equal(spy.getCall(0).args[3], expectedCb, 'got expected cb argument')
+  t.equal(typeof spy.getCall(0).args[3], 'function', 'got cb argument')
 
   test.put(expectedKey, expectedValue, expectedOptions, expectedCb)
 
@@ -438,7 +451,7 @@ test('test put() extensibility', function (t) {
   t.equal(spy.getCall(1).args[0], expectedKey, 'got expected key argument')
   t.equal(spy.getCall(1).args[1], expectedValue, 'got expected value argument')
   t.deepEqual(spy.getCall(1).args[2], expectedOptions, 'got blank options argument')
-  t.equal(spy.getCall(1).args[3], expectedCb, 'got expected cb argument')
+  t.equal(typeof spy.getCall(1).args[3], 'function', 'got cb argument')
   t.end()
 })
 
@@ -461,7 +474,7 @@ test('test batch([]) (array-form) extensibility', function (t) {
   t.equal(spy.getCall(0).args.length, 3, 'got three arguments')
   t.deepEqual(spy.getCall(0).args[0], expectedArray, 'got expected array argument')
   t.deepEqual(spy.getCall(0).args[1], {}, 'got expected options argument')
-  t.equal(spy.getCall(0).args[2], expectedCb, 'got expected callback argument')
+  t.equal(typeof spy.getCall(0).args[2], 'function', 'got callback argument')
 
   test.batch(expectedArray, expectedOptions, expectedCb)
 
@@ -470,7 +483,7 @@ test('test batch([]) (array-form) extensibility', function (t) {
   t.equal(spy.getCall(1).args.length, 3, 'got three arguments')
   t.deepEqual(spy.getCall(1).args[0], expectedArray, 'got expected array argument')
   t.deepEqual(spy.getCall(1).args[1], expectedOptions, 'got expected options argument')
-  t.equal(spy.getCall(1).args[2], expectedCb, 'got expected callback argument')
+  t.equal(typeof spy.getCall(1).args[2], 'function', 'got callback argument')
 
   test.batch(expectedArray, null, expectedCb)
 
@@ -479,7 +492,7 @@ test('test batch([]) (array-form) extensibility', function (t) {
   t.equal(spy.getCall(2).args.length, 3, 'got three arguments')
   t.deepEqual(spy.getCall(2).args[0], expectedArray, 'got expected array argument')
   t.ok(spy.getCall(2).args[1], 'options should not be null')
-  t.equal(spy.getCall(2).args[2], expectedCb, 'got expected callback argument')
+  t.equal(typeof spy.getCall(2).args[2], 'function', 'got callback argument')
   t.end()
 })
 
@@ -600,7 +613,8 @@ test('test AbstractChainedBatch#write() extensibility', function (t) {
     }
   })
 
-  const test = new Test({ isOperational: () => true, detachResource: () => {} })
+  const noop = () => {}
+  const test = new Test({ isOperational: () => true, detachResource: noop, emit: noop })
 
   test.write(function (err) {
     t.ifError(err)
@@ -618,7 +632,8 @@ test('test AbstractChainedBatch#write() extensibility with null options', functi
     }
   })
 
-  const test = new Test({ isOperational: () => true, detachResource: () => {} })
+  const noop = () => {}
+  const test = new Test({ isOperational: () => true, detachResource: noop, emit: noop })
 
   test.write(null, function (err) {
     t.ifError(err)
@@ -636,7 +651,8 @@ test('test AbstractChainedBatch#write() extensibility with options', function (t
     }
   })
 
-  const test = new Test({ isOperational: () => true, detachResource: () => {} })
+  const noop = () => {}
+  const test = new Test({ isOperational: () => true, detachResource: noop, emit: noop })
 
   test.write({ test: true }, function (err) {
     t.ifError(err)
@@ -789,7 +805,7 @@ test('test clear() extensibility', function (t) {
     t.is(spy.getCall(0).thisValue, db, '`this` on _clear() was correct')
     t.is(spy.getCall(0).args.length, 2, 'got two arguments')
     t.same(spy.getCall(0).args[0], expectedOptions, 'got expected options argument')
-    t.is(spy.getCall(0).args[1], callback, 'got expected callback argument')
+    t.is(typeof spy.getCall(0).args[1], 'function', 'got callback argument')
 
     spy.resetHistory()
   }

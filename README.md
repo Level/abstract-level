@@ -37,6 +37,7 @@
     - [`chainedBatch.del(key[, options])`](#chainedbatchdelkey-options)
     - [`chainedBatch.clear()`](#chainedbatchclear)
     - [`chainedBatch.write([options, ]callback)`](#chainedbatchwriteoptions-callback)
+    - [`chainedBatch.length`](#chainedbatchlength)
     - [`chainedBatch.db`](#chainedbatchdb)
   - [`iterator`](#iterator)
     - [`for await...of iterator`](#for-awaitof-iterator)
@@ -44,6 +45,7 @@
     - [`iterator.seek(target)`](#iteratorseektarget)
     - [`iterator.end([callback])`](#iteratorendcallback)
     - [`iterator.db`](#iteratordb)
+  - [Events](#events)
   - [Type Support](#type-support)
 - [Private API For Implementors](#private-api-for-implementors)
   - [`db = AbstractLevelDOWN([manifest])`](#db--abstractleveldownmanifest)
@@ -70,7 +72,6 @@
     - [`chainedBatch._write(options, callback)`](#chainedbatch_writeoptions-callback)
 - [Test Suite](#test-suite)
   - [Excluding tests](#excluding-tests)
-  - [Setup and teardown](#setup-and-teardown)
   - [Reusing `testCommon`](#reusing-testcommon)
 - [Spread The Word](#spread-the-word)
 - [Install](#install)
@@ -374,6 +375,29 @@ If no callback is provided, a promise is returned.
 #### `iterator.db`
 
 A reference to the `db` that created this iterator.
+
+### Events
+
+`abstract-leveldown` is an [`EventEmitter`](https://nodejs.org/api/events.html) and emits the following events.
+
+| Event     | Description          | Arguments            |
+| :-------- | :------------------- | :------------------- |
+| `put`     | Key has been updated | `key, value` (any)   |
+| `del`     | Key has been deleted | `key` (any)          |
+| `batch`   | Batch has executed   | `operations` (array) |
+| `clear`   | Entries were deleted | `options` (object)   |
+| `opening` | Store is opening     | -                    |
+| `open`    | Store has opened     | -                    |
+| `closing` | Store is closing     | -                    |
+| `closed`  | Store has closed.    | -                    |
+
+For example you can do:
+
+```js
+db.on('put', function (key, value) {
+  console.log('inserted', { key, value })
+})
+```
 
 ### Type Support
 

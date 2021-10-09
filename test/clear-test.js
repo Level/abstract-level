@@ -1,6 +1,7 @@
 'use strict'
 
 const concat = require('level-concat-iterator')
+const { isSelf } = require('./util')
 
 exports.args = function (test, testCommon) {
   test('test clear() with legacy range options', function (t) {
@@ -112,7 +113,65 @@ exports.clear = function (test, testCommon) {
   }
 }
 
+exports.events = function (test, testCommon) {
+  test('test clear() with options emits clear event', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    t.ok(db.supports.events.clear)
+
+    if (isSelf(db)) {
+      db._serializeKey = (x) => x.toUpperCase()
+      db._serializeValue = (x) => x.toUpperCase()
+    }
+
+    db.on('clear', function (options) {
+      t.same(options, { gt: 'x', custom: 123 })
+    })
+
+    await db.clear({ gt: 'x', custom: 123 })
+    await db.close()
+  })
+
+  test('test clear() without options emits clear event', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    t.ok(db.supports.events.clear)
+
+    if (isSelf(db)) {
+      db._serializeKey = (x) => x.toUpperCase()
+      db._serializeValue = (x) => x.toUpperCase()
+    }
+
+    db.on('clear', function (options) {
+      t.same(options, {})
+    })
+
+    await db.clear()
+    await db.close()
+  })
+
+  test('test close() on clear event', async function (t) {
+    t.plan(1)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    db.on('clear', function () {
+      db.close(t.ifError.bind(t))
+    })
+
+    await db.clear()
+  })
+}
+
 exports.all = function (test, testCommon) {
   exports.args(test, testCommon)
+  exports.events(test, testCommon)
   exports.clear(test, testCommon)
 }

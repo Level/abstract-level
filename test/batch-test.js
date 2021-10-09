@@ -1,6 +1,6 @@
 'use strict'
 
-const { verifyNotFoundError, isTypedArray, assertAsync } = require('./util')
+const { verifyNotFoundError, isTypedArray, assertAsync, isSelf } = require('./util')
 const { illegalKeys, illegalValues } = require('./util')
 
 let db
@@ -330,6 +330,42 @@ exports.atomic = function (test, testCommon) {
   })
 }
 
+exports.events = function (test, testCommon) {
+  test('test batch([]) (array-form) emits batch event', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    t.ok(db.supports.events.batch)
+
+    if (isSelf(db)) {
+      db._serializeKey = (x) => x.toUpperCase()
+      db._serializeValue = (x) => x.toUpperCase()
+    }
+
+    db.on('batch', function (ops) {
+      t.same(ops, [{ type: 'put', key: 'a', value: 'b', custom: 123 }])
+    })
+
+    await db.batch([{ type: 'put', key: 'a', value: 'b', custom: 123 }])
+    await db.close()
+  })
+
+  test('test close() on array-form batch event', async function (t) {
+    t.plan(1)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    db.on('batch', function () {
+      db.close(t.ifError.bind(t))
+    })
+
+    await db.batch([{ type: 'put', key: 'a', value: 'b' }])
+  })
+}
+
 exports.tearDown = function (test, testCommon) {
   test('tearDown', function (t) {
     db.close(t.end.bind(t))
@@ -341,5 +377,6 @@ exports.all = function (test, testCommon) {
   exports.args(test, testCommon)
   exports.batch(test, testCommon)
   exports.atomic(test, testCommon)
+  exports.events(test, testCommon)
   exports.tearDown(test, testCommon)
 }

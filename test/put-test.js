@@ -1,6 +1,6 @@
 'use strict'
 
-const { isTypedArray, assertAsync, illegalKeys, illegalValues } = require('./util')
+const { isTypedArray, assertAsync, illegalKeys, illegalValues, isSelf } = require('./util')
 
 let db
 
@@ -78,6 +78,43 @@ exports.put = function (test, testCommon) {
   })
 }
 
+exports.events = function (test, testCommon) {
+  test('test put() emits put event', async function (t) {
+    t.plan(3)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    t.ok(db.supports.events.put)
+
+    if (isSelf(db)) {
+      db._serializeKey = (x) => x.toUpperCase()
+      db._serializeValue = (x) => x.toUpperCase()
+    }
+
+    db.on('put', function (key, value) {
+      t.is(key, 'a')
+      t.is(value, 'b')
+    })
+
+    await db.put('a', 'b')
+    await db.close()
+  })
+
+  test('test close() on put event', async function (t) {
+    t.plan(1)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    db.on('put', function () {
+      db.close(t.ifError.bind(t))
+    })
+
+    await db.put('a', 'b')
+  })
+}
+
 exports.tearDown = function (test, testCommon) {
   test('tearDown', function (t) {
     db.close(t.end.bind(t))
@@ -88,5 +125,6 @@ exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)
   exports.put(test, testCommon)
+  exports.events(test, testCommon)
   exports.tearDown(test, testCommon)
 }

@@ -1,5 +1,6 @@
 'use strict'
 
+const { AbstractLevelDOWN } = require('..')
 const nfre = /NotFound/i
 const spies = []
 
@@ -24,6 +25,10 @@ exports.illegalValues = [
   { name: 'null key', value: null, regex: /value cannot be `null` or `undefined`/ },
   { name: 'undefined value', value: undefined, regex: /value cannot be `null` or `undefined`/ }
 ]
+
+exports.isSelf = function (db) {
+  return db.constructor === AbstractLevelDOWN
+}
 
 /**
  * Wrap a callback to check that it's called asynchronously. Must be
