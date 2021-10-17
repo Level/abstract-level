@@ -43,7 +43,7 @@
     - [`for await...of iterator`](#for-awaitof-iterator)
     - [`iterator.next([callback])`](#iteratornextcallback)
     - [`iterator.seek(target)`](#iteratorseektarget)
-    - [`iterator.end([callback])`](#iteratorendcallback)
+    - [`iterator.close([callback])`](#iteratorclosecallback)
     - [`iterator.db`](#iteratordb)
   - [Events](#events)
   - [Type Support](#type-support)
@@ -64,7 +64,7 @@
   - [`iterator = AbstractIterator(db)`](#iterator--abstractiteratordb)
     - [`iterator._next(callback)`](#iterator_nextcallback)
     - [`iterator._seek(target)`](#iterator_seektarget)
-    - [`iterator._end(callback)`](#iterator_endcallback)
+    - [`iterator._close(callback)`](#iterator_closecallback)
   - [`chainedBatch = AbstractChainedBatch(db)`](#chainedbatch--abstractchainedbatchdb)
     - [`chainedBatch._put(key, value, options)`](#chainedbatch_putkey-value-options)
     - [`chainedBatch._del(key, options)`](#chainedbatch_delkey-options)
@@ -88,7 +88,7 @@ This module provides a simple base prototype for a key-value store. It has a pub
 
 Where possible, the default private methods have sensible _noop_ defaults that essentially do nothing. For example, `_open(callback)` will invoke `callback` on a next tick. Other methods like `_clear(..)` have functional defaults. Each method listed below documents whether implementing it is mandatory.
 
-The private methods are always provided with consistent arguments, regardless of what is passed in through the public API. All public methods provide argument checking: if a consumer calls `open()` without a callback argument they'll get an `Error('open() requires a callback argument')`.
+The private methods are always provided with consistent arguments, regardless of what is passed in through the public API. All public methods provide argument checking: if a consumer calls `batch(123)` they'll get an error that the first argument must be an array.
 
 Where optional arguments are involved, private methods receive sensible defaults: a `get(key, callback)` call translates to `_get(key, options, callback)` where the `options` argument is an empty object. These arguments are documented below.
 
@@ -96,75 +96,66 @@ Where optional arguments are involved, private methods receive sensible defaults
 
 ## Example
 
-Let's implement a simplistic in-memory [`leveldown`][leveldown] replacement:
+Let's implement a simplistic in-memory store:
 
 ```js
-var AbstractLevelDOWN = require('abstract-leveldown').AbstractLevelDOWN
-var util = require('util')
+const { AbstractLevelDOWN } = require('abstract-leveldown')
 
-// Constructor
-function FakeLevelDOWN () {
-  AbstractLevelDOWN.call(this)
-}
+class FakeLevelDOWN {
+  constructor (options, callback) {
+    super({}, options, callback)
 
-// Our new prototype inherits from AbstractLevelDOWN
-util.inherits(FakeLevelDOWN, AbstractLevelDOWN)
-
-FakeLevelDOWN.prototype._open = function (options, callback) {
-  // Initialize a memory storage object
-  this._store = {}
-
-  // Use nextTick to be a nice async citizen
-  this._nextTick(callback)
-}
-
-FakeLevelDOWN.prototype._serializeKey = function (key) {
-  // As an example, prefix all input keys with an exclamation mark.
-  // Below methods will receive serialized keys in their arguments.
-  return '!' + key
-}
-
-FakeLevelDOWN.prototype._put = function (key, value, options, callback) {
-  this._store[key] = value
-  this._nextTick(callback)
-}
-
-FakeLevelDOWN.prototype._get = function (key, options, callback) {
-  var value = this._store[key]
-
-  if (value === undefined) {
-    // 'NotFound' error, consistent with LevelDOWN API
-    return this._nextTick(callback, new Error('NotFound'))
+    // Initialize a memory storage object
+    this._store = {}
   }
 
-  this._nextTick(callback, null, value)
-}
+  _open (options, callback) {
+    // Here you would open any necessary resources.
+    // Use nextTick to be a nice async citizen
+    this._nextTick(callback)
+  }
 
-FakeLevelDOWN.prototype._del = function (key, options, callback) {
-  delete this._store[key]
-  this._nextTick(callback)
+  _serializeKey (key) {
+    // As an example, prefix all input keys with an exclamation mark.
+    // Below methods will receive serialized keys in their arguments.
+    return '!' + key
+  }
+
+  _put (key, value, options, callback) {
+    this._store[key] = value
+    this._nextTick(callback)
+  }
+
+  _get (key, options, callback) {
+    var value = this._store[key]
+
+    if (value === undefined) {
+      // 'NotFound' error, consistent with LevelDOWN API
+      return this._nextTick(callback, new Error('NotFound'))
+    }
+
+    this._nextTick(callback, null, value)
+  }
+
+  _del (key, options, callback) {
+    delete this._store[key]
+    this._nextTick(callback)
+  }
 }
 ```
 
-Now we can use our implementation with `levelup`:
+Now we can use our implementation:
 
 ```js
-var levelup = require('levelup')
+const db = new FakeLevelDOWN()
 
-var db = levelup(new FakeLevelDOWN())
+await db.put('foo', 'bar')
+const value = await db.get('foo')
 
-db.put('foo', 'bar', function (err) {
-  if (err) throw err
-
-  db.get('foo', function (err, value) {
-    if (err) throw err
-
-    console.log(value) // 'bar'
-  })
-})
+console.log(value) // 'bar'
 ```
 
-See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory replacement for `leveldown`.
+See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory implementation.
 
 ## Browser Support
 
@@ -180,9 +171,8 @@ Constructors typically take a `location` argument pointing to a location on disk
 
 A read-only property. An `abstract-leveldown` compliant store can be in one of the following states:
 
-- `'new'` - newly created, not opened or closed
 - `'opening'` - waiting for the store to be opened
-- `'open'` - successfully opened the store, available for use
+- `'open'` - successfully opened the store
 - `'closing'` - waiting for the store to be closed
 - `'closed'` - store has been successfully closed, should not be used.
 
@@ -324,7 +314,7 @@ A reference to the `db` that created this chained batch.
 
 An iterator allows you to _iterate_ the entire store or a range. It operates on a snapshot of the store, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee.
 
-Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.end()` must always be called. In contrast, finishing, throwing or breaking from a `for await...of` loop automatically calls `iterator.end()`.
+Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing or breaking from a `for await...of` loop automatically calls `iterator.close()`.
 
 An iterator reaches its natural end in the following situations:
 
@@ -332,7 +322,7 @@ An iterator reaches its natural end in the following situations:
 - The end of the range has been reached
 - The last `iterator.seek()` was out of range.
 
-An iterator keeps track of when a `next()` is in progress and when an `end()` has been called so it doesn't allow concurrent `next()` calls, it does allow `end()` while a `next()` is in progress and it doesn't allow either `next()` or `end()` after `end()` has been called.
+An iterator keeps track of when a `next()` is in progress and when an `close()` has been called so it doesn't allow concurrent `next()` calls, it does allow `close()` while a `next()` is in progress and it doesn't allow `next()` after `close()` has been called.
 
 #### `for await...of iterator`
 
@@ -348,7 +338,7 @@ try {
 }
 ```
 
-Note for implementors: this uses `iterator.next()` and `iterator.end()` under the hood so no further method implementations are needed to support `for await...of`.
+Note for implementors: this uses `iterator.next()` and `iterator.close()` under the hood so no further method implementations are needed to support `for await...of`.
 
 #### `iterator.next([callback])`
 
@@ -356,7 +346,7 @@ Advance the iterator and yield the entry at that key. If an error occurs, the `c
 
 If no callback is provided, a promise is returned for either an array (containing a `key` and `value`) or `undefined` if the iterator reached its natural end.
 
-**Note:** Always call `iterator.end()`, even if you received an error and even if the iterator reached its natural end.
+**Note:** Always call `iterator.close()`, even if you received an error and even if the iterator reached its natural end.
 
 #### `iterator.seek(target)`
 
@@ -366,9 +356,9 @@ If range options like `gt` were passed to `db.iterator()` and `target` does not 
 
 **Note:** At the time of writing, [`leveldown`][leveldown] is the only known implementation to support `seek()`. In other implementations, it is a noop.
 
-#### `iterator.end([callback])`
+#### `iterator.close([callback])`
 
-End iteration and free up underlying resources. The `callback` function will be called with no arguments on success or with an `Error` if ending failed for any reason.
+Free up underlying resources. The `callback` function will be called with no arguments.
 
 If no callback is provided, a promise is returned.
 
@@ -449,7 +439,7 @@ FakeLevelDOWN.prototype._serializeKey = function (key) {
 
 Then `db.get(2, callback)` translates into `db._get('2', options, callback)`. Similarly, `db.iterator({ gt: 2 })` translates into `db._iterator({ gt: '2', ... })` and `iterator.seek(2)` translates into `iterator._seek('2')`.
 
-If the underlying storage supports any JavaScript type or if your implementation wraps another implementation, it is recommended to make `_serializeKey` an identity function (returning the key as-is). Serialization is irreversible, unlike _encoding_ as performed by implementations like [`encoding-down`][encoding-down]. This also applies to `_serializeValue`.
+It must be safe to call `_serializeKey` at any time including if the db hasn't opened yet. If the underlying storage supports any JavaScript type or if your implementation wraps another implementation, it is recommended to make `_serializeKey` an identity function (returning the key as-is). Serialization is irreversible, unlike _encoding_ as performed by implementations like [`encoding-down`][encoding-down]. This also applies to `_serializeValue`.
 
 The default `_serializeKey()` is an identity function.
 
@@ -477,7 +467,7 @@ The default `_get()` invokes `callback` on a next tick with a `NotFound` error. 
 
 Get multiple values by an array of `keys`. The `options` object will always have the following properties: `asBuffer`. If an error occurs, call the `callback` function with an `Error`. Otherwise call `callback` with `null` as the first argument and an array of values as the second. If a key does not exist, set the relevant value to `undefined`.
 
-The default `_getMany()` invokes `callback` on a next tick with an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden and `db.supports.getMany` must be set to true via the [constructor](#db--abstractleveldownmanifest).
+The default `_getMany()` invokes `callback` on a next tick with an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden.
 
 ### `db._put(key, value, options, callback)`
 
@@ -546,11 +536,11 @@ The default `_next()` invokes `callback` on a next tick. It must be overridden.
 
 Seek the iterator to a given key or the closest key. This method is optional.
 
-#### `iterator._end(callback)`
+#### `iterator._close(callback)`
 
-Free up underlying resources. This method is guaranteed to only be called once. If ending failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
 
-The default `_end()` invokes `callback` on a next tick. Overriding is optional.
+The default `_close()` invokes `callback` on a next tick. Overriding is optional.
 
 ### `chainedBatch = AbstractChainedBatch(db)`
 

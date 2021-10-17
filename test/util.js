@@ -1,6 +1,6 @@
 'use strict'
 
-const { AbstractLevelDOWN } = require('..')
+const { AbstractLevelDOWN, AbstractIterator } = require('..')
 const nfre = /NotFound/i
 const spies = []
 
@@ -87,4 +87,16 @@ exports.assertAsync.with = function (t, cb) {
     exports.assertAsync.end(t)
     return ret
   }
+}
+
+exports.mockDown = function (methods, ...args) {
+  class TestDown extends AbstractLevelDOWN {}
+  for (const k in methods) TestDown.prototype[k] = methods[k]
+  return new TestDown(...args)
+}
+
+exports.mockIterator = function (db, methods, ...args) {
+  class TestIterator extends AbstractIterator {}
+  for (const k in methods) TestIterator.prototype[k] = methods[k]
+  return new TestIterator(db, ...args)
 }

@@ -41,11 +41,15 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 ### Increased API parity with `levelup`
 
-All methods that take a callback now also support promises. They return a promise if no callback is provided, the same as `levelup`. Implementations that override public (non-underscored) methods must do the same.
+All methods that take a callback now also support promises. They return a promise if no callback is provided, the same as `levelup`. Implementations that override public (non-underscored) methods _must_ do the same and any implementation _should_ do the same for additional methods if any.
 
 The prototype of `require('abstract-leveldown').AbstractLevelDOWN` now inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and emits the same events as `levelup` would (with the exception of the 'ready' alias that `levelup` has for the 'open' event - `abstract-leveldown` only emits 'open').
 
-The initial `status` of an `abstract-leveldown` instance is now 'closed', and the previous `status` 'new' is gone.
+Deferred open is built-in. This means an `abstract-leveldown` instance opens itself a tick after its constructor returns. Any operations made until opening has completed are queued up in memory. When opening completes the operations are replayed. If opening has failed (and this is a new behavior compared to `levelup`) the operations will yield errors. The `abstract-leveldown` prototype has a new `defer()` method for an implementation to defer custom operations.
+
+The initial `status` of an `abstract-leveldown` instance is now 'opening', and the previous `status` 'new' is gone.
+
+Wrapping an `abstract-leveldown` instance with `deferred-leveldown` will throw.
 
 On any operation, `abstract-leveldown` now checks if it's open. If not, it will either throw an error (if the relevant API is synchronous) or asynchronously yield an error. For example:
 
@@ -66,7 +70,7 @@ try {
 ```
 
 ```js
-db.get('example', function (err, value) {
+db.get('example', function (err) {
   // Error: Database is not open
 })
 ```
@@ -76,24 +80,45 @@ This may be a breaking change downstream because it changes error messages for i
 Implementations that have additional methods, like `leveldown` that has an `approximateSize()` method which is not part of the `abstract-leveldown` interface, should add or align their own safety checks for consistency. Like so:
 
 ```js
+// For brevity this example does not implement promise support
 LevelDOWN.prototype.approximateSize = function (start, end, callback) {
-  if (!this.isOperational()) {
-    return this._nextTick(callback, new Error('Database is not open'))
+  if (this.status === 'opening') {
+    this.defer(() => this.approximateSize(start, end, callback))
+  } else if (this.status !== 'open') {
+    this.nextTick(callback, new Error('Database is not open'))
+  } else {
+    // ..
   }
-
-  // ...
 }
 ```
 
-### Ending iterators is idempotent
+### Closing iterators is idempotent
 
-On `db.close()`, non-ended iterators are automatically ended. This may be a breaking change but only if an implementation has (at its own risk) overridden the public `end()` method, because `end()` is now idempotent rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, ending and thus closing will wait for that.
+The `iterator.end()` method has been renamed to `iterator.close()`, with `end()` being an alias for now. The term "close" makes it easier to differentiate between the iterator having reached its natural end (data-wise) versus closing it to cleanup resources.
+
+Likewise, `_end()` has been renamed to `_close()` but without an alias. This method is no longer allowed to yield an error.
+
+On `db.close()`, non-closed iterators are now automatically closed. This may be a breaking change but only if an implementation has (at its own risk) overridden the public `end()` method, because `close()` or `end()` is now an idempotent operation rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, closing the iterator (or db) will wait for that.
+
+The error messages `cannot call next() after end()` and `cannot call seek() after end()` have been replaced with `Iterator is not open`, and `cannot call next() before previous next() has completed` and `cannot call seek() before next() has completed` have been replaced with `Iterator is busy`.
+
+The `next()` method no longer returns `this` (when a callback is provided).
 
 ### Chained batch can be closed
 
-Chained batch has a new method `close()` which is idempotent and automatically called after `write()` (for backwards compatibility) or on `db.close()`. This to ensure batches can't be used after closing and reopening a db. If a `write()` is in progress, closing will wait for that.
+Chained batch has a new method `close()` which is an idempotent operation and automatically called after `write()` (for backwards compatibility) or on `db.close()`. This to ensure batches can't be used after closing and reopening a db. If a `write()` is in progress, closing will wait for that. If `write()` is never called then `close()` must be.
 
-These changes could be breaking for an implementation that has (at its own risk) overridden the public `write()` method. In addition, the `_written`, `_checkWritten` and `_operations` properties have been removed. The error message `write() already called on this batch` has been replaced with `Batch is not open`.
+These changes could be breaking for an implementation that has (at its own risk) overridden the public `write()` method. In addition, the error message `write() already called on this batch` has been replaced with `Batch is not open`.
+
+### Semi-private properties have been made private
+
+The following properties and methods can no longer be accessed, as they've been replaced with internal [symbols](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol):
+
+- `AbstractIterator#_nexting`
+- `AbstractIterator#_ended`
+- `AbstractChainedBatch#_written`
+- `AbstractChainedBatch#_checkWritten()`
+- `AbstractChainedBatch#_operations`
 
 ### Breaking changes to test suite
 
@@ -101,6 +126,8 @@ These changes could be breaking for an implementation that has (at its own risk)
 - Support of `db.clear()` and `db.getMany()` is now mandatory
 - The `setUp` and `tearDown` functions have been removed from the test suite and `suite.common()`.
 - Added ability to access manifests via `testCommon.supports`, by lazily copying it from `testCommon.factory().supports`. This requires that the manifest does not change during the lifetime of a `db`.
+
+Lastly, it's recommended to revisit any custom tests of an implementation. In particular if those tests relied upon the previously loose state checking of `abstract-leveldown`. For example, making a `db.put()` call before `db.open()`. Such a test now has a different meaning. The previous meaning can typically be restored by wrapping tests with `db.once('open', ...)` logic.
 
 ## 7.0.0
 

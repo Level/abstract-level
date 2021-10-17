@@ -6,22 +6,34 @@ exports.open = function (test, testCommon) {
   test('test database open, no options', function (t) {
     const db = testCommon.factory()
 
+    t.is(db.status, 'opening')
+
     // default createIfMissing=true, errorIfExists=false
     db.open(function (err) {
       t.error(err)
+      t.is(db.status, 'open')
+
       db.close(function () {
+        t.is(db.status, 'closed')
         t.end()
       })
     })
+
+    t.is(db.status, 'opening')
   })
 
   test('test database open, no options, with promise', function (t) {
     const db = testCommon.factory()
 
+    t.is(db.status, 'opening')
+
     // default createIfMissing=true, errorIfExists=false
     db.open().then(function () {
+      t.is(db.status, 'open')
       db.close(t.end.bind(t))
     }).catch(t.fail.bind(t))
+
+    t.is(db.status, 'opening')
   })
 
   test('test database open, options and callback', function (t) {
@@ -50,13 +62,16 @@ exports.open = function (test, testCommon) {
 
     db.open(function (err) {
       t.error(err)
+
       db.close(function (err) {
         t.error(err)
+        t.is(db.status, 'closed')
+
         db.open(function (err) {
           t.error(err)
-          db.close(function () {
-            t.end()
-          })
+          t.is(db.status, 'open')
+
+          db.close(t.end.bind(t))
         })
       })
     })
@@ -145,7 +160,7 @@ exports.open = function (test, testCommon) {
     t.is(db.status, 'opening', 'is still opening')
   }))
 
-  test('test database open if already open', function (t) {
+  test('test database open if already open (sequential)', function (t) {
     t.plan(7)
 
     const db = testCommon.factory()
@@ -159,13 +174,32 @@ exports.open = function (test, testCommon) {
         t.is(db.status, 'open', 'is open')
       }))
 
-      t.is(db.status, 'open', 'is open', 'not reopening')
+      t.is(db.status, 'open', 'not reopening')
       db.on('open', t.fail.bind(t))
       assertAsync.end(t)
     }))
 
     assertAsync.end(t)
   })
+
+  test('test database open if already opening (parallel)', assertAsync.ctx(function (t) {
+    t.plan(7)
+
+    const db = testCommon.factory()
+
+    db.open(assertAsync(function (err) {
+      t.ifError(err, 'no open() error (1)')
+      t.is(db.status, 'open')
+    }))
+
+    db.open(assertAsync(function (err) {
+      t.ifError(err, 'no open() error (2)')
+      t.is(db.status, 'open')
+      db.close(t.end.bind(t))
+    }))
+
+    t.is(db.status, 'opening')
+  }))
 
   test('test database close if already closed', function (t) {
     t.plan(8)

@@ -217,7 +217,7 @@ exports.getMany = function (test, testCommon) {
         t.is(db.status, db.supports.deferredOpen ? 'opening' : 'closed')
 
         // Must be true if db supports deferredOpen
-        const operational = db.supports.deferredOpen || db.isOperational()
+        const operational = db.supports.deferredOpen // || db.isOperational()
 
         db.getMany(keys, assertAsync(function (err, values) {
           if (operational) {
@@ -249,7 +249,7 @@ exports.getMany = function (test, testCommon) {
       db.open(assertAsync(t.error.bind(t), 'open'))
 
       // Must be true if db supports deferredOpen
-      const operational = db.supports.deferredOpen || db.isOperational()
+      const operational = db.supports.deferredOpen // || db.isOperational()
 
       db.getMany(keys, assertAsync(function (err, values) {
         if (operational) {
@@ -264,7 +264,7 @@ exports.getMany = function (test, testCommon) {
   }))
 
   test('test getMany() on closed db', function (t) {
-    t.plan(2 * 6)
+    t.plan(2 * 4)
 
     // Also test empty array because it has a fast-path
     for (const keys of [['foo'], []]) {
@@ -272,11 +272,9 @@ exports.getMany = function (test, testCommon) {
 
       db.open(function (err) {
         t.ifError(err)
-        t.is(db.isOperational(), true)
 
         db.close(assertAsync.with(t, function (err) {
           t.ifError(err)
-          t.is(db.isOperational(), false)
 
           db.getMany(keys, assertAsync(function (err) {
             t.is(err && err.message, 'Database is not open')

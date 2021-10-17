@@ -1,6 +1,6 @@
 'use strict'
 
-const { isTypedArray, assertAsync, illegalKeys, illegalValues, isSelf } = require('./util')
+const { assertAsync, illegalKeys, illegalValues, isSelf } = require('./util')
 
 let db
 
@@ -48,33 +48,45 @@ exports.args = function (test, testCommon) {
 }
 
 exports.put = function (test, testCommon) {
-  test('test simple put()', function (t) {
-    db.put('foo', 'bar', function (err) {
-      t.error(err)
-      db.get('foo', function (err, value) {
-        t.error(err)
-        let result = value.toString()
-        if (isTypedArray(value)) {
-          result = String.fromCharCode.apply(null, new Uint16Array(value))
-        }
-        t.equal(result, 'bar')
-        t.end()
+  test('test simple put()', assertAsync.ctx(function (t) {
+    t.plan(4)
+
+    db.put('foo', 'bar', assertAsync(function (err) {
+      t.ifError(err, 'no put() error')
+
+      db.get('foo', { asBuffer: false }, function (err, value) {
+        t.ifError(err, 'no get() error')
+        t.is(value, 'bar')
       })
-    })
+    }))
+  }))
+
+  test('test simple put() with promise', async function (t) {
+    await db.put('foo2', 'bar')
+    t.is(await db.get('foo2', { asBuffer: false }), 'bar')
   })
 
-  test('test simple put() with promise', function (t) {
-    db.put('foo', 'bar').then(function () {
-      db.get('foo', function (err, value) {
-        t.error(err)
-        let result = value.toString()
-        if (isTypedArray(value)) {
-          result = String.fromCharCode.apply(null, new Uint16Array(value))
-        }
-        t.equal(result, 'bar')
-        t.end()
+  test('test deferred put()', assertAsync.ctx(function (t) {
+    t.plan(5)
+
+    const db = testCommon.factory()
+
+    db.put('foo', 'bar', assertAsync(function (err) {
+      t.ifError(err, 'no put() error')
+
+      db.get('foo', { asBuffer: false }, function (err, value) {
+        t.ifError(err, 'no get() error')
+        t.is(value, 'bar', 'value is ok')
+        db.close(t.ifError.bind(t))
       })
-    }).catch(t.fail.bind(t))
+    }))
+  }))
+
+  test('test deferred put() with promise', async function (t) {
+    const db = testCommon.factory()
+    await db.put('foo', 'bar')
+    t.is(await db.get('foo', { asBuffer: false }), 'bar', 'value is ok')
+    return db.close()
   })
 }
 
@@ -101,17 +113,19 @@ exports.events = function (test, testCommon) {
     await db.close()
   })
 
-  test('test close() on put event', async function (t) {
-    t.plan(1)
-
+  test('test close() on put event', async function () {
     const db = testCommon.factory()
     await db.open()
 
+    let promise
+
     db.on('put', function () {
-      db.close(t.ifError.bind(t))
+      // Should not interfere with the current put() operation
+      promise = db.close()
     })
 
     await db.put('a', 'b')
+    await promise
   })
 }
 

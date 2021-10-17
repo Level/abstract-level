@@ -5,7 +5,8 @@ const isBuffer = require('is-buffer')
 const { EventEmitter } = require('events')
 const { fromCallback } = require('catering')
 const AbstractIterator = require('./abstract-iterator')
-const AbstractChainedBatch = require('./abstract-chained-batch')
+const DeferredIterator = require('./lib/deferred-iterator')
+const DefaultChainedBatch = require('./lib/default-chained-batch')
 const { getCallback, getOptions } = require('./lib/common')
 
 const hasOwnProperty = Object.prototype.hasOwnProperty
@@ -14,13 +15,33 @@ const kPromise = Symbol('promise')
 const kLanded = Symbol('landed')
 const kResources = Symbol('resources')
 const kCloseResources = Symbol('closeResources')
+const kOperations = Symbol('operations')
+const kUndefer = Symbol('undefer')
+const kDeferOpen = Symbol('deferOpen')
+const kOptions = Symbol('options')
+const kStatus = Symbol('status')
+const noop = () => {}
 
-function AbstractLevelDOWN (manifest) {
+// TODO: document new options and callback arguments
+// TODO: and test them, also as testCommon.factory() arguments
+function AbstractLevelDOWN (manifest, options, callback) {
+  if (typeof manifest !== 'object' && manifest != null) {
+    throw new TypeError('First argument must be null, undefined or an object')
+  }
+
+  callback = getCallback(options, callback)
+  options = getOptions(options)
+  manifest = manifest || {}
+
   EventEmitter.call(this)
 
   this[kResources] = new Set()
+  this[kOperations] = []
+  this[kDeferOpen] = true
+  this[kOptions] = options
+  this[kStatus] = 'opening'
 
-  this.status = 'closed'
+  // TODO: add openCallback
   this.supports = supports(manifest, {
     status: true,
     promises: true,
@@ -28,7 +49,11 @@ function AbstractLevelDOWN (manifest) {
     getMany: true,
     idempotentOpen: true,
     passiveOpen: true,
+    deferredOpen: true,
     serialize: true,
+    bufferKeys: true,
+    snapshots: manifest.snapshots !== false,
+    permanence: manifest.permanence !== false,
     events: {
       opening: true,
       open: true,
@@ -40,23 +65,41 @@ function AbstractLevelDOWN (manifest) {
       clear: true
     }
   })
+
+  // Let subclass finish its constructor
+  this._nextTick(() => {
+    if (this[kDeferOpen]) {
+      this.open({ passive: false }, callback || noop)
+    } else if (callback) {
+      this.open({ passive: true }, callback)
+    }
+  })
 }
 
 Object.setPrototypeOf(AbstractLevelDOWN.prototype, EventEmitter.prototype)
 
+Object.defineProperty(AbstractLevelDOWN.prototype, 'status', {
+  enumerable: true,
+  get () {
+    return this[kStatus]
+  }
+})
+
 AbstractLevelDOWN.prototype.open = function (options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options)
+
+  // TODO: document that levelup did not merge option objects
+  options = { ...this[kOptions], ...getOptions(options) }
 
   options.createIfMissing = options.createIfMissing !== false
   options.errorIfExists = !!options.errorIfExists
 
   const maybeOpened = (err) => {
-    if (this.status === 'closing' || this.status === 'opening') {
+    if (this[kStatus] === 'closing' || this[kStatus] === 'opening') {
       // Wait until pending state changes are done
       this.once(kLanded, err ? () => maybeOpened(err) : maybeOpened)
-    } else if (this.status !== 'open') {
+    } else if (this[kStatus] !== 'open') {
       callback(err || new Error('Database is not open'))
     } else {
       callback()
@@ -64,33 +107,40 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
   }
 
   if (options.passive) {
-    if (this.status === 'opening') {
+    if (this[kStatus] === 'opening') {
       this.once(kLanded, maybeOpened)
     } else {
       this._nextTick(maybeOpened)
     }
-  } else if (this.status === 'closed') {
-    const oldStatus = this.status
-
-    this.status = 'opening'
+  } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
+    this[kDeferOpen] = false
+    this[kStatus] = 'opening'
     this.emit('opening')
 
     this._open(options, (err) => {
       if (err) {
-        this.status = oldStatus
-        this.emit(kLanded)
-        return maybeOpened(err)
+        this[kStatus] = 'closed'
+
+        // Resources must be safe to close in any db state
+        this[kCloseResources](() => {
+          this.emit(kLanded)
+          maybeOpened(err)
+        })
+
+        this[kUndefer]()
+        return
       }
 
-      this.status = 'open'
+      this[kStatus] = 'open'
+      this[kUndefer]()
       this.emit(kLanded)
 
       // Only emit public event if pending state changes are done
-      if (this.status === 'open') this.emit('open')
+      if (this[kStatus] === 'open') this.emit('open')
 
       maybeOpened()
     })
-  } else if (this.status === 'open') {
+  } else if (this[kStatus] === 'open') {
     this._nextTick(maybeOpened)
   } else {
     this.once(kLanded, () => this.open(options, callback))
@@ -107,42 +157,42 @@ AbstractLevelDOWN.prototype.close = function (callback) {
   callback = fromCallback(callback, kPromise)
 
   const maybeClosed = (err) => {
-    if (this.status === 'opening' || this.status === 'closing') {
+    if (this[kStatus] === 'opening' || this[kStatus] === 'closing') {
       // Wait until pending state changes are done
       this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
-    } else if (this.status !== 'closed') {
+    } else if (this[kStatus] !== 'closed') {
       callback(err || new Error('Database is not closed'))
     } else {
       callback()
     }
   }
 
-  if (this.status === 'open') {
-    this.status = 'closing'
+  if (this[kStatus] === 'open') {
+    this[kStatus] = 'closing'
     this.emit('closing')
 
     const cancel = (err) => {
-      this.status = 'open'
+      this[kStatus] = 'open'
+      this[kUndefer]()
       this.emit(kLanded)
       maybeClosed(err)
     }
 
-    this[kCloseResources]((err) => {
-      if (err) return cancel(err)
-
+    this[kCloseResources](() => {
       this._close((err) => {
         if (err) return cancel(err)
 
-        this.status = 'closed'
+        this[kStatus] = 'closed'
+        this[kUndefer]()
         this.emit(kLanded)
 
         // Only emit public event if pending state changes are done
-        if (this.status === 'closed') this.emit('closed')
+        if (this[kStatus] === 'closed') this.emit('closed')
 
         maybeClosed()
       })
     })
-  } else if (this.status === 'closed') {
+  } else if (this[kStatus] === 'closed') {
     this._nextTick(maybeClosed)
   } else {
     this.once(kLanded, () => this.close(callback))
@@ -152,25 +202,27 @@ AbstractLevelDOWN.prototype.close = function (callback) {
 }
 
 AbstractLevelDOWN.prototype[kCloseResources] = function (callback) {
-  // No need to dezalgo this internal method unless an error happens
-  if (this[kResources].size === 0) return callback()
+  if (this[kResources].size === 0) {
+    return this._nextTick(callback)
+  }
 
   let pending = this[kResources].size
-  let error = null
+  let sync = true
 
-  const next = (err) => {
-    // TODO: aggregate
-    error = error || err
-
+  const next = () => {
     if (--pending === 0) {
-      callback(error)
+      // We don't have tests for generic resources, so dezalgo
+      if (sync) this.nextTick(callback)
+      else callback()
     }
   }
 
+  // In parallel so that all resources know they are closed
   for (const resource of this[kResources]) {
     resource.close(next)
   }
 
+  sync = false
   this[kResources].clear()
 }
 
@@ -182,6 +234,11 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options)
+
+  if (this[kStatus] === 'opening') {
+    this.defer(() => this.get(key, options, callback))
+    return callback[kPromise]
+  }
 
   if (maybeError(this, callback)) {
     return callback[kPromise]
@@ -202,13 +259,18 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
 }
 
 AbstractLevelDOWN.prototype._get = function (key, options, callback) {
-  this._nextTick(function () { callback(new Error('NotFound')) })
+  this.nextTick(callback, new Error('NotFound'))
 }
 
 AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options)
+
+  if (this[kStatus] === 'opening') {
+    this.defer(() => this.getMany(keys, options, callback))
+    return callback[kPromise]
+  }
 
   if (maybeError(this, callback)) {
     return callback[kPromise]
@@ -255,6 +317,11 @@ AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
   callback = fromCallback(callback, kPromise)
   options = getOptions(options)
 
+  if (this[kStatus] === 'opening') {
+    this.defer(() => this.put(key, value, options, callback))
+    return callback[kPromise]
+  }
+
   if (maybeError(this, callback)) {
     return callback[kPromise]
   }
@@ -284,6 +351,11 @@ AbstractLevelDOWN.prototype.del = function (key, options, callback) {
   callback = fromCallback(callback, kPromise)
   options = getOptions(options)
 
+  if (this[kStatus] === 'opening') {
+    this.defer(() => this.del(key, options, callback))
+    return callback[kPromise]
+  }
+
   if (maybeError(this, callback)) {
     return callback[kPromise]
   }
@@ -311,10 +383,9 @@ AbstractLevelDOWN.prototype._del = function (key, options, callback) {
 AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
   // TODO: deprecate in favor of an explicit db.chainedBatch() method
   if (!arguments.length) {
-    if (!this.isOperational()) throw new Error('Database is not open')
-    const batch = this._chainedBatch()
-    this.attachResource(batch)
-    return batch
+    if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
+    if (this[kStatus] !== 'open') throw new Error('Database is not open')
+    return this._chainedBatch()
   }
 
   if (typeof array === 'function') callback = array
@@ -322,6 +393,11 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
 
   callback = fromCallback(callback, kPromise)
   options = getOptions(options)
+
+  if (this[kStatus] === 'opening') {
+    this.defer(() => this.batch(array, options, callback))
+    return callback[kPromise]
+  }
 
   if (maybeError(this, callback)) {
     return callback[kPromise]
@@ -392,6 +468,11 @@ AbstractLevelDOWN.prototype.clear = function (options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
 
+  if (this[kStatus] === 'opening') {
+    this.defer(() => this.clear(options, callback))
+    return callback[kPromise]
+  }
+
   if (maybeError(this, callback)) {
     return callback[kPromise]
   }
@@ -411,6 +492,7 @@ AbstractLevelDOWN.prototype.clear = function (options, callback) {
   return callback[kPromise]
 }
 
+// TODO: consider removing this default implementation
 AbstractLevelDOWN.prototype._clear = function (options, callback) {
   // Avoid setupIteratorOptions, would serialize range options a second time.
   options.keys = true
@@ -423,14 +505,14 @@ AbstractLevelDOWN.prototype._clear = function (options, callback) {
 
   const next = (err) => {
     if (err) {
-      return iterator.end(function () {
+      return iterator.close(function () {
         callback(err)
       })
     }
 
     iterator.next((err, key) => {
       if (err) return next(err)
-      if (key === undefined) return iterator.end(callback)
+      if (key === undefined) return iterator.close(callback)
 
       // This could be optimized by using a batch, but the default _clear
       // is not meant to be fast. Implementations have more room to optimize
@@ -484,12 +566,11 @@ function isRangeOption (k) {
 }
 
 AbstractLevelDOWN.prototype.iterator = function (options) {
-  if (!this.isOperational()) throw new Error('Database is not open')
   if (typeof options !== 'object' || options === null) options = {}
+  if (this[kStatus] === 'opening') return new DeferredIterator(this, options)
+  if (this[kStatus] !== 'open') throw new Error('Database is not open')
   options = this._setupIteratorOptions(options)
-  const iterator = this._iterator(options)
-  this.attachResource(iterator)
-  return iterator
+  return this._iterator(options)
 }
 
 AbstractLevelDOWN.prototype._iterator = function (options) {
@@ -497,7 +578,45 @@ AbstractLevelDOWN.prototype._iterator = function (options) {
 }
 
 // TODO: docs
+// When deferring an operation, do it early: after normalizing optional arguments but
+// before serializing (to prevent double serialization and to emit original input if
+// the operation has events) and before any fast paths (to prevent calling back before
+// db has finished opening). Resources that can be closed on their own (like iterators
+// and chained batches) should however first check such state before deferring, in
+// order to reject operations after close (including when the db was reopened).
+AbstractLevelDOWN.prototype.defer = function (fn) {
+  if (typeof fn !== 'function') {
+    throw new TypeError('The first argument must be a function')
+  }
+
+  this[kOperations].push(fn)
+}
+
+AbstractLevelDOWN.prototype[kUndefer] = function () {
+  if (this[kOperations].length === 0) {
+    return
+  }
+
+  const operations = this[kOperations]
+  this[kOperations] = []
+
+  for (const op of operations) {
+    op()
+  }
+
+  /* istanbul ignore if: assertion */
+  if (this[kOperations].length > 0) {
+    throw new Error('Did not expect further operations')
+  }
+}
+
+// TODO: docs
 AbstractLevelDOWN.prototype.attachResource = function (resource) {
+  if (typeof resource !== 'object' || resource === null ||
+    typeof resource.close !== 'function') {
+    throw new TypeError('First argument must be a resource')
+  }
+
   this[kResources].add(resource)
 }
 
@@ -507,7 +626,7 @@ AbstractLevelDOWN.prototype.detachResource = function (resource) {
 }
 
 AbstractLevelDOWN.prototype._chainedBatch = function () {
-  return new AbstractChainedBatch(this)
+  return new DefaultChainedBatch(this)
 }
 
 AbstractLevelDOWN.prototype._serializeKey = function (key) {
@@ -536,25 +655,17 @@ AbstractLevelDOWN.prototype._checkValue = function (value) {
   }
 }
 
-// TODO: docs and tests
-AbstractLevelDOWN.prototype.isOperational = function () {
-  return this.status === 'open' || this._isOperational()
-}
-
-// Implementation may accept operations in other states too
-AbstractLevelDOWN.prototype._isOperational = function () {
-  return false
-}
-
 // Expose browser-compatible nextTick for dependents
-// TODO: rename _nextTick to _queueMicrotask
+// TODO: docs
+// TODO: remove _nextTick alias
 // TODO: after we drop node 10, also use queueMicrotask in node
+AbstractLevelDOWN.prototype.nextTick =
 AbstractLevelDOWN.prototype._nextTick = require('./next-tick')
 
 module.exports = AbstractLevelDOWN
 
 function maybeError (db, callback) {
-  if (!db.isOperational()) {
+  if (db[kStatus] !== 'open') {
     db._nextTick(callback, new Error('Database is not open'))
     return true
   }

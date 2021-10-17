@@ -14,27 +14,17 @@ exports.args = function (test, testCommon) {
     const iterator = db.iterator()
     // For levelup & deferred-leveldown compat: may return iterator of an underlying db, that's okay.
     t.ok(iterator.db === db || iterator.db === (db.db || db._db || db))
-    iterator.end(t.end.bind(t))
-  })
-
-  test('test iterator#next returns this in callback mode', function (t) {
-    const iterator = db.iterator()
-    const self = iterator.next(function () {})
-    t.ok(iterator === self)
-    iterator.end(t.end.bind(t))
+    iterator.close(t.end.bind(t))
   })
 }
 
 exports.sequence = function (test, testCommon) {
-  test('test twice iterator#end() is idempotent', function (t) {
+  test('test twice iterator#close() is idempotent', function (t) {
     const iterator = db.iterator()
-    iterator.end(function (err) {
-      t.error(err)
-
+    iterator.close(function () {
       let async = false
 
-      iterator.end(function (err) {
-        t.error(err)
+      iterator.close(function () {
         t.ok(async, 'callback is asynchronous')
         t.end()
       })
@@ -43,9 +33,9 @@ exports.sequence = function (test, testCommon) {
     })
   })
 
-  test('test iterator#next after iterator#end() callback with error', function (t) {
+  test('test iterator#next after iterator#close() callback with error', function (t) {
     const iterator = db.iterator()
-    iterator.end(function (err) {
+    iterator.close(function (err) {
       t.error(err)
 
       let async = false
@@ -53,7 +43,7 @@ exports.sequence = function (test, testCommon) {
       iterator.next(function (err2) {
         t.ok(err2, 'returned error')
         t.is(err2.name, 'Error', 'correct error')
-        t.is(err2.message, 'cannot call next() after end()', 'correct message')
+        t.is(err2.message, 'Iterator is not open', 'correct message')
         t.ok(async, 'callback is asynchronous')
         t.end()
       })
@@ -66,7 +56,7 @@ exports.sequence = function (test, testCommon) {
     const iterator = db.iterator()
     iterator.next(function (err) {
       t.error(err)
-      iterator.end(function (err) {
+      iterator.close(function (err) {
         t.error(err)
         t.end()
       })
@@ -77,7 +67,7 @@ exports.sequence = function (test, testCommon) {
     iterator.next(function (err) {
       t.ok(err, 'returned error')
       t.is(err.name, 'Error', 'correct error')
-      t.is(err.message, 'cannot call next() before previous next() has completed')
+      t.is(err.message, 'Iterator is busy')
       t.ok(async, 'callback is asynchronous')
     })
 
@@ -116,7 +106,7 @@ exports.iterator = function (test, testCommon) {
           t.ok(typeof key === 'undefined', 'key argument is undefined')
           t.ok(typeof value === 'undefined', 'value argument is undefined')
           t.is(idx, data.length, 'correct number of entries')
-          iterator.end(function () {
+          iterator.close(function () {
             t.end()
           })
         }

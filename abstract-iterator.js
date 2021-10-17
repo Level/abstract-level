@@ -3,30 +3,36 @@
 const { fromCallback } = require('catering')
 
 const kPromise = Symbol('promise')
-const kFinishEnd = Symbol('finishEnd')
-const kEndFinished = Symbol('endFinished')
-const kEndCallbacks = Symbol('endCallbacks')
+const kNextCallback = Symbol('nextCallback')
+const kNexting = Symbol('nexting')
+const kFinishNext = Symbol('finishNext')
+const kClosing = Symbol('closing')
+const kFinishClose = Symbol('finishClose')
+const kClosed = Symbol('closed')
+const kCloseCallbacks = Symbol('closeCallbacks')
 
 function AbstractIterator (db) {
   if (typeof db !== 'object' || db === null) {
     throw new TypeError('First argument must be an abstract-leveldown compliant store')
   }
 
-  this[kEndFinished] = false
-  this[kEndCallbacks] = []
+  this[kClosed] = false
+  this[kCloseCallbacks] = []
+  this[kNexting] = false
+  this[kClosing] = false
+  this[kNextCallback] = null
+  this[kFinishNext] = this[kFinishNext].bind(this)
+  this[kFinishClose] = this[kFinishClose].bind(this)
 
   this.db = db
-  this._ended = false
-  this._nexting = false
+  this.db.attachResource(this)
 }
 
 AbstractIterator.prototype.next = function (callback) {
-  // In callback mode, we return `this`
-  // TODO: remove that in a future major
-  let ret = this
+  let promise
 
   if (callback === undefined) {
-    ret = new Promise(function (resolve, reject) {
+    promise = new Promise(function (resolve, reject) {
       callback = function (err, key, value) {
         if (err) reject(err)
         else if (key === undefined && value === undefined) resolve()
@@ -34,96 +40,85 @@ AbstractIterator.prototype.next = function (callback) {
       }
     })
   } else if (typeof callback !== 'function') {
-    throw new Error('next() requires a callback argument')
+    throw new Error('Callback must be a function')
   }
 
-  if (!this.db.isOperational()) {
-    this._nextTick(callback, new Error('Database is not open'))
-    return ret
+  if (this[kClosing]) {
+    this.nextTick(callback, new Error('Iterator is not open'))
+  } else if (this[kNexting]) {
+    this.nextTick(callback, new Error('Iterator is busy'))
+  } else {
+    this[kNexting] = true
+    this[kNextCallback] = callback
+
+    this._next(this[kFinishNext])
   }
 
-  if (this._ended) {
-    this._nextTick(callback, new Error('cannot call next() after end()'))
-    return ret
-  }
-
-  if (this._nexting) {
-    this._nextTick(callback, new Error('cannot call next() before previous next() has completed'))
-    return ret
-  }
-
-  this._nexting = true
-  this._next((err, ...rest) => {
-    this._nexting = false
-    if (this[kEndCallbacks].length > 0) this._end(this[kFinishEnd].bind(this))
-    callback(err, ...rest)
-  })
-
-  return ret
+  return promise
 }
 
 AbstractIterator.prototype._next = function (callback) {
   this._nextTick(callback)
 }
 
+AbstractIterator.prototype[kFinishNext] = function (err, ...rest) {
+  const cb = this[kNextCallback]
+  this[kNexting] = false
+  this[kNextCallback] = null
+  if (this[kClosing]) this._close(this[kFinishClose])
+  cb(err, ...rest)
+}
+
+// TODO: add options argument
 AbstractIterator.prototype.seek = function (target) {
-  if (!this.db.isOperational()) {
-    throw new Error('Database is not open')
+  if (this[kClosing]) {
+    throw new Error('Iterator is not open')
+  } else if (this[kNexting]) {
+    throw new Error('Iterator is busy')
+  } else {
+    this._seek(this.db._serializeKey(target))
   }
-
-  if (this._ended) {
-    throw new Error('cannot call seek() after end()')
-  }
-
-  if (this._nexting) {
-    throw new Error('cannot call seek() before next() has completed')
-  }
-
-  target = this.db._serializeKey(target)
-  this._seek(target)
 }
 
 AbstractIterator.prototype._seek = function (target) {}
 
-AbstractIterator.prototype.end = function (callback) {
+AbstractIterator.prototype.close = function (callback) {
   callback = fromCallback(callback, kPromise)
 
-  if (this._ended && !this[kEndFinished]) {
-    this[kEndCallbacks].push(callback)
-  } else if (this._ended) {
+  if (this[kClosed]) {
     this._nextTick(callback)
-  } else if (!this.db.isOperational() && this.db.status !== 'closing') {
-    this._nextTick(callback, new Error('Database is not open'))
+  } else if (this[kClosing]) {
+    this[kCloseCallbacks].push(callback)
   } else {
-    this._ended = true
-    this[kEndCallbacks].push(callback)
+    this[kClosing] = true
+    this[kCloseCallbacks].push(callback)
 
-    if (!this._nexting) {
-      this._end(this[kFinishEnd].bind(this))
+    if (!this[kNexting]) {
+      this._close(this[kFinishClose])
     }
   }
 
   return callback[kPromise]
 }
 
-AbstractIterator.prototype._end = function (callback) {
+AbstractIterator.prototype._close = function (callback) {
   this._nextTick(callback)
 }
 
-// TODO: deprecate end() in favor of close()
-AbstractIterator.prototype.close = function (callback) {
-  return this.end(callback)
+// TODO: log deprecation message
+AbstractIterator.prototype.end = function (callback) {
+  return this.close(callback)
 }
 
-AbstractIterator.prototype[kFinishEnd] = function (err) {
-  this[kEndFinished] = true
+AbstractIterator.prototype[kFinishClose] = function () {
+  this[kClosed] = true
   this.db.detachResource(this)
 
-  const callbacks = this[kEndCallbacks]
-  this[kEndCallbacks] = []
+  const callbacks = this[kCloseCallbacks]
+  this[kCloseCallbacks] = []
 
   for (const cb of callbacks) {
-    cb(err)
+    cb()
   }
 }
 
@@ -135,11 +130,20 @@ AbstractIterator.prototype[Symbol.asyncIterator] = async function * () {
       yield kv
     }
   } finally {
-    if (!this._ended) await this.end()
+    if (!this[kClosed]) await this.close()
   }
 }
 
+// Temporary to catch issues upgrading to abstract-leveldown@8
+for (const k of ['_ended property', '_nexting property', '_end method']) {
+  Object.defineProperty(AbstractIterator.prototype, k.split(' ')[0], {
+    get () { throw new Error(`The ${k} has been removed`) },
+    set () { throw new Error(`The ${k} has been removed`) }
+  })
+}
+
 // Expose browser-compatible nextTick for dependents
+AbstractIterator.prototype.nextTick =
 AbstractIterator.prototype._nextTick = require('./next-tick')
 
 module.exports = AbstractIterator

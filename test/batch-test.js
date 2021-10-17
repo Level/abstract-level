@@ -352,17 +352,19 @@ exports.events = function (test, testCommon) {
     await db.close()
   })
 
-  test('test close() on array-form batch event', async function (t) {
-    t.plan(1)
-
+  test('test close() on array-form batch event', async function () {
     const db = testCommon.factory()
     await db.open()
 
+    let promise
+
     db.on('batch', function () {
-      db.close(t.ifError.bind(t))
+      // Should not interfere with the current batch() operation
+      promise = db.close()
     })
 
     await db.batch([{ type: 'put', key: 'a', value: 'b' }])
+    await promise
   })
 }
 

@@ -32,6 +32,8 @@ function suite (options) {
   require('./iterator-range-test').all(test, testCommon)
   require('./async-iterator-test').all(test, testCommon)
 
+  require('./deferred-open-test').all(test, testCommon)
+
   if (testCommon.supports.seek) {
     require('./iterator-seek-test').all(test, testCommon)
   }

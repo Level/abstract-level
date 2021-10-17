@@ -156,17 +156,19 @@ exports.events = function (test, testCommon) {
     await db.close()
   })
 
-  test('test close() on clear event', async function (t) {
-    t.plan(1)
-
+  test('test close() on clear event', async function () {
     const db = testCommon.factory()
     await db.open()
 
+    let promise
+
     db.on('clear', function () {
-      db.close(t.ifError.bind(t))
+      // Should not interfere with the current clear() operation
+      promise = db.close()
     })
 
     await db.clear()
+    await promise
   })
 }
 

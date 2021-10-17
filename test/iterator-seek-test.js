@@ -33,7 +33,7 @@ exports.sequence = function (test, testCommon) {
     ite.next(function (err, key, value) {
       t.error(err, 'no error from next()')
       t.ok(async, 'next is asynchronous')
-      ite.end(done)
+      ite.close(done)
     })
 
     async = true
@@ -44,18 +44,19 @@ exports.sequence = function (test, testCommon) {
       error = err.message
     }
 
-    t.is(error, 'cannot call seek() before next() has completed', 'got error')
+    t.is(error, 'Iterator is busy', 'got error')
   })
 
-  make('iterator#seek() throws after end()', function (db, t, done) {
+  make('iterator#seek() throws after close()', function (db, t, done) {
     const ite = db.iterator()
 
-    // TODO: why call next? Can't we end immediately?
+    // TODO: why call next? Can't we close immediately?
     ite.next(function (err, key, value) {
       t.error(err, 'no error from next()')
 
-      ite.end(function (err) {
-        t.error(err, 'no error from end()')
+      ite.close(function (err) {
+        t.error(err, 'no error from close()')
+
         let error
 
         try {
@@ -64,7 +65,7 @@ exports.sequence = function (test, testCommon) {
           error = err.message
         }
 
-        t.is(error, 'cannot call seek() after end()', 'got error')
+        t.is(error, 'Iterator is not open', 'got error')
         done()
       })
     })
@@ -110,7 +111,7 @@ exports.seek = function (test, testCommon) {
         t.error(err, 'no error')
         t.same(key, undefined, 'end of iterator')
         t.same(value, undefined, 'end of iterator')
-        ite.end(done)
+        ite.close(done)
       })
     })
   })
@@ -127,7 +128,7 @@ exports.seek = function (test, testCommon) {
           t.error(err, 'no error from next()')
           t.equal(key, undefined, 'end of iterator')
           t.equal(value, undefined, 'end of iterator')
-          ite.end(done)
+          ite.close(done)
         })
       })
     })
@@ -140,7 +141,7 @@ exports.seek = function (test, testCommon) {
       t.error(err, 'no error')
       t.same(key.toString(), 'three', 'key matches')
       t.same(value.toString(), '3', 'value matches')
-      ite.end(done)
+      ite.close(done)
     })
   })
 
@@ -151,7 +152,7 @@ exports.seek = function (test, testCommon) {
       t.error(err, 'no error')
       t.same(key, undefined, 'end of iterator')
       t.same(value, undefined, 'end of iterator')
-      ite.end(done)
+      ite.close(done)
     })
   })
 
@@ -162,7 +163,7 @@ exports.seek = function (test, testCommon) {
       t.error(err, 'no error')
       t.same(key.toString(), 'two')
       t.same(value.toString(), '2')
-      ite.end(done)
+      ite.close(done)
     })
   })
 
@@ -238,8 +239,8 @@ exports.seek = function (test, testCommon) {
               t.equal(value.toString(), expected, msg)
             }
 
-            ite.end(function (err) {
-              t.error(err, 'no error from end()')
+            ite.close(function (err) {
+              t.error(err, 'no error from close()')
               if (!--pending) done()
             })
           })

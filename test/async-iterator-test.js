@@ -21,7 +21,7 @@ exports.setup = function (test, testCommon) {
 
 exports.asyncIterator = function (test, testCommon) {
   test('for await...of db.iterator()', async function (t) {
-    t.plan(2)
+    t.plan(1)
 
     const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
     const output = []
@@ -30,8 +30,76 @@ exports.asyncIterator = function (test, testCommon) {
       output.push({ key, value })
     }
 
-    t.ok(it._ended, 'ended')
     t.same(output, input)
+  })
+
+  testCommon.supports.permanence && test('for await...of db.iterator() (deferred)', async function (t) {
+    t.plan(1)
+
+    const db = testCommon.factory()
+    await db.batch(input.map(entry => ({ ...entry, type: 'put' })))
+    await db.close()
+
+    // Don't await
+    db.open()
+
+    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const output = []
+
+    for await (const [key, value] of it) {
+      output.push({ key, value })
+    }
+
+    t.same(output, input)
+    await db.close()
+  })
+
+  testCommon.supports.snapshots && test('for await...of db.iterator() (deferred, with snapshot)', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const promise = db.batch(input.map(entry => ({ ...entry, type: 'put' })))
+    const output = []
+
+    for await (const [key, value] of it) {
+      output.push({ key, value })
+    }
+
+    t.same(output, [], 'used snapshot')
+
+    // Wait for data to be written
+    await promise
+
+    for await (const [key, value] of db.iterator({ keyAsBuffer: false, valueAsBuffer: false })) {
+      output.push({ key, value })
+    }
+
+    t.same(output, input)
+  })
+
+  test('for await...of db.iterator() (empty)', async function (t) {
+    const db = testCommon.factory()
+    const entries = []
+
+    await db.open()
+
+    for await (const kv of db.iterator({ keyAsBuffer: false, valueAsBuffer: false })) {
+      entries.push(kv)
+    }
+
+    t.same(entries, [])
+  })
+
+  test('for await...of db.iterator() (empty, deferred)', async function (t) {
+    const db = testCommon.factory()
+    const entries = []
+
+    for await (const kv of db.iterator({ keyAsBuffer: false, valueAsBuffer: false })) {
+      entries.push(kv)
+    }
+
+    t.same(entries, [])
   })
 
   test('for await...of db.iterator() does not permit reuse', async function (t) {
@@ -50,138 +118,7 @@ exports.asyncIterator = function (test, testCommon) {
         t.fail('should not be called')
       }
     } catch (err) {
-      t.is(err.message, 'cannot call next() after end()')
-    }
-  })
-
-  test('for await...of db.iterator() ends on user error', async function (t) {
-    t.plan(2)
-
-    const it = db.iterator()
-
-    try {
-      // eslint-disable-next-line no-unused-vars, no-unreachable-loop
-      for await (const kv of it) {
-        throw new Error('user error')
-      }
-    } catch (err) {
-      t.is(err.message, 'user error')
-      t.ok(it._ended, 'ended')
-    }
-  })
-
-  test('for await...of db.iterator() with user error and end() error', async function (t) {
-    t.plan(3)
-
-    const it = db.iterator()
-    const end = it._end
-
-    it._end = function (callback) {
-      end.call(this, function (err) {
-        t.ifError(err, 'no real error from end()')
-        callback(new Error('end error'))
-      })
-    }
-
-    try {
-      // eslint-disable-next-line no-unused-vars, no-unreachable-loop
-      for await (const kv of it) {
-        throw new Error('user error')
-      }
-    } catch (err) {
-      // TODO: ideally, this would be a combined aka aggregate error
-      t.is(err.message, 'user error')
-      t.ok(it._ended, 'ended')
-    }
-  })
-
-  test('for await...of db.iterator() ends on iterator error', async function (t) {
-    t.plan(3)
-
-    const it = db.iterator()
-
-    it._next = function (callback) {
-      t.pass('nexted')
-      this._nextTick(callback, new Error('iterator error'))
-    }
-
-    try {
-      // eslint-disable-next-line no-unused-vars
-      for await (const kv of it) {
-        t.fail('should not yield results')
-      }
-    } catch (err) {
-      t.is(err.message, 'iterator error')
-      t.ok(it._ended, 'ended')
-    }
-  })
-
-  test('for await...of db.iterator() with iterator error and end() error', async function (t) {
-    t.plan(4)
-
-    const it = db.iterator()
-    const end = it._end
-
-    it._next = function (callback) {
-      t.pass('nexted')
-      this._nextTick(callback, new Error('iterator error'))
-    }
-
-    it._end = function (callback) {
-      end.call(this, function (err) {
-        t.ifError(err, 'no real error from end()')
-        callback(new Error('end error'))
-      })
-    }
-
-    try {
-      // eslint-disable-next-line no-unused-vars
-      for await (const kv of it) {
-        t.fail('should not yield results')
-      }
-    } catch (err) {
-      // TODO: ideally, this would be a combined aka aggregate error
-      t.is(err.message, 'end error')
-      t.ok(it._ended, 'ended')
-    }
-  })
-
-  test('for await...of db.iterator() ends on user break', async function (t) {
-    t.plan(2)
-
-    const it = db.iterator()
-
-    // eslint-disable-next-line no-unused-vars, no-unreachable-loop
-    for await (const kv of it) {
-      t.pass('got a chance to break')
-      break
-    }
-
-    t.ok(it._ended, 'ended')
-  })
-
-  test('for await...of db.iterator() with user break and end() error', async function (t) {
-    t.plan(4)
-
-    const it = db.iterator()
-    const end = it._end
-
-    it._end = function (callback) {
-      end.call(this, function (err) {
-        t.ifError(err, 'no real error from end()')
-        callback(new Error('end error'))
-      })
-    }
-
-    try {
-      // eslint-disable-next-line no-unused-vars, no-unreachable-loop
-      for await (const kv of it) {
-        t.pass('got a chance to break')
-        break
-      }
-    } catch (err) {
-      t.is(err.message, 'end error')
-      t.ok(it._ended, 'ended')
+      t.is(err.message, 'Iterator is not open')
     }
   })
 }
