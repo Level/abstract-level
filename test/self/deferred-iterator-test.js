@@ -7,53 +7,51 @@ const noop = () => {}
 
 // NOTE: copied from deferred-leveldown
 test('deferred iterator', function (t) {
-  t.plan(11)
+  t.plan(9)
 
-  let seekTarget = false
+  const keyEncoding = {
+    format: 'utf8',
+    encode (key) {
+      t.is(key, 'foo', 'encoding got key')
+      return key.toUpperCase()
+    }
+  }
 
   const db = mockDown({
     _iterator: function (options) {
-      t.is(options.gt, 'FOO')
+      t.is(options.gt, 'FOO', 'got encoded range option')
 
-      return mockIterator(this, {
-        _seek: function (target) {
-          seekTarget = target
-        },
+      return mockIterator(this, options, {
         _next: function (cb) {
-          this._nextTick(cb, null, 'key', 'value')
+          this.nextTick(cb, null, 'key', 'value')
         },
         _close: function (cb) {
-          this._nextTick(cb)
+          this.nextTick(cb)
         }
       })
     },
-    _serializeKey: function (key) {
-      t.is(key, 'foo')
-      return key.toUpperCase()
-    },
     _open: function (options, callback) {
       t.pass('opened')
-      this._nextTick(callback)
+      this.nextTick(callback)
     }
+  }, { encodings: { utf8: true } }, {
+    keyEncoding
   })
 
   const it = db.iterator({ gt: 'foo' })
-  t.ok(it instanceof DeferredIterator)
+  t.ok(it instanceof DeferredIterator, 'is deferred')
 
   let nextFirst = false
 
-  it.seek('foo')
-
   it.next(function (err, key, value) {
-    t.is(seekTarget, 'FOO', 'seek was called with correct target')
     nextFirst = true
-    t.error(err, 'no error')
+    t.error(err, 'no next() error')
     t.equal(key, 'key')
     t.equal(value, 'value')
   })
 
   it.end(function (err) {
-    t.error(err, 'no error')
+    t.error(err, 'no end() error')
     t.ok(nextFirst)
   })
 })
@@ -64,12 +62,12 @@ test('deferred iterator - non-deferred operations', function (t) {
 
   const db = mockDown({
     _iterator: function (options) {
-      return mockIterator(this, {
+      return mockIterator(this, options, {
         _seek (target) {
-          t.is(target, 'foo')
+          t.is(target, '123')
         },
         _next (cb) {
-          this._nextTick(cb, null, 'key', 'value')
+          this.nextTick(cb, null, 'key', 'value')
         }
       })
     }
@@ -78,7 +76,7 @@ test('deferred iterator - non-deferred operations', function (t) {
   db.open(function (err) {
     t.error(err, 'no open() error')
 
-    it.seek('foo')
+    it.seek(123)
     it.next(function (err, key, value) {
       t.error(err, 'no next() error')
       t.equal(key, 'key')
@@ -105,13 +103,13 @@ test('deferred iterators are created in order', function (t) {
     return mockDown({
       _iterator: function (options) {
         order.push('iterator created')
-        return mockIterator(this, {})
+        return mockIterator(this, options, {})
       },
       _put: function (key, value, options, callback) {
         order.push('put')
       },
       _open: function (options, callback) {
-        this._nextTick(callback)
+        this.nextTick(callback)
       }
     })
   }
@@ -137,12 +135,12 @@ test('deferred iterators are created in order', function (t) {
 })
 
 test('deferred iterator is closed upon failed open', function (t) {
-  t.plan(6)
+  t.plan(5)
 
   const db = mockDown({
     _open (options, callback) {
       t.pass('opening')
-      this._nextTick(callback, new Error('_open error'))
+      this.nextTick(callback, new Error('_open error'))
     },
     _iterator () {
       t.fail('should not be called')
@@ -162,11 +160,11 @@ test('deferred iterator is closed upon failed open', function (t) {
 })
 
 test('deferred iterator and real iterator are closed on db.close()', function (t) {
-  t.plan(12)
+  t.plan(10)
 
   const db = mockDown({
-    _iterator () {
-      return mockIterator(this, {
+    _iterator (options) {
+      return mockIterator(this, options, {
         _close (callback) {
           t.pass('closed')
           this.nextTick(callback)
@@ -205,8 +203,8 @@ test('deferred iterator and real iterator are detached on db.close()', function 
 
   let real
   const db = mockDown({
-    _iterator () {
-      real = mockIterator(this)
+    _iterator (options) {
+      real = mockIterator(this, options)
       return real
     }
   })
@@ -236,14 +234,14 @@ test('deferred iterator defers underlying close()', function (t) {
   const db = mockDown({
     _open (options, callback) {
       order.push('_open')
-      this._nextTick(callback)
+      this.nextTick(callback)
     },
-    _iterator () {
+    _iterator (options) {
       order.push('_iterator')
-      return mockIterator(this, {
+      return mockIterator(this, options, {
         _close (callback) {
           order.push('_close')
-          this._nextTick(callback)
+          this.nextTick(callback)
         }
       })
     }
@@ -263,12 +261,6 @@ function verifyClosed (t, it, cb) {
     t.is(err && err.message, 'Iterator is not open', 'correct error on first next()')
 
     // Should account for userland code that ignores errors
-    try {
-      it.seek(123)
-    } catch (err) {
-      t.is(err && err.message, 'Iterator is not open', 'correct error on seek()')
-    }
-
     it.next(function (err) {
       t.is(err && err.message, 'Iterator is not open', 'correct error on second next()')
       cb()

@@ -3,7 +3,6 @@
 const { fromCallback } = require('catering')
 const { getCallback, getOptions } = require('./lib/common')
 
-const emptyOptions = Object.freeze({})
 const kPromise = Symbol('promise')
 const kStatus = Symbol('status')
 const kOperations = Symbol('operations')
@@ -22,6 +21,7 @@ function AbstractChainedBatch (db) {
 
   this.db = db
   this.db.attachResource(this)
+  this.nextTick = db.nextTick
 }
 
 Object.defineProperty(AbstractChainedBatch.prototype, 'length', {
@@ -39,11 +39,24 @@ AbstractChainedBatch.prototype.put = function (key, value, options) {
   const err = this.db._checkKey(key) || this.db._checkValue(value)
   if (err) throw err
 
-  const skey = this.db._serializeKey(key)
-  const svalue = this.db._serializeValue(value)
+  const keyEncoding = this.db.keyEncoding(options && options.keyEncoding)
+  const valueEncoding = this.db.valueEncoding(options && options.valueEncoding)
+  const original = options
 
-  this._put(skey, svalue, options != null ? options : emptyOptions)
-  this[kOperations].push({ ...options, type: 'put', key, value })
+  // Forward encoding options
+  if (!options || options.keyEncoding !== keyEncoding.format ||
+    options.valueEncoding !== valueEncoding.format) {
+    options = {
+      ...options,
+      keyEncoding: keyEncoding.format,
+      valueEncoding: valueEncoding.format
+    }
+  }
+
+  this._put(keyEncoding.encode(key), valueEncoding.encode(value), options)
+
+  // TODO: use original options? or none at all?
+  this[kOperations].push({ ...original, type: 'put', key, value })
 
   return this
 }
@@ -58,8 +71,18 @@ AbstractChainedBatch.prototype.del = function (key, options) {
   const err = this.db._checkKey(key)
   if (err) throw err
 
-  this._del(this.db._serializeKey(key), options != null ? options : emptyOptions)
-  this[kOperations].push({ ...options, type: 'del', key })
+  const original = options
+  const keyEncoding = this.db.keyEncoding(options && options.keyEncoding)
+
+  // Forward encoding options
+  if (!options || options.keyEncoding !== keyEncoding.format) {
+    options = { ...options, keyEncoding: keyEncoding.format }
+  }
+
+  this._del(keyEncoding.encode(key), options)
+
+  // TODO: use original options? or none at all?
+  this[kOperations].push({ ...original, type: 'del', key })
 
   return this
 }
@@ -85,7 +108,9 @@ AbstractChainedBatch.prototype.write = function (options, callback) {
   options = getOptions(options)
 
   if (this[kStatus] !== 'open') {
-    this._nextTick(callback, new Error('Batch is not open'))
+    this.nextTick(callback, new Error('Batch is not open'))
+  } else if (this.length === 0) {
+    this.close(callback)
   } else {
     this[kStatus] = 'writing'
     this._write(options, (err) => {
@@ -112,7 +137,7 @@ AbstractChainedBatch.prototype.close = function (callback) {
   if (this[kStatus] === 'closing') {
     this[kCloseCallbacks].push(callback)
   } else if (this[kStatus] === 'closed') {
-    this._nextTick(callback)
+    this.nextTick(callback)
   } else {
     this[kCloseCallbacks].push(callback)
 
@@ -126,7 +151,7 @@ AbstractChainedBatch.prototype.close = function (callback) {
 }
 
 AbstractChainedBatch.prototype._close = function (callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 AbstractChainedBatch.prototype[kFinishClose] = function () {
@@ -140,9 +165,5 @@ AbstractChainedBatch.prototype[kFinishClose] = function () {
     cb()
   }
 }
-
-// Expose browser-compatible nextTick for dependents
-AbstractChainedBatch.prototype.nextTick =
-AbstractChainedBatch.prototype._nextTick = require('./next-tick')
 
 module.exports = AbstractChainedBatch

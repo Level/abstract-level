@@ -1,7 +1,8 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-const { isSelf } = require('./util')
+const { concat } = require('./util')
+const isBuffer = require('is-buffer')
+const { Buffer } = require('buffer')
 
 exports.args = function (test, testCommon) {
   test('test clear() with legacy range options', function (t) {
@@ -32,7 +33,7 @@ exports.args = function (test, testCommon) {
 exports.clear = function (test, testCommon) {
   makeTest('string', ['a', 'b'])
 
-  if (testCommon.supports.bufferKeys) {
+  if (testCommon.supports.encodings.buffer) {
     makeTest('buffer', [Buffer.from('a'), Buffer.from('b')])
     makeTest('mixed', [Buffer.from('a'), 'b'])
 
@@ -46,7 +47,7 @@ exports.clear = function (test, testCommon) {
 
       const db = testCommon.factory()
       const ops = keys.map(function (key) {
-        return { type: 'put', key: key, value: 'foo' }
+        return { type: 'put', key: key, value: 'foo', keyEncoding: isBuffer(key) ? 'buffer' : 'utf8' }
       })
 
       db.open(function (err) {
@@ -81,7 +82,7 @@ exports.clear = function (test, testCommon) {
 
       const db = testCommon.factory()
       const ops = keys.map(function (key) {
-        return { type: 'put', key: key, value: 'foo' }
+        return { type: 'put', key: key, value: 'foo', keyEncoding: isBuffer(key) ? 'buffer' : 'utf8' }
       })
 
       db.open(function (err) {
@@ -111,6 +112,37 @@ exports.clear = function (test, testCommon) {
       })
     })
   }
+
+  // NOTE: adapted from levelup
+  for (const deferred of [false, true]) {
+    for (const [gte, keyEncoding] of [['"b"', 'utf8'], ['b', 'json']]) {
+      test(`clear() with ${keyEncoding} encoding (deferred: ${deferred})`, async function (t) {
+        const db = testCommon.factory()
+
+        await db.open()
+        await db.batch([
+          { type: 'put', key: '"a"', value: 'a' },
+          { type: 'put', key: '"b"', value: 'b' }
+        ])
+
+        if (deferred) {
+          await db.close()
+          t.is(db.status, 'closed')
+          db.open(t.ifError.bind(t))
+          t.is(db.status, 'opening')
+        }
+
+        await db.clear({ gte, keyEncoding })
+
+        const entries = await concat(db.iterator())
+        const keys = entries.map((e) => e.key)
+
+        t.same(keys, ['"a"'], 'got expected keys')
+
+        return db.close()
+      })
+    }
+  }
 }
 
 exports.events = function (test, testCommon) {
@@ -122,16 +154,11 @@ exports.events = function (test, testCommon) {
 
     t.ok(db.supports.events.clear)
 
-    if (isSelf(db)) {
-      db._serializeKey = (x) => x.toUpperCase()
-      db._serializeValue = (x) => x.toUpperCase()
-    }
-
     db.on('clear', function (options) {
-      t.same(options, { gt: 'x', custom: 123 })
+      t.same(options, { gt: 567, custom: 123 })
     })
 
-    await db.clear({ gt: 'x', custom: 123 })
+    await db.clear({ gt: 567, custom: 123 })
     await db.close()
   })
 
@@ -142,11 +169,6 @@ exports.events = function (test, testCommon) {
     await db.open()
 
     t.ok(db.supports.events.clear)
-
-    if (isSelf(db)) {
-      db._serializeKey = (x) => x.toUpperCase()
-      db._serializeValue = (x) => x.toUpperCase()
-    }
 
     db.on('clear', function (options) {
       t.same(options, {})

@@ -1,7 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-
 module.exports = function (test, testCommon) {
   test('testCommon.factory() returns valid database', function (t) {
     t.plan(6)
@@ -42,9 +40,9 @@ module.exports = function (test, testCommon) {
         t.error(err, 'no error while opening db2')
         db1.put('key', 'value', function (err) {
           t.error(err, 'put key in db1')
-          concat(db2.iterator(), function (err, entries) {
-            t.error(err, 'got items from db2')
-            t.same(entries, [], 'db2 should be empty')
+          db2.get('key', function (err, value) {
+            t.ok(err, 'db2 should be empty')
+            t.is(value, undefined, 'db2 should be empty')
             close()
           })
         })

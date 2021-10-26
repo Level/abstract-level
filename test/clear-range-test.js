@@ -48,7 +48,7 @@ exports.range = function (test, testCommon) {
   }
 
   function verify (t, db, expected) {
-    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
 
     concat(it, function (err, result) {
       t.ifError(err, 'no concat error')
@@ -242,6 +242,16 @@ exports.range = function (test, testCommon) {
     lt: '9b',
     gt: '9a',
     reverse: true
+  }, data)
+
+  rangeTest('gt greater than lt', {
+    gt: '20',
+    lt: '10'
+  }, data)
+
+  rangeTest('gte greater than lte', {
+    gte: '20',
+    lte: '10'
   }, data)
 }
 

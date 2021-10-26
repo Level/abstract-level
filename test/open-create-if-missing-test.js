@@ -1,5 +1,6 @@
 'use strict'
 
+// TODO: test options via constructor
 exports.createIfMissing = function (test, testCommon) {
   test('test database open createIfMissing:false', function (t) {
     const db = testCommon.factory()

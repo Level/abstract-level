@@ -1,7 +1,7 @@
 'use strict'
 
 const isBuffer = require('is-buffer')
-const { verifyNotFoundError, isTypedArray, illegalKeys, assertAsync } = require('./util')
+const { verifyNotFoundError, illegalKeys, assertAsync } = require('./util')
 
 let db
 
@@ -37,57 +37,26 @@ exports.get = function (test, testCommon) {
       t.error(err)
       db.get('foo', function (err, value) {
         t.error(err)
-
-        let result
-
-        if (!db.supports.encodings) {
-          t.isNot(typeof value, 'string', 'should not be string by default')
-
-          if (isTypedArray(value)) {
-            result = String.fromCharCode.apply(null, new Uint16Array(value))
-          } else {
-            t.ok(isBuffer(value))
-            try {
-              result = value.toString()
-            } catch (e) {
-              t.error(e, 'should not throw when converting value to a string')
-            }
-          }
-        } else {
-          result = value
-        }
-
-        t.is(result, 'bar')
+        t.is(value, 'bar')
 
         db.get('foo', {}, function (err, value) { // same but with {}
           t.error(err)
+          t.is(value, 'bar')
 
-          let result
-
-          if (!db.supports.encodings) {
-            t.ok(typeof value !== 'string', 'should not be string by default')
-
-            if (isTypedArray(value)) {
-              result = String.fromCharCode.apply(null, new Uint16Array(value))
-            } else {
-              t.ok(isBuffer(value))
-              try {
-                result = value.toString()
-              } catch (e) {
-                t.error(e, 'should not throw when converting value to a string')
-              }
-            }
-          } else {
-            result = value
-          }
-
-          t.is(result, 'bar')
-
-          db.get('foo', { asBuffer: false }, function (err, value) {
+          db.get('foo', { valueEncoding: 'utf8' }, function (err, value) {
             t.error(err)
-            t.ok(typeof value === 'string', 'should be string if not buffer')
             t.is(value, 'bar')
-            t.end()
+
+            if (!db.supports.encodings.buffer) {
+              return t.end()
+            }
+
+            db.get('foo', { valueEncoding: 'buffer' }, function (err, value) {
+              t.error(err)
+              t.ok(isBuffer(value), 'should be buffer')
+              t.is(value.toString(), 'bar')
+              t.end()
+            })
           })
         })
       })
@@ -99,16 +68,19 @@ exports.get = function (test, testCommon) {
       t.error(err)
 
       db.get('promises').then(function (value) {
-        t.is(value.toString(), 'yes', 'got value without options')
+        t.is(value, 'yes', 'got value without options')
 
         db.get('not found').catch(function (err) {
           t.ok(err, 'should error')
           t.ok(verifyNotFoundError(err), 'should have correct error message')
 
-          const opts = db.supports.encodings ? { valueEncoding: 'utf8' } : { asBuffer: false }
+          if (!db.supports.encodings.buffer) {
+            return t.end()
+          }
 
-          db.get('promises', opts).then(function (value) {
-            t.is(value, 'yes', 'got value with string options')
+          db.get('promises', { valueEncoding: 'buffer' }).then(function (value) {
+            t.ok(isBuffer(value), 'is buffer')
+            t.is(value.toString(), 'yes', 'correct value')
             t.end()
           }).catch(t.fail.bind(t))
         })

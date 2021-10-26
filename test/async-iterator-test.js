@@ -23,7 +23,7 @@ exports.asyncIterator = function (test, testCommon) {
   test('for await...of db.iterator()', async function (t) {
     t.plan(1)
 
-    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
     const output = []
 
     for await (const [key, value] of it) {
@@ -43,7 +43,7 @@ exports.asyncIterator = function (test, testCommon) {
     // Don't await
     db.open()
 
-    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
     const output = []
 
     for await (const [key, value] of it) {
@@ -58,7 +58,7 @@ exports.asyncIterator = function (test, testCommon) {
     t.plan(2)
 
     const db = testCommon.factory()
-    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
     const promise = db.batch(input.map(entry => ({ ...entry, type: 'put' })))
     const output = []
 
@@ -71,7 +71,7 @@ exports.asyncIterator = function (test, testCommon) {
     // Wait for data to be written
     await promise
 
-    for await (const [key, value] of db.iterator({ keyAsBuffer: false, valueAsBuffer: false })) {
+    for await (const [key, value] of db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
       output.push({ key, value })
     }
 
@@ -84,7 +84,7 @@ exports.asyncIterator = function (test, testCommon) {
 
     await db.open()
 
-    for await (const kv of db.iterator({ keyAsBuffer: false, valueAsBuffer: false })) {
+    for await (const kv of db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
       entries.push(kv)
     }
 
@@ -95,7 +95,7 @@ exports.asyncIterator = function (test, testCommon) {
     const db = testCommon.factory()
     const entries = []
 
-    for await (const kv of db.iterator({ keyAsBuffer: false, valueAsBuffer: false })) {
+    for await (const kv of db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
       entries.push(kv)
     }
 

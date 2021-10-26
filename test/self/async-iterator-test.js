@@ -12,12 +12,12 @@ function withIterator (methods) {
   }
 
   class Test extends AbstractLevelDOWN {
-    _iterator () {
-      return new TestIterator(this)
+    _iterator (options) {
+      return new TestIterator(this, options)
     }
   }
 
-  return new Test()
+  return new Test({ encodings: { utf8: true } })
 }
 
 for (const type of ['explicit', 'deferred']) {
@@ -35,11 +35,11 @@ for (const type of ['explicit', 'deferred']) {
     const db = withIterator({
       _next (callback) {
         const { key, value } = input[n++] || {}
-        this._nextTick(callback, null, key, value)
+        this.nextTick(callback, null, key, value)
       },
 
       _close (callback) {
-        this._nextTick(function () {
+        this.nextTick(function () {
           closed = true
           callback()
         })
@@ -47,7 +47,7 @@ for (const type of ['explicit', 'deferred']) {
     })
 
     if (type === 'explicit') await db.open()
-    const it = db.iterator({ keyAsBuffer: false, valueAsBuffer: false })
+    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
     verify(t, db, it)
 
     let n = 0
@@ -66,12 +66,12 @@ for (const type of ['explicit', 'deferred']) {
 
     const db = withIterator({
       _next (callback) {
-        this._nextTick(callback, null, n.toString(), n.toString())
+        this.nextTick(callback, null, n.toString(), n.toString())
         if (n++ > 10) throw new Error('Infinite loop')
       },
 
       _close (callback) {
-        this._nextTick(function () {
+        this.nextTick(function () {
           closed = true
           callback(new Error('close error'))
         })
@@ -102,11 +102,11 @@ for (const type of ['explicit', 'deferred']) {
     const db = withIterator({
       _next (callback) {
         t.pass('nexted')
-        this._nextTick(callback, new Error('iterator error'))
+        this.nextTick(callback, new Error('iterator error'))
       },
 
       _close (callback) {
-        this._nextTick(function () {
+        this.nextTick(function () {
           closed = true
           callback()
         })
@@ -135,12 +135,12 @@ for (const type of ['explicit', 'deferred']) {
 
     const db = withIterator({
       _next (callback) {
-        this._nextTick(callback, null, n.toString(), n.toString())
+        this.nextTick(callback, null, n.toString(), n.toString())
         if (n++ > 10) throw new Error('Infinite loop')
       },
 
       _close (callback) {
-        this._nextTick(function () {
+        this.nextTick(function () {
           closed = true
           callback()
         })

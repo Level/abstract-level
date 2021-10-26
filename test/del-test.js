@@ -1,6 +1,6 @@
 'use strict'
 
-const { verifyNotFoundError, illegalKeys, assertAsync, isSelf } = require('./util')
+const { verifyNotFoundError, illegalKeys, assertAsync } = require('./util')
 
 let db
 
@@ -82,15 +82,11 @@ exports.events = function (test, testCommon) {
 
     t.ok(db.supports.events.del)
 
-    if (isSelf(db)) {
-      db._serializeKey = (x) => x.toUpperCase()
-    }
-
     db.on('del', function (key) {
-      t.is(key, 'a')
+      t.is(key, 456)
     })
 
-    await db.del('a')
+    await db.del(456)
     await db.close()
   })
 

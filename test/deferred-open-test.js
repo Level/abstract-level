@@ -7,13 +7,13 @@ exports.all = function (test, testCommon) {
     let pendingGets = 3
 
     for (let k = 1; k <= entries; k++) {
-      db.get('k' + k, { asBuffer: false }, function (err, v) {
+      db.get('k' + k, { valueEncoding: 'utf8' }, function (err, v) {
         t.ifError(err, 'no get() error')
         t.is(v, 'v' + k, 'value is ok')
         t.is(db.status, 'open', 'status is ok')
 
         if (--pendingGets <= 0) {
-          db.get('k4', { asBuffer: false }, function (err) {
+          db.get('k4', { valueEncoding: 'utf8' }, function (err) {
             t.ok(err)
             db.close(t.ifError.bind(t))
           })
@@ -98,45 +98,13 @@ exports.all = function (test, testCommon) {
     await db.put('beep', 'boop')
 
     t.is(db.status, 'open')
-    t.is(await db.get('beep', { asBuffer: false }), 'boop')
+    t.is(await db.get('beep', { valueEncoding: 'utf8' }), 'boop')
 
     await db.close()
   })
 
   // NOTE: copied from levelup
-  // TODO: replace with iterator test
-  // testCommon.streams && test('deferred open(): test deferred ReadStream', function (t) {
-  //   const ctx = readStreamContext(t)
-  //   const db = testCommon.factory()
-  //
-  //   db.batch(ctx.sourceData.slice(), function (err) {
-  //     t.ifError(err)
-  //     db.close(function (err) {
-  //       t.ifError(err, 'no error')
-  //       let async = true
-  //
-  //       db.open(function (err) {
-  //         async = false
-  //         t.ifError(err, 'no open error')
-  //       })
-  //
-  //       createReadStream(db)
-  //         .on('data', ctx.dataSpy)
-  //         .on('end', ctx.endSpy)
-  //         .on('close', function () {
-  //           ctx.verify()
-  //           db.close(t.end.bind(t))
-  //         })
-  //
-  //       // db should open lazily
-  //       t.ok(async)
-  //     })
-  //   })
-  // })
-
-  // NOTE: copied from levelup
-  // Not relevant for abstract-leveldown by itself
-  testCommon.supports.encodings && test('deferred open(): value of queued operation is not serialized', function (t) {
+  test('deferred open(): value of queued operation is not stringified', function (t) {
     t.plan(4)
 
     const db = testCommon.factory({ valueEncoding: 'json' })
@@ -153,8 +121,7 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: copied from levelup
-  // Not relevant for abstract-leveldown by itself
-  testCommon.supports.encodings && test('deferred open(): key of queued operation is not serialized', function (t) {
+  test('deferred open(): key of queued operation is not stringified', function (t) {
     t.plan(4)
 
     const db = testCommon.factory({ keyEncoding: 'json' })
@@ -222,7 +189,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from deferred-leveldown
   test('deferred iterator - cannot operate on closed db', function (t) {
-    t.plan(7)
+    t.plan(6)
 
     const db = testCommon.factory()
 
@@ -252,7 +219,8 @@ exports.all = function (test, testCommon) {
         try {
           it.seek('foo')
         } catch (err) {
-          t.is(err.message, 'Iterator is not open')
+          // Should *not* throw
+          t.fail(err)
         }
       })
     })
@@ -263,7 +231,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from deferred-leveldown
   test('deferred iterator - cannot operate on closing db', function (t) {
-    t.plan(7)
+    t.plan(6)
 
     const db = testCommon.factory()
 
@@ -294,11 +262,44 @@ exports.all = function (test, testCommon) {
       try {
         it.seek('foo')
       } catch (err) {
-        t.is(err.message, 'Iterator is not open')
+        // Should *not* throw
+        t.fail(err)
       }
     })
 
     const it = db.iterator({ gt: 'foo' })
     t.ok(it instanceof DeferredIterator)
+  })
+
+  // NOTE: adapted from levelup
+  // It should be safe to monkey-patch database methods.
+  // TODO: decide whether to fix this (see actual result below)
+  test.skip('deferred open is patch-safe', async function (t) {
+    const db = testCommon.factory()
+    t.is(db.status, 'opening')
+
+    const calls = []
+
+    for (const method of ['put', 'del', 'batch']) {
+      const original = db[method]
+
+      db[method] = function () {
+        calls.push(method)
+        return original.apply(this, arguments)
+      }
+    }
+
+    await Promise.all([
+      db.put('a', 'value'),
+      db.del('b'),
+      db.batch([{ type: 'del', key: 'c' }])
+    ])
+
+    t.is(db.status, 'open')
+
+    // Actual: ['put', 'del', 'batch', 'put', 'del', 'batch']
+    t.same(calls, ['put', 'del', 'batch'])
+
+    return db.close()
   })
 }

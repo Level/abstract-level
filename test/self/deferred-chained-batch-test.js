@@ -4,33 +4,44 @@ const test = require('tape')
 const { mockDown } = require('../util')
 const DefaultChainedBatch = require('../../lib/default-chained-batch')
 
-// NOTE: copied from deferred-leveldown
-test('deferred chained batch serializes once', function (t) {
+// NOTE: adapted from deferred-leveldown
+test('deferred chained batch encodes once', function (t) {
   t.plan(9)
 
   let called = false
+
+  const keyEncoding = {
+    format: 'utf8',
+    encode (key) {
+      t.is(called, false, 'not yet called')
+      t.is(key, 'foo')
+      return key.toUpperCase()
+    }
+  }
+
+  const valueEncoding = {
+    format: 'utf8',
+    encode (value) {
+      t.is(called, false, 'not yet called')
+      t.is(value, 'bar')
+      return value.toUpperCase()
+    }
+  }
 
   const db = mockDown({
     _batch: function (array, options, callback) {
       called = true
       t.is(array[0] && array[0].key, 'FOO')
       t.is(array[0] && array[0].value, 'BAR')
-      this._nextTick(callback)
-    },
-    _serializeKey (key) {
-      t.is(called, false, 'not yet called')
-      t.is(key, 'foo')
-      return key.toUpperCase()
-    },
-    _serializeValue (value) {
-      t.is(called, false, 'not yet called')
-      t.is(value, 'bar')
-      return value.toUpperCase()
+      this.nextTick(callback)
     },
     _open: function (options, callback) {
       t.is(called, false, 'not yet called')
-      this._nextTick(callback)
+      this.nextTick(callback)
     }
+  }, { encodings: { utf8: true } }, {
+    keyEncoding,
+    valueEncoding
   })
 
   db.once('open', function () {
@@ -48,7 +59,7 @@ test('deferred chained batch is closed upon failed open', function (t) {
   const db = mockDown({
     _open (options, callback) {
       t.pass('opening')
-      this._nextTick(callback, new Error('_open error'))
+      this.nextTick(callback, new Error('_open error'))
     },
     _batch () {
       t.fail('should not be called')

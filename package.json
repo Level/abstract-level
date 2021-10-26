@@ -34,7 +34,9 @@
     "catering": "^2.1.0",
     "is-buffer": "^2.0.5",
     "level-concat-iterator": "^3.0.0",
-    "level-supports": "^2.0.2",
+    "level-supports": "^2.1.0",
+    "level-transcoder": "github:Level/transcoder",
+    "module-error": "^1.0.1",
     "queue-microtask": "^1.2.3"
   },
   "devDependencies": {

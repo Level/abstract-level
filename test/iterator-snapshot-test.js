@@ -74,6 +74,23 @@ exports.snapshot = function (test, testCommon) {
       })
     })
   }))
+
+  // NOTE: adapted from memdown
+  test('delete key after snapshotting, with more entries available', async function (t) {
+    const db = testCommon.factory()
+    await db.open()
+    await Promise.all([db.put('a', 'A'), db.put('b', 'B'), db.put('c', 'C')])
+
+    const iterator = db.iterator({ gte: 'a' })
+    t.same(await iterator.next(), ['a', 'A'])
+
+    await db.del('b')
+    t.same(await iterator.next(), ['b', 'B'])
+    t.same(await iterator.next(), ['c', 'C'])
+
+    await iterator.close()
+    return db.close()
+  })
 }
 
 exports.all = function (test, testCommon) {

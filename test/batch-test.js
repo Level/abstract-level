@@ -1,6 +1,7 @@
 'use strict'
 
-const { verifyNotFoundError, isTypedArray, assertAsync, isSelf } = require('./util')
+const { Buffer } = require('buffer')
+const { verifyNotFoundError, assertAsync } = require('./util')
 const { illegalKeys, illegalValues } = require('./util')
 
 let db
@@ -217,18 +218,7 @@ exports.batch = function (test, testCommon) {
 
       db.get('foo', function (err, value) {
         t.error(err)
-        let result
-
-        if (db.supports.encodings) {
-          t.is(typeof value, 'string')
-          result = value
-        } else if (isTypedArray(value)) {
-          result = String.fromCharCode.apply(null, new Uint16Array(value))
-        } else {
-          t.ok(typeof Buffer !== 'undefined' && value instanceof Buffer)
-          result = value.toString()
-        }
-        t.equal(result, 'bar')
+        t.is(value, 'bar')
         t.end()
       })
     })
@@ -240,11 +230,7 @@ exports.batch = function (test, testCommon) {
     await db.open()
     await db.batch([{ type: 'put', key: 'foo', value: 'bar' }])
 
-    const opts = db.supports.encodings
-      ? { valueEncoding: 'utf8' }
-      : { asBuffer: false }
-
-    t.is(await db.get('foo', opts), 'bar')
+    t.is(await db.get('foo', { valueEncoding: 'utf8' }), 'bar')
     return db.close()
   })
 
@@ -264,17 +250,7 @@ exports.batch = function (test, testCommon) {
 
       db.get('foobatch1', function (err, value) {
         t.error(err)
-        let result
-        if (db.supports.encodings) {
-          t.is(typeof value, 'string')
-          result = value
-        } else if (isTypedArray(value)) {
-          result = String.fromCharCode.apply(null, new Uint16Array(value))
-        } else {
-          t.ok(typeof Buffer !== 'undefined' && value instanceof Buffer)
-          result = value.toString()
-        }
-        t.equal(result, 'bar1')
+        t.is(value, 'bar1')
         done()
       })
 
@@ -287,21 +263,52 @@ exports.batch = function (test, testCommon) {
 
       db.get('foobatch3', function (err, value) {
         t.error(err)
-        let result
-        if (db.supports.encodings) {
-          t.is(typeof value, 'string')
-          result = value
-        } else if (isTypedArray(value)) {
-          result = String.fromCharCode.apply(null, new Uint16Array(value))
-        } else {
-          t.ok(typeof Buffer !== 'undefined' && value instanceof Buffer)
-          result = value.toString()
-        }
-        t.equal(result, 'bar3')
+        t.is(value, 'bar3')
         done()
       })
     })
   })
+
+  for (const encoding of ['utf8', 'buffer', 'view']) {
+    if (!testCommon.supports.encodings[encoding]) continue
+
+    // NOTE: adapted from memdown
+    test(`empty values in batch with ${encoding} valueEncoding`, async function (t) {
+      const db = testCommon.factory({ valueEncoding: encoding })
+      const values = ['', Uint8Array.from([]), Buffer.alloc(0)]
+      const expected = encoding === 'utf8' ? values[0] : encoding === 'view' ? values[1] : values[2]
+
+      await db.open()
+      await db.batch(values.map((value, i) => ({ type: 'put', key: String(i), value })))
+
+      for (let i = 0; i < values.length; i++) {
+        const value = await db.get(String(i))
+
+        // Buffer is a Uint8Array, so this is allowed
+        if (encoding === 'view' && Buffer.isBuffer(value)) {
+          t.same(value, values[2])
+        } else {
+          t.same(value, expected)
+        }
+      }
+
+      return db.close()
+    })
+
+    test(`empty keys in batch with ${encoding} keyEncoding`, async function (t) {
+      const db = testCommon.factory({ keyEncoding: encoding })
+      const keys = ['', Uint8Array.from([]), Buffer.alloc(0)]
+
+      await db.open()
+
+      for (let i = 0; i < keys.length; i++) {
+        await db.batch([{ type: 'put', key: keys[i], value: String(i) }])
+        t.same(await db.get(keys[i]), String(i), `got value ${i}`)
+      }
+
+      return db.close()
+    })
+  }
 }
 
 exports.atomic = function (test, testCommon) {
@@ -339,16 +346,11 @@ exports.events = function (test, testCommon) {
 
     t.ok(db.supports.events.batch)
 
-    if (isSelf(db)) {
-      db._serializeKey = (x) => x.toUpperCase()
-      db._serializeValue = (x) => x.toUpperCase()
-    }
-
     db.on('batch', function (ops) {
-      t.same(ops, [{ type: 'put', key: 'a', value: 'b', custom: 123 }])
+      t.same(ops, [{ type: 'put', key: 456, value: 99, custom: 123 }])
     })
 
-    await db.batch([{ type: 'put', key: 'a', value: 'b', custom: 123 }])
+    await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
     await db.close()
   })
 

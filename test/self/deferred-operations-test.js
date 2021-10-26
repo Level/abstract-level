@@ -10,55 +10,63 @@ test('deferred operations are called in order', function (t) {
   const calls = []
   const db = mockDown({
     _put: function (key, value, options, callback) {
-      this._nextTick(callback)
+      this.nextTick(callback)
       calls.push({ type: 'put', key, value, options })
     },
     _get: function (key, options, callback) {
-      this._nextTick(callback)
+      this.nextTick(callback)
       calls.push({ type: 'get', key, options })
     },
     _del: function (key, options, callback) {
-      this._nextTick(callback)
+      this.nextTick(callback)
       calls.push({ type: 'del', key, options })
     },
     _batch: function (arr, options, callback) {
-      this._nextTick(callback)
+      this.nextTick(callback)
       calls.push({ type: 'batch', keys: arr.map(op => op.key).join(',') })
     },
     _clear: function (options, callback) {
-      this._nextTick(callback)
+      this.nextTick(callback)
       calls.push({ ...options, type: 'clear' })
     },
-    _iterator () {
+    _iterator (options) {
       calls.push({ type: 'iterator' })
-      return mockIterator(this, {
+      return mockIterator(this, options, {
         _next (callback) {
-          this._nextTick(callback)
+          this.nextTick(callback)
           calls.push({ type: 'iterator.next' })
         }
       })
     },
     _open: function (options, callback) {
-      this._nextTick(callback)
+      this.nextTick(callback)
       t.is(calls.length, 0, 'not yet called')
     }
+  }, {
+    encodings: {
+      utf8: true,
+      buffer: true
+    }
+  }, {
+    keyEncoding: 'utf8',
+    valueEncoding: 'utf8'
   })
 
   db.open(function (err) {
     t.ifError(err, 'no open() error')
     t.same(calls, [
-      { type: 'put', key: '001', value: 'bar1', options: {} },
-      { type: 'get', key: '002', options: { asBuffer: true } },
-      { type: 'clear', reverse: false, limit: -1 },
-      { type: 'put', key: '010', value: 'bar2', options: {} },
-      { type: 'get', key: '011', options: { asBuffer: false } },
-      { type: 'del', key: '020', options: { customOption: 123 } },
-      { type: 'del', key: '021', options: {} },
+      { type: 'put', key: '001', value: 'bar1', options: { keyEncoding: 'utf8', valueEncoding: 'utf8' } },
+      { type: 'get', key: '002', options: { keyEncoding: 'utf8', valueEncoding: 'utf8' } },
+      { type: 'clear', reverse: false, limit: -1, keyEncoding: 'utf8' },
+      { type: 'put', key: '010', value: 'bar2', options: { keyEncoding: 'utf8', valueEncoding: 'utf8' } },
+      { type: 'get', key: Buffer.from('011'), options: { keyEncoding: 'buffer', valueEncoding: 'utf8' } },
+      { type: 'del', key: '020', options: { customOption: 123, keyEncoding: 'utf8' } },
+      { type: 'del', key: '021', options: { keyEncoding: 'utf8' } },
       { type: 'batch', keys: '040,041' },
       { type: 'iterator' },
       { type: 'batch', keys: '050,051' },
       { type: 'iterator.next' },
-      { type: 'clear', gt: '060', reverse: false, limit: -1 }
+      { type: 'clear', gt: '060', reverse: false, limit: -1, keyEncoding: 'utf8' }
     ], 'calls correctly behaved')
   })
 
@@ -66,7 +74,7 @@ test('deferred operations are called in order', function (t) {
   db.get('002', t.ifError.bind(t))
   db.clear(t.ifError.bind(t))
   db.put('010', 'bar2', t.ifError.bind(t))
-  db.get('011', { asBuffer: false }, t.ifError.bind(t))
+  db.get('011', { keyEncoding: 'buffer' }, t.ifError.bind(t))
   db.del('020', { customOption: 123 }, t.ifError.bind(t))
   db.del('021', t.ifError.bind(t))
   db.batch([

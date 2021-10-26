@@ -92,7 +92,7 @@ exports.open = function (test, testCommon) {
     }).catch(t.fail.bind(t))
   })
 
-  testCommon.supports.idempotentOpen && test('test database open and close in same tick', assertAsync.ctx(function (t) {
+  test('test database open and close in same tick', assertAsync.ctx(function (t) {
     t.plan(10)
 
     const db = testCommon.factory()
@@ -122,7 +122,7 @@ exports.open = function (test, testCommon) {
     db.on('closed', assertAsync(() => { order.push('closed event') }))
   }))
 
-  testCommon.supports.idempotentOpen && test('test database open, close and open in same tick', assertAsync.ctx(function (t) {
+  test('test database open, close and open in same tick', assertAsync.ctx(function (t) {
     t.plan(14)
 
     const db = testCommon.factory()
@@ -247,7 +247,7 @@ exports.open = function (test, testCommon) {
     }
   }))
 
-  testCommon.supports.idempotentOpen && test('test database close on open event', function (t) {
+  test('test database close on open event', function (t) {
     t.plan(5)
 
     const db = testCommon.factory()
@@ -270,6 +270,25 @@ exports.open = function (test, testCommon) {
     })
 
     db.on('closed', () => { order.push('closed event') })
+  })
+
+  test('test passive open()', async function (t) {
+    t.plan(1)
+    const db = testCommon.factory()
+    await db.open({ passive: true }) // OK, already opening
+    await db.close()
+    await db.open({ passive: true }).catch(err => {
+      t.is(err.message, 'Database is not open')
+    })
+    await db.open()
+    await db.open({ passive: true }) // OK, already open
+    return db.close()
+  })
+
+  test('test passive open(): ignored if set in constructor options', async function (t) {
+    const db = testCommon.factory({ passive: true })
+    await new Promise((resolve) => db.once('open', resolve))
+    return db.close()
   })
 }
 

@@ -1,6 +1,8 @@
 'use strict'
 
 const { fromCallback } = require('catering')
+const ModuleError = require('module-error')
+const { getOptions } = require('./lib/common')
 
 const kPromise = Symbol('promise')
 const kNextCallback = Symbol('nextCallback')
@@ -10,10 +12,18 @@ const kClosing = Symbol('closing')
 const kFinishClose = Symbol('finishClose')
 const kClosed = Symbol('closed')
 const kCloseCallbacks = Symbol('closeCallbacks')
+const kKeyEncoding = Symbol('keyEncoding')
+const kValueEncoding = Symbol('valueEncoding')
+const kKeys = Symbol('keys')
+const kValues = Symbol('values')
 
-function AbstractIterator (db) {
+function AbstractIterator (db, options) {
   if (typeof db !== 'object' || db === null) {
     throw new TypeError('First argument must be an abstract-leveldown compliant store')
+  }
+
+  if (typeof options !== 'object' || options === null) {
+    throw new TypeError('The second argument must be an options object')
   }
 
   this[kClosed] = false
@@ -23,9 +33,14 @@ function AbstractIterator (db) {
   this[kNextCallback] = null
   this[kFinishNext] = this[kFinishNext].bind(this)
   this[kFinishClose] = this[kFinishClose].bind(this)
+  this[kKeyEncoding] = options[kKeyEncoding]
+  this[kValueEncoding] = options[kValueEncoding]
+  this[kKeys] = options.keys !== false
+  this[kValues] = options.values !== false
 
   this.db = db
   this.db.attachResource(this)
+  this.nextTick = db.nextTick
 }
 
 AbstractIterator.prototype.next = function (callback) {
@@ -40,7 +55,7 @@ AbstractIterator.prototype.next = function (callback) {
       }
     })
   } else if (typeof callback !== 'function') {
-    throw new Error('Callback must be a function')
+    throw new TypeError('The first argument must be a function or undefined')
   }
 
   if (this[kClosing]) {
@@ -58,35 +73,74 @@ AbstractIterator.prototype.next = function (callback) {
 }
 
 AbstractIterator.prototype._next = function (callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
-AbstractIterator.prototype[kFinishNext] = function (err, ...rest) {
+AbstractIterator.prototype[kFinishNext] = function (err, key, value) {
   const cb = this[kNextCallback]
+
   this[kNexting] = false
   this[kNextCallback] = null
+
   if (this[kClosing]) this._close(this[kFinishClose])
-  cb(err, ...rest)
+
+  try {
+    if (this[kKeys] && key != null) {
+      key = this[kKeyEncoding].decode(key)
+    } else {
+      key = undefined
+    }
+  } catch (err) {
+    return cb(new ModuleError('Iterator could not decode key', {
+      code: 'LEVEL_DECODE_ERROR',
+      cause: err
+    }))
+  }
+
+  try {
+    if (this[kValues] && value != null) {
+      value = this[kValueEncoding].decode(value)
+    } else {
+      value = undefined
+    }
+  } catch (err) {
+    return cb(new ModuleError('Iterator could not decode value', {
+      code: 'LEVEL_DECODE_ERROR',
+      cause: err
+    }))
+  }
+
+  cb(err, key, value)
 }
 
-// TODO: add options argument
-AbstractIterator.prototype.seek = function (target) {
+AbstractIterator.prototype.seek = function (target, options) {
+  options = getOptions(options)
+
   if (this[kClosing]) {
-    throw new Error('Iterator is not open')
+    // Don't throw here, to be kind to implementations that wrap
+    // another db and don't necessarily control when the db is closed
   } else if (this[kNexting]) {
     throw new Error('Iterator is busy')
   } else {
-    this._seek(this.db._serializeKey(target))
+    const keyEncoding = this.db.keyEncoding(
+      options.keyEncoding || this[kKeyEncoding]
+    )
+
+    if (options.keyEncoding !== keyEncoding.format) {
+      options = { ...options, keyEncoding: keyEncoding.format }
+    }
+
+    this._seek(keyEncoding.encode(target), options)
   }
 }
 
-AbstractIterator.prototype._seek = function (target) {}
+AbstractIterator.prototype._seek = function (target, options) {}
 
 AbstractIterator.prototype.close = function (callback) {
   callback = fromCallback(callback, kPromise)
 
   if (this[kClosed]) {
-    this._nextTick(callback)
+    this.nextTick(callback)
   } else if (this[kClosing]) {
     this[kCloseCallbacks].push(callback)
   } else {
@@ -102,7 +156,7 @@ AbstractIterator.prototype.close = function (callback) {
 }
 
 AbstractIterator.prototype._close = function (callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 // TODO: log deprecation message
@@ -142,8 +196,8 @@ for (const k of ['_ended property', '_nexting property', '_end method']) {
   })
 }
 
-// Expose browser-compatible nextTick for dependents
-AbstractIterator.prototype.nextTick =
-AbstractIterator.prototype._nextTick = require('./next-tick')
+// Exposed so that AbstractLevelDOWN can set these options
+AbstractIterator.keyEncoding = kKeyEncoding
+AbstractIterator.valueEncoding = kValueEncoding
 
 module.exports = AbstractIterator

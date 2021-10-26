@@ -30,7 +30,7 @@ test('defer() custom operation', function (t) {
       } else {
         t.is(db.status, 'open')
         t.is(arg, 456)
-        this._nextTick(callback, null, 987)
+        this.nextTick(callback, null, 987)
       }
     }
   })
@@ -49,14 +49,14 @@ test('defer() custom operation with failed open', function (t) {
   const db = mockDown({
     _open (options, callback) {
       t.pass('opened')
-      this._nextTick(callback, new Error('_open error'))
+      this.nextTick(callback, new Error('_open error'))
     },
     custom (arg, callback) {
       if (this.status === 'opening') {
         this.defer(() => this.custom(arg, callback))
       } else {
         t.is(db.status, 'closed')
-        this._nextTick(callback, new Error('Database is not open (x)'))
+        this.nextTick(callback, new Error('Database is not open (x)'))
       }
     }
   })
@@ -73,7 +73,7 @@ test('defer() can drop custom synchronous operation', function (t) {
   const db = mockDown({
     _open (options, callback) {
       t.pass('opened')
-      this._nextTick(callback, new Error('_open error'))
+      this.nextTick(callback, new Error('_open error'))
     },
     custom (arg) {
       if (this.status === 'opening') {

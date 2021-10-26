@@ -1,27 +1,19 @@
 'use strict'
 
-const verifyNotFoundError = require('./util').verifyNotFoundError
-const testBuffer = Buffer.from('testbuffer')
+const { verifyNotFoundError } = require('./util')
+const { Buffer } = require('buffer')
 
 let db
 
-function makePutGetDelSuccessfulTest (test, testCommon, type, key, value, expectedResult) {
-  const hasExpectedResult = arguments.length === 6
+function makeTest (test, type, key, value, expectedResult) {
+  const hasExpectedResult = arguments.length === 5
   test('test put()/get()/del() with ' + type, function (t) {
     db.put(key, value, function (err) {
       t.error(err)
       db.get(key, function (err, _value) {
         t.error(err, 'no error, has key/value for `' + type + '`')
 
-        let result
-
-        if (!db.supports.encodings) {
-          t.ok(Buffer.isBuffer(_value), 'is a Buffer')
-          result = _value
-        } else {
-          t.is(typeof _value, 'string', 'is a string')
-          result = _value
-        }
+        let result = _value
 
         if (hasExpectedResult) {
           t.equal(result.toString(), expectedResult)
@@ -59,52 +51,52 @@ exports.setUp = function (test, testCommon) {
 
 exports.nonErrorKeys = function (test, testCommon) {
   // valid falsey keys
-  makePutGetDelSuccessfulTest(test, testCommon, '`0` key', 0, 'foo 0')
+  makeTest(test, '`0` key', 0, 'foo 0')
+  makeTest(test, 'empty string key', 0, 'foo')
 
   // standard String key
-  makePutGetDelSuccessfulTest(
+  makeTest(
     test
-    , testCommon
     , 'long String key'
     , 'some long string that I\'m using as a key for this unit test, cross your fingers human, we\'re going in!'
     , 'foo'
   )
 
-  if (testCommon.supports.bufferKeys) {
-    makePutGetDelSuccessfulTest(test, testCommon, 'Buffer key', testBuffer, 'foo')
+  if (testCommon.supports.encodings.buffer) {
+    makeTest(test, 'Buffer key', Buffer.from('0080c0ff', 'hex'), 'foo')
+    makeTest(test, 'empty Buffer key', Buffer.alloc(0), 'foo')
   }
 
   // non-empty Array as a value
-  makePutGetDelSuccessfulTest(test, testCommon, 'Array value', 'foo', [1, 2, 3, 4])
+  makeTest(test, 'Array value', 'foo', [1, 2, 3, 4])
 }
 
 exports.nonErrorValues = function (test, testCommon) {
   // valid falsey values
-  makePutGetDelSuccessfulTest(test, testCommon, '`false` value', 'foo false', false)
-  makePutGetDelSuccessfulTest(test, testCommon, '`0` value', 'foo 0', 0)
-  makePutGetDelSuccessfulTest(test, testCommon, '`NaN` value', 'foo NaN', NaN)
+  makeTest(test, '`false` value', 'foo false', false)
+  makeTest(test, '`0` value', 'foo 0', 0)
+  makeTest(test, '`NaN` value', 'foo NaN', NaN)
 
   // all of the following result in an empty-string value:
-  makePutGetDelSuccessfulTest(test, testCommon, 'empty String value', 'foo', '', '')
-  makePutGetDelSuccessfulTest(test, testCommon, 'empty Buffer value', 'foo', Buffer.alloc(0), '')
+  makeTest(test, 'empty String value', 'foo', '', '')
+  makeTest(test, 'empty Buffer value', 'foo', Buffer.alloc(0), '')
+  makeTest(test, 'empty Array value', 'foo', [], '')
 
-  // note that an implementation may return the value as an array
-  makePutGetDelSuccessfulTest(test, testCommon, 'empty Array value', 'foo', [], '')
-
-  // standard String value
-  makePutGetDelSuccessfulTest(
+  // String value
+  makeTest(
     test
-    , testCommon
     , 'long String value'
     , 'foo'
     , 'some long string that I\'m using as a key for this unit test, cross your fingers human, we\'re going in!'
   )
 
-  // standard Buffer value
-  makePutGetDelSuccessfulTest(test, testCommon, 'Buffer value', 'foo', testBuffer)
+  // Buffer value
+  if (testCommon.supports.encodings.buffer) {
+    makeTest(test, 'Buffer value', 'foo', Buffer.from('0080c0ff', 'hex'))
+  }
 
   // non-empty Array as a key
-  makePutGetDelSuccessfulTest(test, testCommon, 'Array key', [1, 2, 3, 4], 'foo')
+  makeTest(test, 'Array key', [1, 2, 3, 4], 'foo')
 }
 
 exports.tearDown = function (test, testCommon) {

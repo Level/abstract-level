@@ -35,8 +35,8 @@ exports.setUp = function (test, testCommon) {
 
 exports.range = function (test, testCommon) {
   function rangeTest (name, opts, expected) {
-    opts.keyAsBuffer = false
-    opts.valueAsBuffer = false
+    opts.keyEncoding = 'utf8'
+    opts.valueEncoding = 'utf8'
 
     test(name, function (t) {
       collectEntries(db.iterator(opts), function (err, result) {
@@ -247,6 +247,16 @@ exports.range = function (test, testCommon) {
     lt: '9b',
     gt: '9a',
     reverse: true
+  }, [])
+
+  rangeTest('gt greater than lt', {
+    gt: '20',
+    lt: '10'
+  }, [])
+
+  rangeTest('gte greater than lte', {
+    gte: '20',
+    lte: '10'
   }, [])
 }
 

@@ -3,15 +3,17 @@
 const test = require('tape')
 const sinon = require('sinon')
 const inherits = require('util').inherits
+const isBuffer = require('is-buffer')
+const { Buffer } = require('buffer')
 const AbstractLevelDOWN = require('../').AbstractLevelDOWN
 const AbstractIterator = require('../').AbstractIterator
 const AbstractChainedBatch = require('../').AbstractChainedBatch
-const { isSelf } = require('./util')
+const getRangeOptions = require('../lib/range-options')
 
 const testCommon = require('./common')({
-  test: test,
+  test,
   factory: function () {
-    return new AbstractLevelDOWN()
+    return new AbstractLevelDOWN({ encodings: { utf8: true } })
   }
 })
 
@@ -140,22 +142,8 @@ test('async generator', async function (t) {
 
 test('test core extensibility', function (t) {
   const Test = implement(AbstractLevelDOWN)
-  const test = new Test()
+  const test = new Test({ encodings: { utf8: true } })
   t.equal(test.status, 'opening', 'status is opening')
-  t.is(isSelf(test), false, 'isSelf utility works')
-  t.is(isSelf(new AbstractLevelDOWN()), true, 'isSelf utility works')
-  t.end()
-})
-
-test('test key/value serialization', function (t) {
-  const Test = implement(AbstractLevelDOWN)
-  const test = new Test()
-
-  ;['', {}, null, undefined, Buffer.alloc(0)].forEach(function (v) {
-    t.ok(test._serializeKey(v) === v, '_serializeKey is an identity function')
-    t.ok(test._serializeValue(v) === v, '_serializeValue is an identity function')
-  })
-
   t.end()
 })
 
@@ -164,8 +152,8 @@ test('test open() extensibility when new', function (t) {
   const expectedCb = function () {}
   const expectedOptions = { createIfMissing: true, errorIfExists: false }
   const Test = implement(AbstractLevelDOWN, { _open: spy })
-  const test = new Test({})
-  const test2 = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
+  const test2 = new Test({ encodings: { utf8: true } })
 
   test.open(expectedCb)
 
@@ -190,7 +178,7 @@ test('test open() extensibility when open', function (t) {
 
   const spy = sinon.spy(function (options, cb) { this.nextTick(cb) })
   const Test = implement(AbstractLevelDOWN, { _open: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     t.is(spy.callCount, 1, 'got _open() call')
@@ -206,7 +194,7 @@ test('test opening explicitly gives a chance to capture an error', function (t) 
 
   const spy = sinon.spy(function (options, cb) { this.nextTick(cb, new Error('_open error')) })
   const Test = implement(AbstractLevelDOWN, { _open: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.open(function (err) {
     t.is(spy.callCount, 1, 'got _open() call')
@@ -219,7 +207,7 @@ test('test opening explicitly gives a chance to capture an error with promise', 
 
   const spy = sinon.spy(function (options, cb) { this.nextTick(cb, new Error('_open error')) })
   const Test = implement(AbstractLevelDOWN, { _open: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   try {
     await test.open()
@@ -229,12 +217,36 @@ test('test opening explicitly gives a chance to capture an error with promise', 
   }
 })
 
+test('test constructor options are forwarded to open()', function (t) {
+  t.plan(3)
+
+  const spy = sinon.spy(function (options, cb) { this.nextTick(cb) })
+  const Test = implement(AbstractLevelDOWN, { _open: spy })
+  const test = new Test({ encodings: { utf8: true } }, {
+    passive: true,
+    keyEncoding: 'json',
+    valueEncoding: 'json',
+    createIfMissing: false,
+    foo: 123
+  })
+
+  test.open(function (err) {
+    t.ifError(err, 'no open() error')
+    t.is(spy.callCount, 1, 'got _open() call')
+    t.same(spy.getCall(0).args[0], {
+      foo: 123,
+      createIfMissing: false,
+      errorIfExists: false
+    }, 'does not forward passive, keyEncoding and valueEncoding options')
+  })
+})
+
 test('test close() extensibility when open', function (t) {
   t.plan(4)
 
-  const spy = sinon.spy(function (cb) { this._nextTick(cb) })
+  const spy = sinon.spy(function (cb) { this.nextTick(cb) })
   const Test = implement(AbstractLevelDOWN, { _close: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.close(function (err) {
@@ -246,29 +258,12 @@ test('test close() extensibility when open', function (t) {
   })
 })
 
-test('test close() extensibility when open, via open callback', function (t) {
-  t.plan(4)
-
-  const spy = sinon.spy(function (cb) { this._nextTick(cb) })
-  const Test = implement(AbstractLevelDOWN, { _close: spy })
-  const test = new Test({}, function () {
-    test.close(function (err) {
-      t.ifError(err, 'no close() error')
-      t.is(spy.callCount, 1, 'got _close() call')
-      t.is(spy.getCall(0).thisValue, test, '`this` on _close() was correct')
-      t.is(spy.getCall(0).args.length, 1, 'got one arguments')
-    })
-
-    test.on('open', t.fail.bind(t))
-  })
-})
-
 test('test close() extensibility when new', function (t) {
   t.plan(3)
 
-  const spy = sinon.spy(function (cb) { this._nextTick(cb) })
+  const spy = sinon.spy(function (cb) { this.nextTick(cb) })
   const Test = implement(AbstractLevelDOWN, { _close: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.close(function (err) {
     t.ifError(err, 'no close() error')
@@ -291,7 +286,7 @@ test('test open(), close(), open() with twice failed open', function (t) {
 
   db._open = function (options, callback) {
     t.pass('called')
-    this._nextTick(callback, new Error('test' + (++opens)))
+    this.nextTick(callback, new Error('test' + (++opens)))
   }
 
   db.open(function (err) {
@@ -324,7 +319,7 @@ test('test open(), close(), open() with first failed open', function (t) {
 
   db._open = function (options, callback) {
     t.pass('called')
-    this._nextTick(callback, opens++ ? null : new Error('test'))
+    this.nextTick(callback, opens++ ? null : new Error('test'))
   }
 
   db.open(function (err) {
@@ -360,7 +355,7 @@ test('test open(), close(), open() with second failed open', function (t) {
 
   db._open = function (options, callback) {
     t.pass('called')
-    this._nextTick(callback, opens++ ? new Error('test') : null)
+    this.nextTick(callback, opens++ ? new Error('test') : null)
   }
 
   db.open(function (err) {
@@ -388,10 +383,10 @@ test('test get() extensibility', function (t) {
 
   const spy = sinon.spy()
   const expectedCb = function () {}
-  const expectedOptions = { asBuffer: true }
+  const expectedOptions = { keyEncoding: 'utf8', valueEncoding: 'utf8' }
   const expectedKey = 'a key'
   const Test = implement(AbstractLevelDOWN, { _get: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } }, { keyEncoding: 'utf8' })
 
   test.once('open', function () {
     test.get(expectedKey, expectedCb)
@@ -401,7 +396,7 @@ test('test get() extensibility', function (t) {
     t.equal(spy.getCall(0).args.length, 3, 'got three arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
     t.deepEqual(spy.getCall(0).args[1], expectedOptions, 'got default options argument')
-    t.equal(spy.getCall(0).args[2], expectedCb, 'got expected cb argument')
+    t.is(typeof spy.getCall(0).args[2], 'function', 'got cb argument')
 
     test.get(expectedKey, { options: 1 }, expectedCb)
 
@@ -412,7 +407,7 @@ test('test get() extensibility', function (t) {
     t.equal(spy.getCall(1).args.length, 3, 'got three arguments')
     t.equal(spy.getCall(1).args[0], expectedKey, 'got expected key argument')
     t.deepEqual(spy.getCall(1).args[1], expectedOptions, 'got expected options argument')
-    t.equal(spy.getCall(1).args[2], expectedCb, 'got expected cb argument')
+    t.is(typeof spy.getCall(1).args[2], 'function', 'got cb argument')
   })
 })
 
@@ -421,10 +416,10 @@ test('test getMany() extensibility', function (t) {
 
   const spy = sinon.spy()
   const expectedCb = function () {}
-  const expectedOptions = { asBuffer: true }
+  const expectedOptions = { keyEncoding: 'utf8', valueEncoding: 'utf8' }
   const expectedKey = 'a key'
   const Test = implement(AbstractLevelDOWN, { _getMany: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.getMany([expectedKey], expectedCb)
@@ -434,7 +429,7 @@ test('test getMany() extensibility', function (t) {
     t.equal(spy.getCall(0).args.length, 3, 'got three arguments')
     t.deepEqual(spy.getCall(0).args[0], [expectedKey], 'got expected keys argument')
     t.deepEqual(spy.getCall(0).args[1], expectedOptions, 'got default options argument')
-    t.equal(spy.getCall(0).args[2], expectedCb, 'got expected cb argument')
+    t.is(typeof spy.getCall(0).args[2], 'function', 'got cb argument')
 
     test.getMany([expectedKey], { options: 1 }, expectedCb)
 
@@ -445,7 +440,7 @@ test('test getMany() extensibility', function (t) {
     t.equal(spy.getCall(1).args.length, 3, 'got three arguments')
     t.deepEqual(spy.getCall(1).args[0], [expectedKey], 'got expected key argument')
     t.deepEqual(spy.getCall(1).args[1], expectedOptions, 'got expected options argument')
-    t.equal(spy.getCall(1).args[2], expectedCb, 'got expected cb argument')
+    t.is(typeof spy.getCall(1).args[2], 'function', 'got cb argument')
   })
 })
 
@@ -454,10 +449,10 @@ test('test del() extensibility', function (t) {
 
   const spy = sinon.spy()
   const expectedCb = function () {}
-  const expectedOptions = { options: 1 }
+  const expectedOptions = { options: 1, keyEncoding: 'utf8' }
   const expectedKey = 'a key'
   const Test = implement(AbstractLevelDOWN, { _del: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.del(expectedKey, expectedCb)
@@ -466,7 +461,7 @@ test('test del() extensibility', function (t) {
     t.equal(spy.getCall(0).thisValue, test, '`this` on _del() was correct')
     t.equal(spy.getCall(0).args.length, 3, 'got three arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
-    t.deepEqual(spy.getCall(0).args[1], {}, 'got blank options argument')
+    t.deepEqual(spy.getCall(0).args[1], { keyEncoding: 'utf8' }, 'got blank options argument')
     t.equal(typeof spy.getCall(0).args[2], 'function', 'got cb argument')
 
     test.del(expectedKey, expectedOptions, expectedCb)
@@ -485,11 +480,11 @@ test('test put() extensibility', function (t) {
 
   const spy = sinon.spy()
   const expectedCb = function () {}
-  const expectedOptions = { options: 1 }
+  const expectedOptions = { options: 1, keyEncoding: 'utf8', valueEncoding: 'utf8' }
   const expectedKey = 'a key'
   const expectedValue = 'a value'
   const Test = implement(AbstractLevelDOWN, { _put: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.put(expectedKey, expectedValue, expectedCb)
@@ -499,7 +494,7 @@ test('test put() extensibility', function (t) {
     t.equal(spy.getCall(0).args.length, 4, 'got four arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
     t.equal(spy.getCall(0).args[1], expectedValue, 'got expected value argument')
-    t.deepEqual(spy.getCall(0).args[2], {}, 'got blank options argument')
+    t.deepEqual(spy.getCall(0).args[2], { keyEncoding: 'utf8', valueEncoding: 'utf8' }, 'got default options argument')
     t.equal(typeof spy.getCall(0).args[3], 'function', 'got cb argument')
 
     test.put(expectedKey, expectedValue, expectedOptions, expectedCb)
@@ -509,7 +504,7 @@ test('test put() extensibility', function (t) {
     t.equal(spy.getCall(1).args.length, 4, 'got four arguments')
     t.equal(spy.getCall(1).args[0], expectedKey, 'got expected key argument')
     t.equal(spy.getCall(1).args[1], expectedValue, 'got expected value argument')
-    t.deepEqual(spy.getCall(1).args[2], expectedOptions, 'got blank options argument')
+    t.deepEqual(spy.getCall(1).args[2], expectedOptions, 'got expected options argument')
     t.equal(typeof spy.getCall(1).args[3], 'function', 'got cb argument')
   })
 })
@@ -521,11 +516,11 @@ test('test batch([]) (array-form) extensibility', function (t) {
   const expectedCb = function () {}
   const expectedOptions = { options: 1 }
   const expectedArray = [
-    { type: 'put', key: '1', value: '1' },
-    { type: 'del', key: '2' }
+    { type: 'put', key: '1', value: '1', keyEncoding: 'utf8', valueEncoding: 'utf8' },
+    { type: 'del', key: '2', keyEncoding: 'utf8' }
   ]
   const Test = implement(AbstractLevelDOWN, { _batch: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch(expectedArray, expectedCb)
@@ -562,7 +557,7 @@ test('test batch([]) (array-form) with empty array is asynchronous', function (t
 
   const spy = sinon.spy()
   const Test = implement(AbstractLevelDOWN, { _batch: spy })
-  const test = new Test()
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     let async = false
@@ -586,7 +581,7 @@ test('test chained batch() extensibility', function (t) {
   const expectedCb = function () {}
   const expectedOptions = { options: 1 }
   const Test = implement(AbstractLevelDOWN, { _batch: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch().put('foo', 'bar').del('bang').write(expectedCb)
@@ -595,8 +590,8 @@ test('test chained batch() extensibility', function (t) {
     t.equal(spy.getCall(0).thisValue, test, '`this` on _batch() was correct')
     t.equal(spy.getCall(0).args.length, 3, 'got three arguments')
     t.equal(spy.getCall(0).args[0].length, 2, 'got expected array argument')
-    t.deepEqual(spy.getCall(0).args[0][0], { type: 'put', key: 'foo', value: 'bar' }, 'got expected array argument[0]')
-    t.deepEqual(spy.getCall(0).args[0][1], { type: 'del', key: 'bang' }, 'got expected array argument[1]')
+    t.deepEqual(spy.getCall(0).args[0][0], { keyEncoding: 'utf8', valueEncoding: 'utf8', type: 'put', key: 'foo', value: 'bar' }, 'got expected array argument[0]')
+    t.deepEqual(spy.getCall(0).args[0][1], { keyEncoding: 'utf8', type: 'del', key: 'bang' }, 'got expected array argument[1]')
     t.deepEqual(spy.getCall(0).args[1], {}, 'got expected options argument')
     t.is(typeof spy.getCall(0).args[2], 'function', 'got callback argument')
 
@@ -606,8 +601,8 @@ test('test chained batch() extensibility', function (t) {
     t.equal(spy.getCall(1).thisValue, test, '`this` on _batch() was correct')
     t.equal(spy.getCall(1).args.length, 3, 'got three arguments')
     t.equal(spy.getCall(1).args[0].length, 2, 'got expected array argument')
-    t.deepEqual(spy.getCall(1).args[0][0], { type: 'put', key: 'foo', value: 'bar', options: 1 }, 'got expected array argument[0]')
-    t.deepEqual(spy.getCall(1).args[0][1], { type: 'del', key: 'bang', options: 1 }, 'got expected array argument[1]')
+    t.deepEqual(spy.getCall(1).args[0][0], { keyEncoding: 'utf8', valueEncoding: 'utf8', type: 'put', key: 'foo', value: 'bar', options: 1 }, 'got expected array argument[0]')
+    t.deepEqual(spy.getCall(1).args[0][1], { keyEncoding: 'utf8', type: 'del', key: 'bang', options: 1 }, 'got expected array argument[1]')
     t.deepEqual(spy.getCall(1).args[1], { options: 1 }, 'got expected options argument')
     t.is(typeof spy.getCall(1).args[2], 'function', 'got callback argument')
   })
@@ -617,7 +612,7 @@ test('test chained batch() with no operations is asynchronous', function (t) {
   t.plan(2)
 
   const Test = implement(AbstractLevelDOWN, {})
-  const test = new Test()
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     let async = false
@@ -636,7 +631,7 @@ test('test chained batch() (custom _chainedBatch) extensibility', function (t) {
 
   const spy = sinon.spy()
   const Test = implement(AbstractLevelDOWN, { _chainedBatch: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch()
@@ -680,7 +675,7 @@ test('test AbstractChainedBatch#write() extensibility', function (t) {
     _write: function (options, callback) {
       t.same(options, {})
       t.is(this, batch, 'thisArg on _write() is correct')
-      this._nextTick(callback)
+      this.nextTick(callback)
     }
   })
 
@@ -689,6 +684,8 @@ test('test AbstractChainedBatch#write() extensibility', function (t) {
   db.once('open', function () {
     batch = new Test(db)
 
+    // Without any operations, _write isn't called
+    batch.put('foo', 'bar')
     batch.write(function (err) {
       t.ifError(err)
     })
@@ -704,7 +701,7 @@ test('test AbstractChainedBatch#write() extensibility with null options', functi
     _write: function (options, callback) {
       t.same(options, {})
       t.is(this, batch, 'thisArg on _write() is correct')
-      this._nextTick(callback)
+      this.nextTick(callback)
     }
   })
 
@@ -713,6 +710,8 @@ test('test AbstractChainedBatch#write() extensibility with null options', functi
   db.once('open', function () {
     batch = new Test(db)
 
+    // Without any operations, _write isn't called
+    batch.put('foo', 'bar')
     batch.write(null, function (err) {
       t.ifError(err)
     })
@@ -728,7 +727,7 @@ test('test AbstractChainedBatch#write() extensibility with options', function (t
     _write: function (options, callback) {
       t.same(options, { test: true })
       t.is(this, batch, 'thisArg on _write() is correct')
-      this._nextTick(callback)
+      this.nextTick(callback)
     }
   })
 
@@ -736,6 +735,8 @@ test('test AbstractChainedBatch#write() extensibility with options', function (t
 
   db.once('open', function () {
     batch = new Test(db)
+    // Without any operations, _write isn't called
+    batch.put('foo', 'bar')
     batch.write({ test: true }, function (err) {
       t.ifError(err)
     })
@@ -760,7 +761,7 @@ test('test AbstractChainedBatch#put() extensibility', function (t) {
     t.equal(spy.getCall(0).args.length, 3, 'got 3 arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
     t.equal(spy.getCall(0).args[1], expectedValue, 'got expected value argument')
-    t.same(spy.getCall(0).args[2], {}, 'got expected options argument')
+    t.same(spy.getCall(0).args[2], { keyEncoding: 'utf8', valueEncoding: 'utf8' }, 'got expected options argument')
     t.equal(returnValue, test, 'get expected return value')
   })
 })
@@ -781,7 +782,7 @@ test('test AbstractChainedBatch#del() extensibility', function (t) {
     t.equal(spy.getCall(0).thisValue, test, '`this` on _del() was correct')
     t.equal(spy.getCall(0).args.length, 2, 'got 2 arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
-    t.same(spy.getCall(0).args[1], {}, 'got expected options argument')
+    t.same(spy.getCall(0).args[1], { keyEncoding: 'utf8' }, 'got expected options argument')
     t.equal(returnValue, test, 'get expected return value')
   })
 })
@@ -808,18 +809,18 @@ test('test iterator() extensibility', function (t) {
   t.plan(4)
 
   const TestIterator = implement(AbstractIterator)
-  const spy = sinon.spy(function () { return new TestIterator(this) })
+  const spy = sinon.spy(function (options) { return new TestIterator(this, options) })
   const expectedOptions = {
     options: 1,
     reverse: false,
     keys: true,
     values: true,
     limit: -1,
-    keyAsBuffer: true,
-    valueAsBuffer: true
+    keyEncoding: 'utf8',
+    valueEncoding: 'utf8'
   }
   const Test = implement(AbstractLevelDOWN, { _iterator: spy })
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.iterator({ options: 1 })
@@ -834,9 +835,37 @@ test('test iterator() extensibility', function (t) {
 test('test AbstractIterator extensibility', function (t) {
   const Test = implement(AbstractIterator)
   const db = testCommon.factory()
-  const test = new Test(db)
+  const test = new Test(db, {})
   t.ok(test.db === db, 'instance has db reference')
   t.end()
+})
+
+test('test AbstractIterator throws on invalid db argument', function (t) {
+  t.plan(4 * 2)
+
+  for (const args of [[], [null], [undefined], 'foo']) {
+    try {
+      // eslint-disable-next-line no-new
+      new AbstractIterator(...args)
+    } catch (err) {
+      t.is(err.name, 'TypeError')
+      t.is(err.message, 'First argument must be an abstract-leveldown compliant store')
+    }
+  }
+})
+
+test('test AbstractIterator throws on invalid options argument', function (t) {
+  t.plan(4 * 2)
+
+  for (const args of [[], [null], [undefined], 'foo']) {
+    try {
+      // eslint-disable-next-line no-new
+      new AbstractIterator({}, ...args)
+    } catch (err) {
+      t.is(err.name, 'TypeError')
+      t.is(err.message, 'The second argument must be an options object')
+    }
+  }
 })
 
 test('test AbstractIterator#next() extensibility', function (t) {
@@ -848,7 +877,7 @@ test('test AbstractIterator#next() extensibility', function (t) {
   const db = testCommon.factory()
 
   db.once('open', function () {
-    const test = new Test(db)
+    const test = new Test(db, {})
 
     test.next(spycb)
 
@@ -862,6 +891,47 @@ test('test AbstractIterator#next() extensibility', function (t) {
   })
 })
 
+test('test AbstractIterator#next() throws on invalid callback argument', async function (t) {
+  t.plan(3 * 2)
+
+  const db = testCommon.factory()
+  await db.open()
+
+  for (const invalid of [{}, null, 'foo']) {
+    const it = new AbstractIterator(db, {})
+
+    try {
+      it.next(invalid)
+    } catch (err) {
+      t.is(err.name, 'TypeError')
+      t.is(err.message, 'The first argument must be a function or undefined')
+    }
+  }
+})
+
+test('test AbstractIterator throws when accessing legacy properties', async function (t) {
+  t.plan(3 * 2)
+
+  const db = testCommon.factory()
+  await db.open()
+  const it = new AbstractIterator(db, {})
+
+  for (const k of ['_ended property', '_nexting property', '_end method']) {
+    try {
+      // eslint-disable-next-line no-unused-expressions
+      it[k.split(' ')[0]]
+    } catch (err) {
+      t.is(err.message, `The ${k} has been removed`)
+    }
+
+    try {
+      it[k.split(' ')[0]] = 123
+    } catch (err) {
+      t.is(err.message, `The ${k} has been removed`)
+    }
+  }
+})
+
 test('test AbstractIterator#close() extensibility', function (t) {
   t.plan(4)
 
@@ -871,7 +941,7 @@ test('test AbstractIterator#close() extensibility', function (t) {
   const db = testCommon.factory()
 
   db.once('open', function () {
-    const test = new Test(db)
+    const test = new Test(db, {})
 
     test.close(expectedCb)
 
@@ -887,17 +957,17 @@ test('test clear() extensibility', function (t) {
 
   const spy = sinon.spy()
   const Test = implement(AbstractLevelDOWN, { _clear: spy })
-  const db = new Test()
+  const db = new Test({ encodings: { utf8: true } })
   const callback = function () {}
 
   db.once('open', function () {
-    call([callback], { reverse: false, limit: -1 })
-    call([null, callback], { reverse: false, limit: -1 })
-    call([undefined, callback], { reverse: false, limit: -1 })
-    call([{ custom: 1 }, callback], { custom: 1, reverse: false, limit: -1 })
-    call([{ reverse: true, limit: 0 }, callback], { reverse: true, limit: 0 })
-    call([{ reverse: 1 }, callback], { reverse: true, limit: -1 })
-    call([{ reverse: null }, callback], { reverse: false, limit: -1 })
+    call([callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
+    call([null, callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
+    call([undefined, callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
+    call([{ custom: 1 }, callback], { custom: 1, keyEncoding: 'utf8', reverse: false, limit: -1 })
+    call([{ reverse: true, limit: 0 }, callback], { keyEncoding: 'utf8', reverse: true, limit: 0 })
+    call([{ reverse: 1 }, callback], { keyEncoding: 'utf8', reverse: true, limit: -1 })
+    call([{ reverse: null }, callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
 
     function call (args, expectedOptions) {
       db.clear.apply(db, args)
@@ -913,7 +983,8 @@ test('test clear() extensibility', function (t) {
   })
 })
 
-test('test serialization extensibility (get)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (get)', function (t) {
   t.plan(2)
 
   const spy = sinon.spy()
@@ -924,7 +995,7 @@ test('test serialization extensibility (get)', function (t) {
     }
   })
 
-  const test = new Test()
+  const test = new Test({ encodings: { utf8: true } }, { keyEncoding: 'utf8' })
 
   test.once('open', function () {
     test.get('foo', function () {})
@@ -934,7 +1005,8 @@ test('test serialization extensibility (get)', function (t) {
   })
 })
 
-test('test serialization extensibility (getMany)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (getMany)', function (t) {
   t.plan(2)
 
   const spy = sinon.spy()
@@ -945,7 +1017,7 @@ test('test serialization extensibility (getMany)', function (t) {
     }
   })
 
-  const test = new Test()
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.getMany(['foo', 'bar'], function () {})
@@ -955,7 +1027,8 @@ test('test serialization extensibility (getMany)', function (t) {
   })
 })
 
-test('test serialization extensibility (put)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (put)', function (t) {
   t.plan(5)
 
   const spy = sinon.spy()
@@ -972,7 +1045,7 @@ test('test serialization extensibility (put)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.put('no', 'nope', function () {})
@@ -983,7 +1056,8 @@ test('test serialization extensibility (put)', function (t) {
   })
 })
 
-test('test serialization extensibility (del)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (del)', function (t) {
   t.plan(3)
 
   const spy = sinon.spy()
@@ -998,7 +1072,7 @@ test('test serialization extensibility (del)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.del('no', function () {})
@@ -1008,7 +1082,8 @@ test('test serialization extensibility (del)', function (t) {
   })
 })
 
-test('test serialization extensibility (batch array put)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (batch array put)', function (t) {
   t.plan(5)
 
   const spy = sinon.spy()
@@ -1024,7 +1099,7 @@ test('test serialization extensibility (batch array put)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch([{ type: 'put', key: 'no', value: 'nope' }], function () {})
@@ -1035,7 +1110,8 @@ test('test serialization extensibility (batch array put)', function (t) {
   })
 })
 
-test('test serialization extensibility (batch chain put)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (batch chain put)', function (t) {
   t.plan(5)
 
   const spy = sinon.spy()
@@ -1051,7 +1127,7 @@ test('test serialization extensibility (batch chain put)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch().put('no', 'nope').write(function () {})
@@ -1062,7 +1138,8 @@ test('test serialization extensibility (batch chain put)', function (t) {
   })
 })
 
-test('test serialization extensibility (batch array del)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (batch array del)', function (t) {
   t.plan(3)
 
   const spy = sinon.spy()
@@ -1077,7 +1154,7 @@ test('test serialization extensibility (batch array del)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch([{ type: 'del', key: 'no' }], function () {})
@@ -1087,7 +1164,8 @@ test('test serialization extensibility (batch array del)', function (t) {
   })
 })
 
-test('test serialization extensibility (batch chain del)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (batch chain del)', function (t) {
   t.plan(3)
 
   const spy = sinon.spy()
@@ -1102,7 +1180,7 @@ test('test serialization extensibility (batch chain del)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.batch().del('no').write(function () {})
@@ -1112,7 +1190,8 @@ test('test serialization extensibility (batch chain del)', function (t) {
   })
 })
 
-test('test serialization extensibility (batch array is not mutated)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (batch array is not mutated)', function (t) {
   t.plan(7)
 
   const spy = sinon.spy()
@@ -1128,7 +1207,7 @@ test('test serialization extensibility (batch array is not mutated)', function (
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     const op = { type: 'put', key: 'no', value: 'nope' }
@@ -1144,7 +1223,8 @@ test('test serialization extensibility (batch array is not mutated)', function (
   })
 })
 
-test('test serialization extensibility (iterator range options)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (iterator range options)', function (t) {
   t.plan(2)
 
   function Test () {
@@ -1169,14 +1249,15 @@ test('test serialization extensibility (iterator range options)', function (t) {
 
   inherits(Iterator, AbstractIterator)
 
-  const test = new Test()
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     test.iterator({ gt: 'input' })
   })
 })
 
-test('test serialization extensibility (iterator seek)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (iterator seek)', function (t) {
   t.plan(3)
 
   const spy = sinon.spy()
@@ -1192,7 +1273,7 @@ test('test serialization extensibility (iterator seek)', function (t) {
     }
   })
 
-  const test = new Test({})
+  const test = new Test({ encodings: { utf8: true } })
 
   test.once('open', function () {
     const it = test.iterator()
@@ -1204,7 +1285,8 @@ test('test serialization extensibility (iterator seek)', function (t) {
   })
 })
 
-test('test serialization extensibility (clear range options)', function (t) {
+// TODO: update or remove (ser.)
+test.skip('test serialization extensibility (clear range options)', function (t) {
   t.plan(rangeOptions.length * 2)
 
   rangeOptions.forEach(function (key) {
@@ -1218,7 +1300,7 @@ test('test serialization extensibility (clear range options)', function (t) {
       }
     })
 
-    const db = new Test()
+    const db = new Test({ encodings: { utf8: true } })
     const options = {}
 
     options[key] = 'input'
@@ -1230,7 +1312,7 @@ test('test serialization extensibility (clear range options)', function (t) {
 })
 
 test('clear() does not delete empty or nullish range options', function (t) {
-  const rangeValues = [Buffer.alloc(0), '', null, undefined]
+  const rangeValues = [Uint8Array.from([]), '', null, undefined]
 
   t.plan(rangeOptions.length * rangeValues.length)
 
@@ -1243,7 +1325,7 @@ test('clear() does not delete empty or nullish range options', function (t) {
       }
     })
 
-    const db = new Test()
+    const db = new Test({ encodings: { utf8: true } })
     const options = {}
 
     rangeOptions.forEach(function (key) {
@@ -1262,7 +1344,7 @@ test('.status', function (t) {
 
   t.test('empty prototype', function (t) {
     const Test = implement(AbstractLevelDOWN)
-    const test = new Test({})
+    const test = new Test({ encodings: { utf8: true } })
 
     t.equal(test.status, 'opening')
 
@@ -1287,7 +1369,7 @@ test('.status', function (t) {
       }
     })
 
-    const test = new Test({})
+    const test = new Test({ encodings: { utf8: true } })
 
     test.open(function (err) {
       t.is(err && err.message, '_open error')
@@ -1303,7 +1385,7 @@ test('.status', function (t) {
       }
     })
 
-    const test = new Test({})
+    const test = new Test({ encodings: { utf8: true } })
     test.open(function () {
       test.close(function (err) {
         t.is(err && err.message, '_close error')
@@ -1316,11 +1398,11 @@ test('.status', function (t) {
   t.test('open', function (t) {
     const Test = implement(AbstractLevelDOWN, {
       _open: function (options, cb) {
-        this._nextTick(cb)
+        this.nextTick(cb)
       }
     })
 
-    const test = new Test({})
+    const test = new Test({ encodings: { utf8: true } })
     test.open(function (err) {
       t.error(err)
       t.equal(test.status, 'open')
@@ -1332,11 +1414,11 @@ test('.status', function (t) {
   t.test('close', function (t) {
     const Test = implement(AbstractLevelDOWN, {
       _close: function (cb) {
-        this._nextTick(cb)
+        this.nextTick(cb)
       }
     })
 
-    const test = new Test({})
+    const test = new Test({ encodings: { utf8: true } })
     test.open(function (err) {
       t.error(err)
       test.close(function (err) {
@@ -1349,90 +1431,109 @@ test('.status', function (t) {
   })
 })
 
-test('_setupIteratorOptions', function (t) {
+test('rangeOptions', function (t) {
   const keys = rangeOptions.slice()
-  const db = new AbstractLevelDOWN()
+  const db = new AbstractLevelDOWN({
+    encodings: {
+      utf8: true, buffer: true, view: true
+    }
+  })
 
-  function setupOptions (constrFn) {
+  function setupOptions (create) {
     const options = {}
-    keys.forEach(function (key) {
-      options[key] = constrFn()
-    })
+    for (const key of keys) {
+      options[key] = create()
+    }
     return options
   }
 
   function verifyOptions (t, options) {
-    keys.forEach(function (key) {
+    for (const key of keys) {
       t.ok(key in options, key + ' option should not be deleted')
-    })
+    }
     t.end()
   }
 
-  t.plan(7)
+  t.plan(11)
+  t.test('setup', async (t) => db.open())
 
   t.test('default options', function (t) {
-    t.same(db._setupIteratorOptions(), {
+    t.same(getRangeOptions(undefined, db.keyEncoding('utf8')), {
       reverse: false,
-      keys: true,
-      values: true,
-      limit: -1,
-      keyAsBuffer: true,
-      valueAsBuffer: true
+      limit: -1
     }, 'correct defaults')
     t.end()
   })
 
   t.test('set options', function (t) {
-    t.same(db._setupIteratorOptions({
+    t.same(getRangeOptions({ reverse: false, limit: 20 }, db.keyEncoding('utf8')), {
       reverse: false,
-      keys: false,
-      values: false,
-      limit: 20,
-      keyAsBuffer: false,
-      valueAsBuffer: false
-    }), {
-      reverse: false,
-      keys: false,
-      values: false,
-      limit: 20,
-      keyAsBuffer: false,
-      valueAsBuffer: false
+      limit: 20
     }, 'options set correctly')
     t.end()
   })
 
-  t.test('does not delete empty buffers', function (t) {
-    const options = setupOptions(function () { return Buffer.from('') })
-    keys.forEach(function (key) {
-      t.is(Buffer.isBuffer(options[key]), true, 'should be buffer')
-      t.is(options[key].length, 0, 'should be empty')
+  t.test('ignores invalid limit', function (t) {
+    for (const limit of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, NaN, -2, 5.5]) {
+      t.same(getRangeOptions({ limit }, db.keyEncoding('utf8')).limit, -1)
+    }
+    t.end()
+  })
+
+  t.test('ignores not-own property', function (t) {
+    class Options {}
+    Options.prototype.limit = 20
+    const options = new Options()
+
+    t.is(options.limit, 20)
+    t.same(getRangeOptions(options, db.keyEncoding('utf8')), {
+      reverse: false,
+      limit: -1
     })
-    verifyOptions(t, db._setupIteratorOptions(options))
+    t.end()
+  })
+
+  t.test('does not delete empty buffers', function (t) {
+    const options = setupOptions(() => Buffer.alloc(0))
+    keys.forEach(function (key) {
+      t.is(isBuffer(options[key]), true, 'should be buffer')
+      t.is(options[key].byteLength, 0, 'should be empty')
+    })
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('buffer')))
+  })
+
+  t.test('does not delete empty views', function (t) {
+    const options = setupOptions(() => Uint8Array.from([]))
+    keys.forEach(function (key) {
+      t.is(options[key] instanceof Uint8Array, true, 'should be Uint8Array')
+      t.is(options[key].byteLength, 0, 'should be empty')
+    })
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('view')))
   })
 
   t.test('does not delete empty strings', function (t) {
-    const options = setupOptions(function () { return '' })
+    const options = setupOptions(() => '')
     keys.forEach(function (key) {
       t.is(typeof options[key], 'string', 'should be string')
       t.is(options[key].length, 0, 'should be empty')
     })
-    verifyOptions(t, db._setupIteratorOptions(options))
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('utf8')))
   })
 
   t.test('does not delete null', function (t) {
-    const options = setupOptions(function () { return null })
+    const options = setupOptions(() => null)
     keys.forEach(function (key) {
-      t.is(options[key], null, 'should be null')
+      t.is(options[key], null)
     })
-    verifyOptions(t, db._setupIteratorOptions(options))
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('utf8')))
   })
 
   t.test('does not delete undefined', function (t) {
-    const options = setupOptions(function () { return undefined })
+    const options = setupOptions(() => undefined)
     keys.forEach(function (key) {
-      t.is(options[key], undefined, 'should be undefined')
+      t.is(options[key], undefined)
     })
-    verifyOptions(t, db._setupIteratorOptions(options))
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('utf8')))
   })
 
   t.test('rejects legacy range options', function (t) {
@@ -1443,18 +1544,18 @@ test('_setupIteratorOptions', function (t) {
       options[key] = 'x'
 
       try {
-        db._setupIteratorOptions(options)
+        getRangeOptions(options, db.keyEncoding('utf8'))
       } catch (err) {
         t.is(err.message, 'Legacy range options ("start" and "end") have been removed')
       }
     }
   })
-
-  require('./self/defer-test')
-  require('./self/attach-resource-test')
-  require('./self/deferred-iterator-test')
-  require('./self/deferred-operations-test')
-  require('./self/deferred-chained-batch-test')
-  require('./self/async-iterator-test')
-  require('./self/deferred-default-clear-test')
 })
+
+require('./self/defer-test')
+require('./self/attach-resource-test')
+require('./self/deferred-iterator-test')
+require('./self/deferred-operations-test')
+require('./self/deferred-chained-batch-test')
+require('./self/async-iterator-test')
+require('./self/encoding-test')

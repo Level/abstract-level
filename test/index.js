@@ -33,6 +33,11 @@ function suite (options) {
   require('./async-iterator-test').all(test, testCommon)
 
   require('./deferred-open-test').all(test, testCommon)
+  require('./encoding-test').all(test, testCommon)
+  require('./encoding-json-test').all(test, testCommon)
+  require('./encoding-custom-test').all(test, testCommon)
+  require('./encoding-buffer-test').all(test, testCommon)
+  require('./encoding-decode-error-test').all(test, testCommon)
 
   if (testCommon.supports.seek) {
     require('./iterator-seek-test').all(test, testCommon)

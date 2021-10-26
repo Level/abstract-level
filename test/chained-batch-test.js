@@ -1,31 +1,8 @@
 'use strict'
 
-const collectEntries = require('level-concat-iterator')
-const { isSelf } = require('./util')
+const { concat } = require('./util')
 
 let db
-
-function collectBatchOps (batch) {
-  const _put = batch._put
-  const _del = batch._del
-  const _operations = []
-
-  if (typeof _put !== 'function' || typeof _del !== 'function') {
-    return batch._operations
-  }
-
-  batch._put = function (key, value) {
-    _operations.push({ type: 'put', key, value })
-    return _put.apply(this, arguments)
-  }
-
-  batch._del = function (key) {
-    _operations.push({ type: 'del', key })
-    return _del.apply(this, arguments)
-  }
-
-  return _operations
-}
 
 exports.setUp = function (test, testCommon) {
   test('setUp db', function (t) {
@@ -151,22 +128,6 @@ exports.args = function (test, testCommon) {
     })
   })
 
-  testCommon.supports.serialize && test('test serialize object', function (t) {
-    const batch = db.batch()
-    const ops = collectBatchOps(batch)
-
-    batch
-      .put({ foo: 'bar' }, { beep: 'boop' })
-      .del({ bar: 'baz' })
-    ops.forEach(function (op) {
-      t.ok(op.key, '.key is set for .put and .del operations')
-      if (op.type === 'put') {
-        t.ok(op.value, '.value is set for .put operation')
-      }
-    })
-    t.end()
-  })
-
   test('test batch#write() with no operations', function (t) {
     let async = false
 
@@ -229,12 +190,8 @@ exports.batch = function (test, testCommon) {
       batch.write(function (err) {
         t.error(err, 'no write() error')
 
-        const opts = db.supports.encodings
-          ? { keyEncoding: 'utf8', valueEncoding: 'utf8' }
-          : { keyAsBuffer: false, valueAsBuffer: false }
-
-        collectEntries(
-          db.iterator(opts), function (err, data) {
+        concat(
+          db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' }), function (err, data) {
             t.error(err)
             t.equal(data.length, 3, 'correct number of entries')
             const expected = [
@@ -261,12 +218,8 @@ exports.batch = function (test, testCommon) {
         .put('2', 'two')
         .put('3', 'three')
         .write().then(function () {
-          const opts = db.supports.encodings
-            ? { keyEncoding: 'utf8', valueEncoding: 'utf8' }
-            : { keyAsBuffer: false, valueAsBuffer: false }
-
-          collectEntries(
-            db.iterator(opts), function (err, data) {
+          concat(
+            db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' }), function (err, data) {
               t.error(err)
               t.same(data, [
                 { key: '1', value: 'one' },
@@ -279,6 +232,37 @@ exports.batch = function (test, testCommon) {
         }).catch(t.fail.bind(t))
     })
   })
+
+  // NOTE: adapted from levelup
+  test('chained batch with per-operation encoding options', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    db.once('batch', function (operations) {
+      t.same(operations, [
+        { type: 'put', key: 'a', value: 'a', valueEncoding: 'json' },
+        { type: 'put', key: 'b', value: 'b' },
+        { type: 'put', key: '"c"', value: 'c' },
+        { type: 'del', key: 'c', keyEncoding: 'json', arbitraryOption: true }
+      ])
+    })
+
+    await db.batch()
+      .put('a', 'a', { valueEncoding: 'json' })
+      .put('b', 'b')
+      .put('"c"', 'c')
+      .del('c', { keyEncoding: 'json', arbitraryOption: true })
+      .write()
+
+    t.same(await concat(db.iterator()), [
+      { key: 'a', value: '"a"' },
+      { key: 'b', value: 'b' }
+    ])
+
+    return db.close()
+  })
 }
 
 exports.events = function (test, testCommon) {
@@ -290,19 +274,14 @@ exports.events = function (test, testCommon) {
 
     t.ok(db.supports.events.batch)
 
-    if (isSelf(db)) {
-      db._serializeKey = (x) => x.toUpperCase()
-      db._serializeValue = (x) => x.toUpperCase()
-    }
-
     db.on('batch', function (ops) {
       t.same(ops, [
-        { type: 'put', key: 'a', value: 'b', custom: 123 },
-        { type: 'del', key: 'x', custom: 999 }
+        { type: 'put', key: 987, value: 'b', custom: 123 },
+        { type: 'del', key: 216, custom: 999 }
       ])
     })
 
-    await db.batch().put('a', 'b', { custom: 123 }).del('x', { custom: 999 }).write()
+    await db.batch().put(987, 'b', { custom: 123 }).del(216, { custom: 999 }).write()
     await db.close()
   })
 

@@ -16,6 +16,9 @@ module.exports = function (test, testCommon) {
     testCommon.supports = db.supports
     t.ok(testCommon.supports, 'can be accessed via testCommon')
 
+    t.ok(db.supports.encodings.utf8, 'supports utf8')
+    t.ok(db.supports.encodings.json, 'supports json')
+
     db.close(t.end.bind(t))
   })
 }

@@ -1,7 +1,6 @@
 'use strict'
 
-const isBuffer = require('is-buffer')
-const { isTypedArray, assertAsync, illegalKeys } = require('./util')
+const { assertAsync, illegalKeys } = require('./util')
 
 let db
 
@@ -87,28 +86,7 @@ exports.getMany = function (test, testCommon) {
         t.error(err)
         t.ok(Array.isArray(values), 'got an array')
         t.is(values.length, 1, 'array has 1 element')
-
-        const value = values[0]
-        let result
-
-        if (!db.supports.encodings) {
-          t.isNot(typeof value, 'string', 'should not be string by default')
-
-          if (isTypedArray(value)) {
-            result = String.fromCharCode.apply(null, new Uint16Array(value))
-          } else {
-            t.ok(isBuffer(value))
-            try {
-              result = value.toString()
-            } catch (e) {
-              t.error(e, 'should not throw when converting value to a string')
-            }
-          }
-        } else {
-          result = value
-        }
-
-        t.is(result, 'bar')
+        t.is(values[0], 'bar')
       }
 
       db.getMany(['foo'], function (err, values) {
@@ -117,7 +95,7 @@ exports.getMany = function (test, testCommon) {
         db.getMany(['foo'], {}, function (err, values) {
           verify(err, values)
 
-          db.getMany(['foo'], { asBuffer: false }, function (err, values) {
+          db.getMany(['foo'], { valueEncoding: 'utf8' }, function (err, values) {
             t.error(err)
             t.is(values && typeof values[0], 'string', 'should be string if not buffer')
             t.same(values, ['bar'])
@@ -134,12 +112,12 @@ exports.getMany = function (test, testCommon) {
     db.put('beep', 'boop', function (err) {
       t.ifError(err)
 
-      db.getMany(['foo', 'beep'], { asBuffer: false }, function (err, values) {
+      db.getMany(['foo', 'beep'], { valueEncoding: 'utf8' }, function (err, values) {
         t.ifError(err)
         t.same(values, ['bar', 'boop'])
       })
 
-      db.getMany(['beep', 'foo'], { asBuffer: false }, function (err, values) {
+      db.getMany(['beep', 'foo'], { valueEncoding: 'utf8' }, function (err, values) {
         t.ifError(err)
         t.same(values, ['boop', 'bar'], 'maintains order of input keys')
       })
@@ -147,10 +125,11 @@ exports.getMany = function (test, testCommon) {
   })
 
   test('test empty getMany()', assertAsync.ctx(function (t) {
-    t.plan(2 * 3)
+    const encodings = Object.keys(db.supports.encodings).filter(k => db.supports.encodings[k])
+    t.plan(encodings.length * 3)
 
-    for (const asBuffer in [true, false]) {
-      db.getMany([], { asBuffer }, assertAsync(function (err, values) {
+    for (const valueEncoding of encodings) {
+      db.getMany([], { valueEncoding }, assertAsync(function (err, values) {
         t.ifError(err)
         t.same(values, [])
       }))
@@ -158,10 +137,11 @@ exports.getMany = function (test, testCommon) {
   }))
 
   test('test not-found getMany()', assertAsync.ctx(function (t) {
-    t.plan(2 * 3)
+    const encodings = Object.keys(db.supports.encodings).filter(k => db.supports.encodings[k])
+    t.plan(encodings.length * 3)
 
-    for (const asBuffer in [true, false]) {
-      db.getMany(['nope', 'another'], { asBuffer }, assertAsync(function (err, values) {
+    for (const valueEncoding of encodings) {
+      db.getMany(['nope', 'another'], { valueEncoding }, assertAsync(function (err, values) {
         t.ifError(err)
         t.same(values, [undefined, undefined])
       }))
@@ -169,12 +149,12 @@ exports.getMany = function (test, testCommon) {
   }))
 
   test('test getMany() with promise', async function (t) {
-    t.same(await db.getMany(['foo'], { asBuffer: false }), ['bar'])
-    t.same(await db.getMany(['beep'], { asBuffer: false }), ['boop'])
-    t.same(await db.getMany(['foo', 'beep'], { asBuffer: false }), ['bar', 'boop'])
-    t.same(await db.getMany(['beep', 'foo'], { asBuffer: false }), ['boop', 'bar'])
-    t.same(await db.getMany(['beep', 'foo', 'nope'], { asBuffer: false }), ['boop', 'bar', undefined])
-    t.same(await db.getMany([], { asBuffer: false }), [])
+    t.same(await db.getMany(['foo'], { valueEncoding: 'utf8' }), ['bar'])
+    t.same(await db.getMany(['beep'], { valueEncoding: 'utf8' }), ['boop'])
+    t.same(await db.getMany(['foo', 'beep'], { valueEncoding: 'utf8' }), ['bar', 'boop'])
+    t.same(await db.getMany(['beep', 'foo'], { valueEncoding: 'utf8' }), ['boop', 'bar'])
+    t.same(await db.getMany(['beep', 'foo', 'nope'], { valueEncoding: 'utf8' }), ['boop', 'bar', undefined])
+    t.same(await db.getMany([], { valueEncoding: 'utf8' }), [])
   })
 
   test('test simultaneous getMany()', function (t) {
@@ -217,7 +197,7 @@ exports.getMany = function (test, testCommon) {
         t.is(db.status, db.supports.deferredOpen ? 'opening' : 'closed')
 
         // Must be true if db supports deferredOpen
-        const operational = db.supports.deferredOpen // || db.isOperational()
+        const operational = db.supports.deferredOpen
 
         db.getMany(keys, assertAsync(function (err, values) {
           if (operational) {
@@ -249,7 +229,7 @@ exports.getMany = function (test, testCommon) {
       db.open(assertAsync(t.error.bind(t), 'open'))
 
       // Must be true if db supports deferredOpen
-      const operational = db.supports.deferredOpen // || db.isOperational()
+      const operational = db.supports.deferredOpen
 
       db.getMany(keys, assertAsync(function (err, values) {
         if (operational) {

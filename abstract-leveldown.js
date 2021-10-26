@@ -1,16 +1,16 @@
 'use strict'
 
 const supports = require('level-supports')
-const isBuffer = require('is-buffer')
+const Transcoder = require('level-transcoder')
 const { EventEmitter } = require('events')
 const { fromCallback } = require('catering')
+const ModuleError = require('module-error')
 const AbstractIterator = require('./abstract-iterator')
 const DeferredIterator = require('./lib/deferred-iterator')
 const DefaultChainedBatch = require('./lib/default-chained-batch')
 const { getCallback, getOptions } = require('./lib/common')
+const rangeOptions = require('./lib/range-options')
 
-const hasOwnProperty = Object.prototype.hasOwnProperty
-const rangeOptions = ['lt', 'lte', 'gt', 'gte']
 const kPromise = Symbol('promise')
 const kLanded = Symbol('landed')
 const kResources = Symbol('resources')
@@ -20,28 +20,38 @@ const kUndefer = Symbol('undefer')
 const kDeferOpen = Symbol('deferOpen')
 const kOptions = Symbol('options')
 const kStatus = Symbol('status')
+const kDefaultOptions = Symbol('defaultOptions')
+const kTranscoder = Symbol('transcoder')
+const kKeyEncoding = Symbol('keyEncoding')
+const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-// TODO: document new options and callback arguments
-// TODO: and test them, also as testCommon.factory() arguments
-function AbstractLevelDOWN (manifest, options, callback) {
-  if (typeof manifest !== 'object' && manifest != null) {
-    throw new TypeError('First argument must be null, undefined or an object')
+// TODO: document promise support
+function AbstractLevelDOWN (manifest, options, _callback) {
+  if (typeof manifest !== 'object' || manifest === null) {
+    throw new TypeError("First argument 'manifest' must be an object")
   }
 
-  callback = getCallback(options, callback)
+  _callback = getCallback(options, _callback)
   options = getOptions(options)
-  manifest = manifest || {}
+
+  // To help migrating to abstract-level
+  if (typeof _callback === 'function') {
+    throw new ModuleError('The levelup-style callback argument has been removed', {
+      code: 'LEVEL_LEGACY'
+    })
+  }
 
   EventEmitter.call(this)
+
+  const { keyEncoding, valueEncoding, passive, ...forward } = options
 
   this[kResources] = new Set()
   this[kOperations] = []
   this[kDeferOpen] = true
-  this[kOptions] = options
+  this[kOptions] = forward
   this[kStatus] = 'opening'
 
-  // TODO: add openCallback
   this.supports = supports(manifest, {
     status: true,
     promises: true,
@@ -50,11 +60,11 @@ function AbstractLevelDOWN (manifest, options, callback) {
     idempotentOpen: true,
     passiveOpen: true,
     deferredOpen: true,
-    serialize: true,
-    bufferKeys: true,
     snapshots: manifest.snapshots !== false,
     permanence: manifest.permanence !== false,
+    encodings: manifest.encodings || {},
     events: {
+      ...manifest.events,
       opening: true,
       open: true,
       closing: true,
@@ -66,12 +76,36 @@ function AbstractLevelDOWN (manifest, options, callback) {
     }
   })
 
+  // Get encodings supported by implementation
+  const formats = Object.keys(this.supports.encodings)
+    .filter(k => !!this.supports.encodings[k])
+
+  this[kTranscoder] = new Transcoder(formats, options)
+  this[kKeyEncoding] = this[kTranscoder].encoding(keyEncoding || 'utf8')
+  this[kValueEncoding] = this[kTranscoder].encoding(valueEncoding || 'utf8')
+
+  // Add custom and transcoder encodings to manifest
+  for (const encoding of this[kTranscoder].encodings()) {
+    if (!this.supports.encodings[encoding.commonName]) {
+      this.supports.encodings[encoding.commonName] = true
+    }
+  }
+
+  this[kDefaultOptions] = {
+    empty: {},
+    entry: {
+      keyEncoding: this[kKeyEncoding].commonName,
+      valueEncoding: this[kValueEncoding].commonName
+    },
+    key: {
+      keyEncoding: this[kKeyEncoding].commonName
+    }
+  }
+
   // Let subclass finish its constructor
-  this._nextTick(() => {
+  this.nextTick(() => {
     if (this[kDeferOpen]) {
-      this.open({ passive: false }, callback || noop)
-    } else if (callback) {
-      this.open({ passive: true }, callback)
+      this.open({ passive: false }, noop)
     }
   })
 }
@@ -84,6 +118,14 @@ Object.defineProperty(AbstractLevelDOWN.prototype, 'status', {
     return this[kStatus]
   }
 })
+
+AbstractLevelDOWN.prototype.keyEncoding = function (encoding) {
+  return this[kTranscoder].encoding(encoding != null ? encoding : this[kKeyEncoding])
+}
+
+AbstractLevelDOWN.prototype.valueEncoding = function (encoding) {
+  return this[kTranscoder].encoding(encoding != null ? encoding : this[kValueEncoding])
+}
 
 AbstractLevelDOWN.prototype.open = function (options, callback) {
   callback = getCallback(options, callback)
@@ -110,7 +152,7 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
     if (this[kStatus] === 'opening') {
       this.once(kLanded, maybeOpened)
     } else {
-      this._nextTick(maybeOpened)
+      this.nextTick(maybeOpened)
     }
   } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
     this[kDeferOpen] = false
@@ -141,7 +183,7 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
       maybeOpened()
     })
   } else if (this[kStatus] === 'open') {
-    this._nextTick(maybeOpened)
+    this.nextTick(maybeOpened)
   } else {
     this.once(kLanded, () => this.open(options, callback))
   }
@@ -150,7 +192,7 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
 }
 
 AbstractLevelDOWN.prototype._open = function (options, callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 AbstractLevelDOWN.prototype.close = function (callback) {
@@ -193,7 +235,7 @@ AbstractLevelDOWN.prototype.close = function (callback) {
       })
     })
   } else if (this[kStatus] === 'closed') {
-    this._nextTick(maybeClosed)
+    this.nextTick(maybeClosed)
   } else {
     this.once(kLanded, () => this.close(callback))
   }
@@ -203,7 +245,7 @@ AbstractLevelDOWN.prototype.close = function (callback) {
 
 AbstractLevelDOWN.prototype[kCloseResources] = function (callback) {
   if (this[kResources].size === 0) {
-    return this._nextTick(callback)
+    return this.nextTick(callback)
   }
 
   let pending = this[kResources].size
@@ -227,13 +269,13 @@ AbstractLevelDOWN.prototype[kCloseResources] = function (callback) {
 }
 
 AbstractLevelDOWN.prototype._close = function (callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 AbstractLevelDOWN.prototype.get = function (key, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options)
+  options = getOptions(options, this[kDefaultOptions].entry)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.get(key, options, callback))
@@ -247,14 +289,39 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
   const err = this._checkKey(key)
 
   if (err) {
-    this._nextTick(callback, err)
+    this.nextTick(callback, err)
     return callback[kPromise]
   }
 
-  key = this._serializeKey(key)
-  options.asBuffer = options.asBuffer !== false
+  const keyEncoding = this.keyEncoding(options.keyEncoding)
+  const valueEncoding = this.valueEncoding(options.valueEncoding)
 
-  this._get(key, options, callback)
+  // Forward encoding options to the underlying store
+  if (options.keyEncoding !== keyEncoding.format ||
+    options.valueEncoding !== valueEncoding.format) {
+    options = {
+      ...options,
+      keyEncoding: keyEncoding.format,
+      valueEncoding: valueEncoding.format
+    }
+  }
+
+  // TODO: handle notfound errors (or go with undefined)
+  this._get(keyEncoding.encode(key), options, (err, value) => {
+    if (err) return callback(err)
+
+    try {
+      value = valueEncoding.decode(value)
+    } catch (err) {
+      return callback(new ModuleError('Could not decode value', {
+        code: 'LEVEL_DECODE_ERROR',
+        cause: err
+      }))
+    }
+
+    callback(null, value)
+  })
+
   return callback[kPromise]
 }
 
@@ -265,7 +332,7 @@ AbstractLevelDOWN.prototype._get = function (key, options, callback) {
 AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options)
+  options = getOptions(options, this[kDefaultOptions].entry)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.getMany(keys, options, callback))
@@ -277,45 +344,72 @@ AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
   }
 
   if (!Array.isArray(keys)) {
-    this._nextTick(callback, new Error('getMany() requires an array argument'))
+    this.nextTick(callback, new Error('getMany() requires an array argument'))
     return callback[kPromise]
   }
 
   if (keys.length === 0) {
-    this._nextTick(callback, null, [])
+    this.nextTick(callback, null, [])
     return callback[kPromise]
   }
 
-  if (typeof options.asBuffer !== 'boolean') {
-    options = { ...options, asBuffer: true }
+  const keyEncoding = this.keyEncoding(options.keyEncoding)
+  const valueEncoding = this.valueEncoding(options.valueEncoding)
+
+  // Forward encoding options
+  if (options.keyEncoding !== keyEncoding.format ||
+    options.valueEncoding !== valueEncoding.format) {
+    options = {
+      ...options,
+      keyEncoding: keyEncoding.format,
+      valueEncoding: valueEncoding.format
+    }
   }
 
-  const serialized = new Array(keys.length)
+  const encoded = new Array(keys.length)
 
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]
     const err = this._checkKey(key)
 
     if (err) {
-      this._nextTick(callback, err)
+      this.nextTick(callback, err)
       return callback[kPromise]
     }
 
-    serialized[i] = this._serializeKey(key)
+    encoded[i] = keyEncoding.encode(key)
   }
 
-  this._getMany(serialized, options, callback)
+  this._getMany(encoded, options, (err, values) => {
+    if (err) return callback(err)
+
+    try {
+      for (let i = 0; i < values.length; i++) {
+        if (values[i] !== undefined) {
+          values[i] = valueEncoding.decode(values[i])
+        }
+      }
+    } catch (err) {
+      return callback(new ModuleError(`Could not decode one or more of ${values.length} value(s)`, {
+        code: 'LEVEL_DECODE_ERROR',
+        cause: err
+      }))
+    }
+
+    callback(null, values)
+  })
+
   return callback[kPromise]
 }
 
 AbstractLevelDOWN.prototype._getMany = function (keys, options, callback) {
-  this._nextTick(callback, null, new Array(keys.length).fill(undefined))
+  this.nextTick(callback, null, new Array(keys.length).fill(undefined))
 }
 
 AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options)
+  options = getOptions(options, this[kDefaultOptions].entry)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.put(key, value, options, callback))
@@ -329,11 +423,24 @@ AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
   const err = this._checkKey(key) || this._checkValue(value)
 
   if (err) {
-    this._nextTick(callback, err)
+    this.nextTick(callback, err)
     return callback[kPromise]
   }
 
-  this._put(this._serializeKey(key), this._serializeValue(value), options, (err) => {
+  const keyEncoding = this.keyEncoding(options.keyEncoding)
+  const valueEncoding = this.valueEncoding(options.valueEncoding)
+
+  // Forward encoding options
+  if (options.keyEncoding !== keyEncoding.format ||
+    options.valueEncoding !== valueEncoding.format) {
+    options = {
+      ...options,
+      keyEncoding: keyEncoding.format,
+      valueEncoding: valueEncoding.format
+    }
+  }
+
+  this._put(keyEncoding.encode(key), valueEncoding.encode(value), options, (err) => {
     if (err) return callback(err)
     this.emit('put', key, value)
     callback()
@@ -343,13 +450,13 @@ AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
 }
 
 AbstractLevelDOWN.prototype._put = function (key, value, options, callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 AbstractLevelDOWN.prototype.del = function (key, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options)
+  options = getOptions(options, this[kDefaultOptions].key)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.del(key, options, callback))
@@ -363,11 +470,18 @@ AbstractLevelDOWN.prototype.del = function (key, options, callback) {
   const err = this._checkKey(key)
 
   if (err) {
-    this._nextTick(callback, err)
+    this.nextTick(callback, err)
     return callback[kPromise]
   }
 
-  this._del(this._serializeKey(key), options, (err) => {
+  const keyEncoding = this.keyEncoding(options.keyEncoding)
+
+  // Forward encoding options
+  if (options.keyEncoding !== keyEncoding.format) {
+    options = { ...options, keyEncoding: keyEncoding.format }
+  }
+
+  this._del(keyEncoding.encode(key), options, (err) => {
     if (err) return callback(err)
     this.emit('del', key)
     callback()
@@ -377,7 +491,7 @@ AbstractLevelDOWN.prototype.del = function (key, options, callback) {
 }
 
 AbstractLevelDOWN.prototype._del = function (key, options, callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
@@ -392,7 +506,7 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
   else callback = getCallback(options, callback)
 
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options)
+  options = getOptions(options, this[kDefaultOptions].entry)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.batch(array, options, callback))
@@ -404,54 +518,61 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
   }
 
   if (!Array.isArray(array)) {
-    this._nextTick(callback, new Error('batch(array) requires an array argument'))
+    this.nextTick(callback, new Error('batch(array) requires an array argument'))
     return callback[kPromise]
   }
 
   if (array.length === 0) {
-    this._nextTick(callback)
+    this.nextTick(callback)
     return callback[kPromise]
   }
 
-  const serialized = new Array(array.length)
+  const encoded = new Array(array.length)
+  const { keyEncoding: ke, valueEncoding: ve, ...rest } = options
 
   for (let i = 0; i < array.length; i++) {
     if (typeof array[i] !== 'object' || array[i] === null) {
-      this._nextTick(callback, new Error('batch(array) element must be an object and not `null`'))
+      this.nextTick(callback, new Error('batch(array) element must be an object and not `null`'))
       return callback[kPromise]
     }
 
-    const e = Object.assign({}, array[i])
+    const op = Object.assign({}, array[i])
 
-    if (e.type !== 'put' && e.type !== 'del') {
-      this._nextTick(callback, new Error("`type` must be 'put' or 'del'"))
+    if (op.type !== 'put' && op.type !== 'del') {
+      this.nextTick(callback, new Error("`type` must be 'put' or 'del'"))
       return callback[kPromise]
     }
 
-    const err = this._checkKey(e.key)
+    const err = this._checkKey(op.key)
 
     if (err) {
-      this._nextTick(callback, err)
+      this.nextTick(callback, err)
       return callback[kPromise]
     }
 
-    e.key = this._serializeKey(e.key)
+    const keyEncoding = this.keyEncoding(op.keyEncoding || ke)
 
-    if (e.type === 'put') {
-      const valueErr = this._checkValue(e.value)
+    op.key = keyEncoding.encode(op.key)
+    op.keyEncoding = keyEncoding.format
+
+    if (op.type === 'put') {
+      const valueErr = this._checkValue(op.value)
 
       if (valueErr) {
-        this._nextTick(callback, valueErr)
+        this.nextTick(callback, valueErr)
         return callback[kPromise]
       }
 
-      e.value = this._serializeValue(e.value)
+      const valueEncoding = this.valueEncoding(op.valueEncoding || ve)
+
+      op.value = valueEncoding.encode(op.value)
+      op.valueEncoding = valueEncoding.format
     }
 
-    serialized[i] = e
+    encoded[i] = op
   }
 
-  this._batch(serialized, options, (err) => {
+  this._batch(encoded, rest, (err) => {
     if (err) return callback(err)
     this.emit('batch', array)
     callback()
@@ -461,12 +582,13 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
 }
 
 AbstractLevelDOWN.prototype._batch = function (array, options, callback) {
-  this._nextTick(callback)
+  this.nextTick(callback)
 }
 
 AbstractLevelDOWN.prototype.clear = function (options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
+  options = getOptions(options, this[kDefaultOptions].empty)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.clear(options, callback))
@@ -477,104 +599,55 @@ AbstractLevelDOWN.prototype.clear = function (options, callback) {
     return callback[kPromise]
   }
 
-  const originalOptions = options || {}
+  const { keyEncoding: ke, ...original } = options
+  const keyEncoding = this.keyEncoding(ke)
 
-  options = cleanRangeOptions(this, options)
-  options.reverse = !!options.reverse
-  options.limit = typeof options.limit === 'number' && options.limit !== Infinity ? options.limit : -1
+  options = rangeOptions(options, keyEncoding)
+  options.keyEncoding = keyEncoding.format
 
   this._clear(options, (err) => {
     if (err) return callback(err)
-    this.emit('clear', originalOptions)
+    // TODO: should this include encoding options? a batch event does
+    this.emit('clear', original)
     callback()
   })
 
   return callback[kPromise]
 }
 
-// TODO: consider removing this default implementation
 AbstractLevelDOWN.prototype._clear = function (options, callback) {
-  // Avoid setupIteratorOptions, would serialize range options a second time.
-  options.keys = true
-  options.values = false
-  options.keyAsBuffer = true
-  options.valueAsBuffer = true
-
-  const iterator = this._iterator(options)
-  const emptyOptions = {}
-
-  const next = (err) => {
-    if (err) {
-      return iterator.close(function () {
-        callback(err)
-      })
-    }
-
-    iterator.next((err, key) => {
-      if (err) return next(err)
-      if (key === undefined) return iterator.close(callback)
-
-      // This could be optimized by using a batch, but the default _clear
-      // is not meant to be fast. Implementations have more room to optimize
-      // if they override _clear. Note: using _del bypasses key serialization.
-      this._del(key, emptyOptions, next)
-    })
-  }
-
-  next()
-}
-
-AbstractLevelDOWN.prototype._setupIteratorOptions = function (options) {
-  options = cleanRangeOptions(this, options)
-
-  options.reverse = !!options.reverse
-  options.keys = options.keys !== false
-  options.values = options.values !== false
-  options.limit = typeof options.limit === 'number' && options.limit !== Infinity ? options.limit : -1
-  options.keyAsBuffer = options.keyAsBuffer !== false
-  options.valueAsBuffer = options.valueAsBuffer !== false
-
-  return options
-}
-
-function cleanRangeOptions (db, options) {
-  const result = {}
-
-  for (const k in options) {
-    if (!hasOwnProperty.call(options, k)) continue
-
-    if (k === 'start' || k === 'end') {
-      throw new Error('Legacy range options ("start" and "end") have been removed')
-    }
-
-    let opt = options[k]
-
-    if (isRangeOption(k)) {
-      // Note that we don't reject nullish and empty options here. While
-      // those types are invalid as keys, they are valid as range options.
-      opt = db._serializeKey(opt)
-    }
-
-    result[k] = opt
-  }
-
-  return result
-}
-
-function isRangeOption (k) {
-  return rangeOptions.includes(k)
+  this.nextTick(callback)
 }
 
 AbstractLevelDOWN.prototype.iterator = function (options) {
-  if (typeof options !== 'object' || options === null) options = {}
-  if (this[kStatus] === 'opening') return new DeferredIterator(this, options)
-  if (this[kStatus] !== 'open') throw new Error('Database is not open')
-  options = this._setupIteratorOptions(options)
+  const keyEncoding = this.keyEncoding(options && options.keyEncoding)
+  const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+
+  options = rangeOptions(options, keyEncoding)
+  options.keys = options.keys !== false
+  options.values = options.values !== false
+
+  // We need the original encoding options in AbstractIterator in order to decode data
+  Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
+  Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+
+  // Forward encoding options to the underlying store
+  options.keyEncoding = keyEncoding.format
+  options.valueEncoding = valueEncoding.format
+
+  if (this[kStatus] === 'opening') {
+    return new DeferredIterator(this, options)
+  }
+
+  if (this[kStatus] !== 'open') {
+    throw new Error('Database is not open')
+  }
+
   return this._iterator(options)
 }
 
 AbstractLevelDOWN.prototype._iterator = function (options) {
-  return new AbstractIterator(this)
+  return new AbstractIterator(this, options)
 }
 
 // TODO: docs
@@ -629,23 +702,9 @@ AbstractLevelDOWN.prototype._chainedBatch = function () {
   return new DefaultChainedBatch(this)
 }
 
-AbstractLevelDOWN.prototype._serializeKey = function (key) {
-  return key
-}
-
-AbstractLevelDOWN.prototype._serializeValue = function (value) {
-  return value
-}
-
 AbstractLevelDOWN.prototype._checkKey = function (key) {
   if (key === null || key === undefined) {
     return new Error('key cannot be `null` or `undefined`')
-  } else if (isBuffer(key) && key.length === 0) { // TODO: replace with typed array check
-    return new Error('key cannot be an empty Buffer')
-  } else if (key === '') {
-    return new Error('key cannot be an empty String')
-  } else if (Array.isArray(key) && key.length === 0) {
-    return new Error('key cannot be an empty Array')
   }
 }
 
@@ -657,16 +716,14 @@ AbstractLevelDOWN.prototype._checkValue = function (value) {
 
 // Expose browser-compatible nextTick for dependents
 // TODO: docs
-// TODO: remove _nextTick alias
 // TODO: after we drop node 10, also use queueMicrotask in node
-AbstractLevelDOWN.prototype.nextTick =
-AbstractLevelDOWN.prototype._nextTick = require('./next-tick')
+AbstractLevelDOWN.prototype.nextTick = require('./next-tick')
 
 module.exports = AbstractLevelDOWN
 
 function maybeError (db, callback) {
   if (db[kStatus] !== 'open') {
-    db._nextTick(callback, new Error('Database is not open'))
+    db.nextTick(callback, new Error('Database is not open'))
     return true
   }
 

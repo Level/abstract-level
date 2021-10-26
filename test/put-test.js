@@ -1,6 +1,6 @@
 'use strict'
 
-const { assertAsync, illegalKeys, illegalValues, isSelf } = require('./util')
+const { assertAsync, illegalKeys, illegalValues } = require('./util')
 
 let db
 
@@ -49,21 +49,30 @@ exports.args = function (test, testCommon) {
 
 exports.put = function (test, testCommon) {
   test('test simple put()', assertAsync.ctx(function (t) {
-    t.plan(4)
+    t.plan(7)
 
     db.put('foo', 'bar', assertAsync(function (err) {
       t.ifError(err, 'no put() error')
 
-      db.get('foo', { asBuffer: false }, function (err, value) {
+      db.get('foo', function (err, value) {
         t.ifError(err, 'no get() error')
         t.is(value, 'bar')
+
+        db.put('foo', 'new', function (err) {
+          t.ifError(err, 'no put() error')
+
+          db.get('foo', function (err, value) {
+            t.ifError(err, 'no get() error')
+            t.is(value, 'new', 'value was overwritten')
+          })
+        })
       })
     }))
   }))
 
   test('test simple put() with promise', async function (t) {
     await db.put('foo2', 'bar')
-    t.is(await db.get('foo2', { asBuffer: false }), 'bar')
+    t.is(await db.get('foo2'), 'bar')
   })
 
   test('test deferred put()', assertAsync.ctx(function (t) {
@@ -74,7 +83,7 @@ exports.put = function (test, testCommon) {
     db.put('foo', 'bar', assertAsync(function (err) {
       t.ifError(err, 'no put() error')
 
-      db.get('foo', { asBuffer: false }, function (err, value) {
+      db.get('foo', { valueEncoding: 'utf8' }, function (err, value) {
         t.ifError(err, 'no get() error')
         t.is(value, 'bar', 'value is ok')
         db.close(t.ifError.bind(t))
@@ -85,7 +94,7 @@ exports.put = function (test, testCommon) {
   test('test deferred put() with promise', async function (t) {
     const db = testCommon.factory()
     await db.put('foo', 'bar')
-    t.is(await db.get('foo', { asBuffer: false }), 'bar', 'value is ok')
+    t.is(await db.get('foo', { valueEncoding: 'utf8' }), 'bar', 'value is ok')
     return db.close()
   })
 }
@@ -99,17 +108,12 @@ exports.events = function (test, testCommon) {
 
     t.ok(db.supports.events.put)
 
-    if (isSelf(db)) {
-      db._serializeKey = (x) => x.toUpperCase()
-      db._serializeValue = (x) => x.toUpperCase()
-    }
-
     db.on('put', function (key, value) {
-      t.is(key, 'a')
+      t.is(key, 123)
       t.is(value, 'b')
     })
 
-    await db.put('a', 'b')
+    await db.put(123, 'b')
     await db.close()
   })
 
