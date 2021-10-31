@@ -243,6 +243,16 @@ exports.range = function (test, testCommon) {
     gt: '9a',
     reverse: true
   }, data)
+
+  rangeTest('gt greater than lt', {
+    gt: '20',
+    lt: '10'
+  }, data)
+
+  rangeTest('gte greater than lte', {
+    gte: '20',
+    lte: '10'
+  }, data)
 }
 
 exports.all = function (test, testCommon) {

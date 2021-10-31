@@ -248,6 +248,16 @@ exports.range = function (test, testCommon) {
     gt: '9a',
     reverse: true
   }, [])
+
+  rangeTest('gt greater than lt', {
+    gt: '20',
+    lt: '10'
+  }, [])
+
+  rangeTest('gte greater than lte', {
+    gte: '20',
+    lte: '10'
+  }, [])
 }
 
 exports.tearDown = function (test, testCommon) {

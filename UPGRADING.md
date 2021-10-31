@@ -53,6 +53,8 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 **This release removes the need for `levelup` and `encoding-down`. This means that an `abstract-leveldown` compliant db is a complete solution that doesn't need to be wrapped. It has the same API as `level(up)` including encodings, promises and events. In addition, implementations can use typed arrays (Uint8Array) instead of Buffer if they want to. Consumers of an implementation can use both.**
 
+Support of Node.js 10 has been dropped.
+
 For most folks an upgraded `abstract-leveldown` db can be a drop-in replacement for a `level(up)` db. Let's start this upgrade guide there: all methods have been enhanced and tuned to reach API parity with `levelup`.
 
 ### 1. API parity with `levelup`
@@ -126,7 +128,7 @@ All relevant methods including the `AbstractLevelDOWN` constructor now accept `k
 
 Both the public and private API of `abstract-leveldown` are encoding-aware. This means that private methods receive `keyEncoding` and `valueEncoding` options too, instead of `keyAsBuffer`, `valueAsBuffer` or `asBuffer`. Implementations don't need to perform encoding or decoding themselves. In fact they can do less: the `_serializeKey()` and `_serializeValue()` methods are also gone and implementations like `memdown` don't have to convert between strings and buffers.
 
-For example: a call like `db.put(key, { x: 2 }, { valueEncoding: 'json' })` will encode the `{ x: 2 }` value and might forward it to the private API as `db._put(key, '{"x":2}', { valueEncoding: 'utf8' }, callback)`. Same for the key (omitted for brevity). The private API would previously receive `{ asBuffer: false }` options.
+For example: a call like `db.put(key, { x: 2 }, { valueEncoding: 'json' })` will encode the `{ x: 2 }` value and might forward it to the private API as `db._put(key, '{"x":2}', { valueEncoding: 'utf8' }, callback)`. Same for the key (omitted for brevity).
 
 The keys, values and encoding options received by the private API depend on which encodings it supports. It must declare those via the manifest passed to the `AbstractLevelDOWN` constructor. See README for details. For example, an implementation might only support storing data as Uint8Arrays, known here as a "view":
 
@@ -139,12 +141,14 @@ The JSON example above would then result in `db._put(key, value, { valueEncoding
 Lastly:
 
 - The `binary` encoding has been renamed to `buffer`, with `binary` as an alias
-- The `utf8` encoding will always return a string. It previously did not touch Buffers. Now it will call `buffer.toString('utf8')` for consistency. Consumers can (selectively) use the `buffer` or `view` encoding to avoid this conversion.
+- The `utf8` encoding previously did not touch Buffers. Now it will call `buffer.toString('utf8')` for consistency. Consumers can use the `buffer` encoding to avoid this conversion.
 - Unlike `encoding-down` and `level-codec`, the legacy and undocumented `encoding` option (as an alias for `valueEncoding`) is not supported
 - The `AbstractIterator` constructor now requires an `options` argument
 - The `AbstractIterator#_seek()` method got a new `options` argument
 - Zero-length keys are now valid
+- The `id` encoding (aliased as `none`) which wasn't supported by any active `abstract-leveldown` implementation, has been removed.
 - The `ascii`, `ucs2` and `utf16le` encodings are not supported.
+- The `db.supports.bufferKeys` property has been removed.
 
 ### 3. Closing iterators is idempotent
 
@@ -154,7 +158,7 @@ Likewise, `_end()` has been renamed to `_close()` but without an alias. This met
 
 On `db.close()`, non-closed iterators are now automatically closed. This may be a breaking change but only if an implementation has (at its own risk) overridden the public `end()` method, because `close()` or `end()` is now an idempotent operation rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, closing the iterator (or db) will wait for that.
 
-The error messages `cannot call next() after end()` and `cannot call seek() after end()` have been replaced with `Iterator is not open`, and `cannot call next() before previous next() has completed` and `cannot call seek() before next() has completed` have been replaced with `Iterator is busy`.
+The error message `cannot call next() after end()` has been replaced with `Iterator is not open`, the error `cannot call seek() after end()` has been removed in favor of a silent return, and `cannot call next() before previous next() has completed` and `cannot call seek() before next() has completed` have been replaced with `Iterator is busy`.
 
 The `next()` method no longer returns `this` (when a callback is provided).
 

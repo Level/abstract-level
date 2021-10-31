@@ -189,7 +189,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from deferred-leveldown
   test('deferred iterator - cannot operate on closed db', function (t) {
-    t.plan(7)
+    t.plan(6)
 
     const db = testCommon.factory()
 
@@ -219,7 +219,8 @@ exports.all = function (test, testCommon) {
         try {
           it.seek('foo')
         } catch (err) {
-          t.is(err.message, 'Iterator is not open')
+          // Should *not* throw
+          t.fail(err)
         }
       })
     })
@@ -230,7 +231,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from deferred-leveldown
   test('deferred iterator - cannot operate on closing db', function (t) {
-    t.plan(7)
+    t.plan(6)
 
     const db = testCommon.factory()
 
@@ -261,7 +262,8 @@ exports.all = function (test, testCommon) {
       try {
         it.seek('foo')
       } catch (err) {
-        t.is(err.message, 'Iterator is not open')
+        // Should *not* throw
+        t.fail(err)
       }
     })
 

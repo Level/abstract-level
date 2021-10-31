@@ -106,3 +106,12 @@ exports.concat = function (iterator, callback) {
   concat(iterator, callback)
   return callback[kPromise]
 }
+
+// Mock encoding where null and undefined are significant types
+exports.nullishEncoding = {
+  name: 'nullish',
+  format: 'utf8',
+  encode (v) {
+    return v === null ? '\x00' : v === undefined ? '\xff' : String(v)
+  }
+}

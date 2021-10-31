@@ -4,24 +4,6 @@ const { concat } = require('./util')
 
 let db
 
-function collectBatchOps (batch) {
-  const _put = batch._put
-  const _del = batch._del
-  const _operations = []
-
-  batch._put = function (key, value) {
-    _operations.push({ type: 'put', key, value })
-    return _put.apply(this, arguments)
-  }
-
-  batch._del = function (key) {
-    _operations.push({ type: 'del', key })
-    return _del.apply(this, arguments)
-  }
-
-  return _operations
-}
-
 exports.setUp = function (test, testCommon) {
   test('setUp db', function (t) {
     db = testCommon.factory()
@@ -144,22 +126,6 @@ exports.args = function (test, testCommon) {
     batch.write(function (err) {
       t.is(err && err.message, 'Batch is not open', 'correct error message')
     })
-  })
-
-  testCommon.supports.serialize && test('test serialize object', function (t) {
-    const batch = db.batch()
-    const ops = collectBatchOps(batch)
-
-    batch
-      .put({ foo: 'bar' }, { beep: 'boop' })
-      .del({ bar: 'baz' })
-    ops.forEach(function (op) {
-      t.ok(op.key, '.key is set for .put and .del operations')
-      if (op.type === 'put') {
-        t.ok(op.value, '.value is set for .put operation')
-      }
-    })
-    t.end()
   })
 
   test('test batch#write() with no operations', function (t) {

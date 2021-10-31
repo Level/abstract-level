@@ -234,23 +234,6 @@ test('test close() extensibility when open', function (t) {
   })
 })
 
-test('test close() extensibility when open, via open callback', function (t) {
-  t.plan(4)
-
-  const spy = sinon.spy(function (cb) { this.nextTick(cb) })
-  const Test = implement(AbstractLevelDOWN, { _close: spy })
-  const test = new Test({ encodings: { utf8: true } }, function () {
-    test.close(function (err) {
-      t.ifError(err, 'no close() error')
-      t.is(spy.callCount, 1, 'got _close() call')
-      t.is(spy.getCall(0).thisValue, test, '`this` on _close() was correct')
-      t.is(spy.getCall(0).args.length, 1, 'got one arguments')
-    })
-
-    test.on('open', t.fail.bind(t))
-  })
-})
-
 test('test close() extensibility when new', function (t) {
   t.plan(3)
 
@@ -677,6 +660,8 @@ test('test AbstractChainedBatch#write() extensibility', function (t) {
   db.once('open', function () {
     batch = new Test(db)
 
+    // Without any operations, _write isn't called
+    batch.put('foo', 'bar')
     batch.write(function (err) {
       t.ifError(err)
     })
@@ -701,6 +686,8 @@ test('test AbstractChainedBatch#write() extensibility with null options', functi
   db.once('open', function () {
     batch = new Test(db)
 
+    // Without any operations, _write isn't called
+    batch.put('foo', 'bar')
     batch.write(null, function (err) {
       t.ifError(err)
     })
@@ -724,6 +711,8 @@ test('test AbstractChainedBatch#write() extensibility with options', function (t
 
   db.once('open', function () {
     batch = new Test(db)
+    // Without any operations, _write isn't called
+    batch.put('foo', 'bar')
     batch.write({ test: true }, function (err) {
       t.ifError(err)
     })
@@ -1422,7 +1411,7 @@ test('rangeOptions', function (t) {
   const keys = rangeOptions.slice()
   const db = new AbstractLevelDOWN({
     encodings: {
-      utf8: true, buffer: true, view: true, id: true
+      utf8: true, buffer: true, view: true
     }
   })
 
@@ -1510,17 +1499,17 @@ test('rangeOptions', function (t) {
   t.test('does not delete null', function (t) {
     const options = setupOptions(() => null)
     keys.forEach(function (key) {
-      t.is(options[key], null, 'should be null')
+      t.is(options[key], null)
     })
-    verifyOptions(t, getRangeOptions(options, db.keyEncoding('id')))
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('utf8')))
   })
 
   t.test('does not delete undefined', function (t) {
     const options = setupOptions(() => undefined)
     keys.forEach(function (key) {
-      t.is(options[key], undefined, 'should be undefined')
+      t.is(options[key], undefined)
     })
-    verifyOptions(t, getRangeOptions(options, db.keyEncoding('id')))
+    verifyOptions(t, getRangeOptions(options, db.keyEncoding('utf8')))
   })
 
   t.test('rejects legacy range options', function (t) {

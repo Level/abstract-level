@@ -1,6 +1,6 @@
 # abstract-leveldown
 
-> An abstract prototype matching the [`leveldown`][leveldown] API. Useful for extending [`levelup`](https://github.com/Level/levelup) functionality by providing a replacement to `leveldown`.
+**Base prototype for a key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for implementors.**
 
 [![level badge][level-badge]](https://github.com/Level/awesome)
 [![npm](https://img.shields.io/npm/v/abstract-leveldown.svg)](https://www.npmjs.com/package/abstract-leveldown)
@@ -15,15 +15,13 @@
 
 <details><summary>Click to expand</summary>
 
-- [Background](#background)
-- [Example](#example)
 - [Browser Support](#browser-support)
 - [Public API For Consumers](#public-api-for-consumers)
-  - [`db = constructor(location[, options][, callback])`](#db--constructorlocation-options-callback)
+  - [`db = constructor(...[, options])`](#db--constructor-options)
   - [`db.status`](#dbstatus)
+  - [`db.open([options, ][callback])`](#dbopenoptions-callback)
+  - [`db.close([callback])`](#dbclosecallback)
   - [`db.supports`](#dbsupports)
-  - [`db.open([options, ]callback)`](#dbopenoptions-callback)
-  - [`db.close(callback)`](#dbclosecallback)
   - [`db.get(key[, options], callback)`](#dbgetkey-options-callback)
   - [`db.getMany(keys[, options][, callback])`](#dbgetmanykeys-options-callback)
   - [`db.put(key, value[, options], callback)`](#dbputkey-value-options-callback)
@@ -62,8 +60,10 @@
     - [`LEVEL_INVALID_KEY`](#level_invalid_key)
     - [`LEVEL_INVALID_VALUE`](#level_invalid_value)
     - [`LEVEL_INVALID_BATCH`](#level_invalid_batch)
-    - [`LEVEL_LEGACY_API`](#level_legacy_api)
+    - [`LEVEL_NOT_SUPPORTED`](#level_not_supported)
+    - [`LEVEL_LEGACY`](#level_legacy)
 - [Private API For Implementors](#private-api-for-implementors)
+  - [Example](#example)
   - [`db = AbstractLevelDOWN(manifest[, options][, callback])`](#db--abstractleveldownmanifest-options-callback)
   - [`db._open(options, callback)`](#db_openoptions-callback)
   - [`db._close(callback)`](#db_closecallback)
@@ -84,6 +84,7 @@
     - [`chainedBatch._del(key, options)`](#chainedbatch_delkey-options)
     - [`chainedBatch._clear()`](#chainedbatch_clear)
     - [`chainedBatch._write(options, callback)`](#chainedbatch_writeoptions-callback)
+- [Differences from `level(up)`](#differences-from-levelup)
 - [Test Suite](#test-suite)
   - [Excluding tests](#excluding-tests)
   - [Reusing `testCommon`](#reusing-testcommon)
@@ -96,115 +97,53 @@
 
 </details>
 
-## Background
-
-This module provides a base prototype for a key-value store. It has a public API for consumers and a private API for implementors. To implement a `abstract-leveldown` compliant store, extend its prototype and override the private underscore versions of the methods. For example, to implement `put()`, override `_put()` on your prototype.
-
-Where possible, the default private methods have sensible _noop_ defaults that essentially do nothing. For example, `_open(callback)` will invoke `callback` on a next tick. Other methods have functional defaults. Each method listed below documents whether implementing it is mandatory.
-
-The private methods are always provided with consistent arguments, regardless of what is passed in through the public API. All public methods provide argument checking: if a consumer calls `batch(123)` they'll get an error that the first argument must be an array.
-
-Where optional arguments are involved, private methods receive sensible defaults: a `get(key, callback)` call translates to `_get(key, options, callback)`. These arguments are documented below.
-
-**If you are upgrading:** please see [UPGRADING.md](UPGRADING.md).
-
-## Example
-
-Let's implement a simplistic in-memory store:
-
-```js
-const { AbstractLevelDOWN } = require('abstract-leveldown')
-
-class FakeLevelDOWN {
-  // This in-memory example doesn't have a location
-  constructor (location, options, callback) {
-    // Declare supported encodings
-    const encodings = { utf8: true }
-
-    // Call AbstractLevelDOWN constructor
-    super({ encodings }, options, callback)
-
-    // Create a map to store entries
-    this._entries_ = new Map()
-  }
-
-  _open (options, callback) {
-    // Here you would open any necessary resources.
-    // Use nextTick to be a nice async citizen
-    this.nextTick(callback)
-  }
-
-  _put (key, value, options, callback) {
-    this._entries_.set(key, value)
-    this.nextTick(callback)
-  }
-
-  _get (key, options, callback) {
-    const value = this._entries_.get(key)
-
-    if (value === undefined) {
-      // 'NotFound' error, consistent with LevelDOWN API
-      return this.nextTick(callback, new Error('NotFound'))
-    }
-
-    this.nextTick(callback, null, value)
-  }
-
-  _del (key, options, callback) {
-    this._entries_.delete(key)
-    this.nextTick(callback)
-  }
-}
-```
-
-Now we can use our implementation:
-
-```js
-const db = new FakeLevelDOWN()
-
-await db.put('foo', 'bar')
-const value = await db.get('foo')
-
-console.log(value) // 'bar'
-```
-
-Although our simple implementation only supports `utf8` strings internally, we do get to use [encodings](#encodings) that _encode to_ that. For example, the `json` encoding which encodes to `utf8`:
-
-```js
-const db = new FakeLevelDOWN({ valueEncoding: 'json' })
-await db.put('foo', { a: 123 })
-const value = await db.get('foo')
-
-console.log(value) // { a: 123 }
-```
-
-See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory implementation.
-
 ## Browser Support
 
 [![Sauce Test Status](https://app.saucelabs.com/browser-matrix/abstract-leveldown.svg)](https://app.saucelabs.com/u/abstract-leveldown)
 
 ## Public API For Consumers
 
-### `db = constructor(location[, options][, callback])`
+_If you are upgrading: please see [UPGRADING.md](UPGRADING.md)._
 
-Constructors typically take a `location` as their first argument, pointing to where the data will be stored. That may be a file path, URL, something else or `null`, since not all implementations are disk-based or persistent. Some implementations take another db rather than a location as the first argument.
+### `db = constructor(...[, options])`
+
+The signature of this function is implementation-specific but all should have an `options` argument as the last. Typically, constructors take a `location` as their first argument, pointing to where the data will be stored. That may be a file path, URL, something else or none at all, since not all implementations are disk-based or persistent. Others take another database rather than a location as their first argument.
 
 The optional `options` object may contain:
 
 - `keyEncoding` (string or object, default `'utf8'`): encoding to use for keys
 - `valueEncoding` (string or object, default `'utf8'`): encoding to use for values.
 
-See the [Encodings section](#encodings) for a full description of these options. Other `options` as well as the `callback` argument (if any) are forwarded to `db.open(options, callback)`.
+See [Encodings](#encodings) for a full description of these options. Other `options` are forwarded to `db.open()` which is automatically called. Any read & write operations are queued internally until the database has finished opening. If opening fails, those queued operations will yield errors.
 
 ### `db.status`
 
-A read-only property. An `abstract-leveldown` store can be in one of the following states:
+A read-only property. A database can be in one of the following states:
 
-- `'opening'` - waiting for the store to be opened
-- `'open'` - successfully opened the store
-- `'closing'` - waiting for the store to be closed
-- `'closed'` - store has been successfully closed, should not be used.
+- `'opening'` - waiting for the database to be opened
+- `'open'` - successfully opened the database
+- `'closing'` - waiting for the database to be closed
+- `'closed'` - database has been successfully closed, should not be used.
+
+### `db.open([options, ][callback])`
+
+Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably `memdown` and `level-js`).
+
+The optional `options` object may contain:
+
+- `createIfMissing` (boolean, default: `true`): If `true`, create an empty database if one doesn't already exist. If `false` and the database doesn't exist, opening will fail.
+- `errorIfExists` (boolean, default: `false`): If `true` and the database already exists, opening will fail.
+- `passive` (boolean, default: `false`): Wait for, but do not initiate, opening of the database.
+
+In general it's not necessary to call this method directly as it's automatically called by the constructor. However, it is possible to reopen the database after it has been closed with [`close()`](#dbclosecallback). Once `open()` has then been called, any read & write operations will again be queued internally until opening finished.
+
+The `open()` and `close()` methods are idempotent. If the database is already open, the `callback` will be called in a next tick. If opening is already in progress, the `callback` will be called when that completes. If closing is in progress, the database will be reopened once closing completes. Likewise, if `close()` is called before opening completes, the database will be closed once opening completes and the `callback` will receive an error.
+
+### `db.close([callback])`
+
+Close the database. The `callback` function will be called with no arguments if the operation is successful or with a single `error` argument if closing failed for any reason. If no callback is provided, a promise is returned.
+
+A database may have associated resources like file handles and locks. When you no longer need the database (for the remainder of your program) call `close()` to free up resources.
 
 ### `db.supports`
 
@@ -220,39 +159,21 @@ if (db.supports.encodings.buffer) {
 }
 ```
 
-### `db.open([options, ]callback)`
-
-Open the store. The `callback` function will be called with no arguments when the store has been successfully opened, or with a single error argument if the open operation failed for any reason.
-
-The optional `options` argument may contain:
-
-- `createIfMissing` _(boolean, default: `true`)_: If `true` and the store doesn't exist it will be created. If `false` and the store doesn't exist, `callback` will receive an error.
-- `errorIfExists` _(boolean, default: `false`)_: If `true` and the store exists, `callback` will receive an error.
-- `passive` _(boolean, default: `false`)_: If `true` then the db will wait for, but not initiate, opening of the db.
-
-Options passed to `open()` take precedence over options passed to the constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably `memdown` and `level-js`).
-
-If the store is already open, the `callback` will be called in a next tick. If opening is already in progress, the `callback` will be called when that completes. If closing is in progress, the store will be reopened once closing completes. Likewise, if `db.close()` is called before opening completes, the store will be closed once opening completes and the `callback` will receive an error.
-
-### `db.close(callback)`
-
-Close the store. The `callback` function will be called with no arguments if the operation is successful or with a single `error` argument if closing failed for any reason.
-
 ### `db.get(key[, options], callback)`
 
-Get a value from the store by `key`. The optional `options` object may contain:
+Get a value from the database by `key`. The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode the `key`.
-- `valueEncoding` (string or object): custom value encoding for this operation, used to decode the value.
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `valueEncoding`: custom value encoding for this operation, used to decode the value.
 
 The `callback` function will be called with an `Error` if the operation failed for any reason, including if the key was not found. If successful the first argument will be `null` and the second argument will be the value.
 
 ### `db.getMany(keys[, options][, callback])`
 
-Get multiple values from the store by an array of `keys`. The optional `options` object may contain:
+Get multiple values from the database by an array of `keys`. The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode the `keys`.
-- `valueEncoding` (string or object): custom value encoding for this operation, used to decode values.
+- `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
+- `valueEncoding`: custom value encoding for this operation, used to decode values.
 
 The `callback` function will be called with an `Error` if the operation failed for any reason. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
@@ -262,8 +183,8 @@ If no callback is provided, a promise is returned.
 
 Store a new entry or overwrite an existing entry. The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode the `key`.
-- `valueEncoding` (string or object): custom value encoding for this operation, used to encode the `value`.
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
 
 The `callback` function will be called with no arguments if the operation is successful or with an `Error` if putting failed for any reason.
 
@@ -271,7 +192,7 @@ The `callback` function will be called with no arguments if the operation is suc
 
 Delete an entry. The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode the `key`.
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 
 The `callback` function will be called with no arguments if the operation is successful or with an `Error` if deletion failed for any reason.
 
@@ -283,8 +204,8 @@ Each operation is contained in an object having the following properties: `type`
 
 The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this batch.
-- `valueEncoding` (string or object): custom value encoding for this batch.
+- `keyEncoding`: custom key encoding for this batch.
+- `valueEncoding`: custom value encoding for this batch.
 
 These options can also be set on individual operation objects, taking precedence. The `callback` function will be called with no arguments if the batch is successful or with an error if the batch failed for any reason.
 
@@ -305,8 +226,8 @@ In addition to range options, `iterator()` takes the following options:
 
 - `keys` _(boolean, default: `true`)_: whether to return the key of each entry. If set to `false`, calls to `iterator.next(callback)` will yield keys with a value of `undefined`.
 - `values` _(boolean, default: `true`)_: whether to return the value of each entry. If set to `false`, calls to `iterator.next(callback)` will yield values with a value of `undefined`.
-- `keyEncoding` (string or object): custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
-- `valueEncoding` (string or object): custom value encoding for this iterator, used to decode values.
+- `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
+- `valueEncoding`: custom value encoding for this iterator, used to decode values.
 
 Lastly, an implementation is free to add its own options.
 
@@ -318,27 +239,28 @@ Delete all entries or a range. Not guaranteed to be atomic. Accepts the followin
 - `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be deleted. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse=true` the order will be reversed, but the entries deleted will be the same.
 - `reverse` _(boolean, default: `false`)_: delete entries in reverse order. Only effective in combination with `limit`, to remove the last N records.
 - `limit` _(number, default: `-1`)_: limit the number of entries to be deleted. This number represents a _maximum_ number of entries and may not be reached if you get to the end of the range first. A value of `-1` means there is no limit. When `reverse=true` the entries with the highest keys will be deleted instead of the lowest keys.
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode range options.
+- `keyEncoding`: custom key encoding for this operation, used to encode range options.
 
 If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an `Error` if it failed for any reason.
 
 ### `encoding = db.keyEncoding([encoding]`
 
-Returns the given `encoding` as a normalized encoding object in [`level-transcoder`](https://github.com/Level/transcoder) form. The `encoding` argument may be:
+Returns the given `encoding` argument as a normalized encoding object that follows the [`level-transcoder`](https://github.com/Level/transcoder) encoding interface. See [Encodings](#encodings) for an introduction. The `encoding` argument may be:
 
-- A string to select a known encoding
-- An encoding object in [`level-transcoder`](https://github.com/Level/transcoder) form
-- An encoding object in legacy [`level-codec` form](https://github.com/Level/codec#encoding-format)
-- A previously normalized encoding, such that `db.keyEncoding(x) === db.keyEncoding(db.keyEncoding(x))`
-- Omitted, `null` or `undefined`, in which case the default `keyEncoding` of the db is returned.
+- A string to select a known encoding by its name
+- An object that follows one of the following interfaces: [`level-transcoder`](https://github.com/Level/transcoder#encoding-interface), [`level-codec`](https://github.com/Level/codec#encoding-format), [`codecs`](https://github.com/mafintosh/codecs), [`abstract-encoding`](https://github.com/mafintosh/abstract-encoding), [`multiformats`](https://github.com/multiformats/js-multiformats/blob/master/src/codecs/interface.ts)
+- A previously normalized encoding, such that `keyEncoding(x)` equals `keyEncoding(keyEncoding(x))`
+- Omitted, `null` or `undefined`, in which case the default `keyEncoding` of the database is returned.
 
-Depending on the encodings supported by an implementation, this method may return a _transcoder_ that translates the desired encoding from/to an encoding supported by the implementation. Such a transcoder is an encoding object like usual, of which the `encode()` and `decode()` methods accept the same input types as a non-transcoded encoding, but its `type` property will differ.
+Other methods that take `keyEncoding` or `valueEncoding` options, accept the same as above. Results are cached. If the `encoding` argument is an object and it has a name then subsequent calls can refer to that encoding by name.
 
-Assume that e.g. `db.keyEncoding().encode(key)` is safe to call at any time including if the store hasn't opened yet, because encodings must be stateless. If the given encoding is not found or supported, a [`LEVEL_ENCODING_NOT_FOUND` or `LEVEL_ENCODING_NOT_SUPPORTED` error](#errors) is thrown.
+Depending on the encodings supported by a database, this method may return a _transcoder encoding_ that translates the desired encoding from / to an encoding supported by the database. Its `encode()` and `decode()` methods will have respectively the same input and output types as a non-transcoded encoding, but its `name` property will differ.
+
+Assume that e.g. `db.keyEncoding().encode(key)` is safe to call at any time including if the database isn't open, because encodings must be stateless. If the given encoding is not found or supported, a [`LEVEL_ENCODING_NOT_FOUND` or `LEVEL_ENCODING_NOT_SUPPORTED` error](#errors) is thrown.
 
 ### `encoding = db.valueEncoding([encoding])`
 
-Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the db if the `encoding` argument is omitted, `null` or `undefined`.
+Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the database if the `encoding` argument is omitted, `null` or `undefined`.
 
 ### `chainedBatch`
 
@@ -346,14 +268,14 @@ Same as `db.keyEncoding([encoding])` except that it returns the default `valueEn
 
 Queue a `put` operation on this batch. This may throw if `key` or `value` is invalid. The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode the `key`.
-- `valueEncoding` (string or object): custom value encoding for this operation, used to encode the `value`.
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
 
 #### `chainedBatch.del(key[, options])`
 
 Queue a `del` operation on this batch. This may throw if `key` is invalid. The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding for this operation, used to encode the `key`.
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 
 #### `chainedBatch.clear()`
 
@@ -375,17 +297,17 @@ The number of queued operations on the current batch.
 
 #### `chainedBatch.db`
 
-A reference to the `db` that created this chained batch.
+A reference to the database that created this chained batch.
 
 ### `iterator`
 
-An iterator allows you to _iterate_ the entire store or a range. It operates on a snapshot of the store, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee.
+An iterator allows you to _iterate_ the entire database or a range. It operates on a snapshot of the database, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee.
 
 Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing or breaking from a `for await...of` loop automatically calls `iterator.close()`.
 
 An iterator reaches its natural end in the following situations:
 
-- The end of the store has been reached
+- The end of the database has been reached
 - The end of the range has been reached
 - The last `iterator.seek()` was out of range.
 
@@ -421,7 +343,7 @@ Seek the iterator to a given key or the closest key. Subsequent calls to `iterat
 
 The optional `options` object may contain:
 
-- `keyEncoding` (string or object): custom key encoding, used to encode the `target`. By default the `keyEncoding` option of the iterator is used or (if that wasn't set) the `keyEncoding` of the db.
+- `keyEncoding`: custom key encoding, used to encode the `target`. By default the `keyEncoding` option of the iterator is used or (if that wasn't set) the `keyEncoding` of the database.
 
 If range options like `gt` were passed to `db.iterator()` and `target` does not fall within that range, the iterator will reach its natural end.
 
@@ -435,13 +357,13 @@ If no callback is provided, a promise is returned.
 
 #### `iterator.db`
 
-A reference to the `db` that created this iterator.
+A reference to the database that created this iterator.
 
 ### Encodings
 
 Any method that takes a `key` argument, `value` argument or range options like `gte`, hereby jointly referred to as `data`, runs that `data` through an _encoding_. This means to encode input `data` and decode output `data`.
 
-Several encodings are builtin courtesy of [`level-transcoder`](https://github.com/Level/transcoder) and can be selected by a short name like `utf8` or `json`. The default encoding is `utf8` which ensures you'll always get back a string. Encodings can be specified for keys and values independently with `keyEncoding` and `valueEncoding` options, either in the db constructor or per method to apply an encoding selectively. For example:
+Several encodings are builtin courtesy of [`level-transcoder`](https://github.com/Level/transcoder) and can be selected by a short name like `utf8` or `json`. The default encoding is `utf8` which ensures you'll always get back a string. Encodings can be specified for keys and values independently with `keyEncoding` and `valueEncoding` options, either in the database constructor or per method to apply an encoding selectively. For example:
 
 ```js
 const db = level('./db', {
@@ -462,7 +384,7 @@ const obj = await db.get(key)
 const str = await db.get(key, { valueEncoding: 'utf8' })
 ```
 
-The `keyEncoding` and `valueEncoding` options accept a string to select a known encoding by its name, or an object to use a custom encoding like [`charwise`](https://github.com/dominictarr/charwise). If a custom encoding is passed to the db constructor, subsequent method calls can refer to that encoding by name. Supported encodings are exposed in the `db.supports` manifest:
+The `keyEncoding` and `valueEncoding` options accept a string to select a known encoding by its name, or an object to use a custom encoding like [`charwise`](https://github.com/dominictarr/charwise). See [`keyEncoding()`](#encoding--dbkeyencodingencoding) for details. If a custom encoding is passed to the database constructor, subsequent method calls can refer to that encoding by name. Supported encodings are exposed in the `db.supports` manifest:
 
 ```js
 const db = level('./db', {
@@ -529,17 +451,15 @@ Not yet implemented. When an entry (a key-value pair) was not found.
 
 #### `LEVEL_DATABASE_NOT_OPEN`
 
-TODO: reevaluate: is it "store" or "database"? Store made sense when we had `levelup`, in the sense that it had an underlying store.
-
-Not yet implemented. When an operation was made on a store while it was closing or closed, or when a store failed to `open()`, including when `close()` was called in the mean time.
+Not yet implemented. When an operation was made on a database while it was closing or closed, or when a database failed to `open()`, including when `close()` was called in the mean time.
 
 #### `LEVEL_DATABASE_NOT_CLOSED`
 
-Not yet implemented. When a store failed to `close()`.
+Not yet implemented. When a database failed to `close()`.
 
 #### `LEVEL_ITERATOR_NOT_OPEN`
 
-Not yet implemented. When an operation was made on an iterator while it was closing or closed, which may also be the result of the store being closed.
+Not yet implemented. When an operation was made on an iterator while it was closing or closed, which may also be the result of the database being closed.
 
 #### `LEVEL_ITERATOR_BUSY`
 
@@ -547,7 +467,7 @@ Not yet implemented. When `iterator.next()` or `seek()` was called while a previ
 
 #### `LEVEL_BATCH_NOT_OPEN`
 
-Not yet implemented. When an operation was made on a chained batch while it was closing or closed, which may also be the result of the store being closed or that `write()` was called on the chained batch.
+Not yet implemented. When an operation was made on a chained batch while it was closing or closed, which may also be the result of the database being closed or that `write()` was called on the chained batch.
 
 #### `LEVEL_ENCODING_NOT_FOUND`
 
@@ -555,7 +475,7 @@ When a `keyEncoding` or `valueEncoding` option specified a named encoding that d
 
 #### `LEVEL_ENCODING_NOT_SUPPORTED`
 
-When a `keyEncoding` or `valueEncoding` option specified an encoding that isn't supported by the underlying store.
+When a `keyEncoding` or `valueEncoding` option specified an encoding that isn't supported by the database.
 
 #### `LEVEL_DECODE_ERROR`
 
@@ -584,17 +504,111 @@ Not yet implemented.
 
 Not yet implemented. When a `batch()` operation has a `type` property that is not `put` or `del`.
 
-#### `LEVEL_LEGACY_API`
+#### `LEVEL_NOT_SUPPORTED`
 
-Not yet implemented. When a method, option or other property was used that has been removed from the API.
+When a module needs a certain feature, typically as indicated by `db.supports`, but that feature is not available on an input. For example:
+
+```js
+const ModuleError = require('module-error')
+
+module.exports = function plugin (db) {
+  if (!db.supports.seek) {
+    throw new ModuleError('Database must support seeking', {
+      code: 'LEVEL_NOT_SUPPORTED'
+    })
+  }
+
+  // ..
+}
+```
+
+#### `LEVEL_LEGACY`
+
+When a method, option or other property was used that has been removed from the API.
 
 ## Private API For Implementors
 
-Each of these methods will receive exactly the number and order of arguments described. Optional arguments will receive sensible defaults. All callbacks are error-first and must be asynchronous.
+To implement a `abstract-leveldown` database, extend its prototype and override the private underscored versions of the methods. For example, to implement the public `put()` method, override the private `_put()` method.
 
-If an operation within your implementation is synchronous, be sure to invoke the callback on a next tick using `queueMicrotask`, `process.nextTick` or some other means of microtask scheduling. For convenience, the prototypes of `AbstractLevelDOWN`, `AbstractIterator` and `AbstractChainedBatch` include a `nextTick` method that is compatible with node and browsers.
+Each of the private methods listed below will receive exactly the number and types of arguments described, regardless of what is passed in through the public API. Public methods provide type checking: if a consumer calls `batch(123)` they'll get an error that the first argument must be an array. Optional arguments get sensible defaults: a `get(key)` call translates to `_get(key, options, callback)`.
 
-When throwing or yielding an error, use a known error code (as documented above) when possible. If new codes are required for your implementation and you wish to use the `LEVEL_` prefix for consistency, feel free to open an issue to discuss. We'll likely want to document those codes here.
+All callbacks are error-first and must be asynchronous. If an operation within your implementation is synchronous, invoke the callback on a next tick using microtask scheduling. For convenience, instances of `AbstractLevelDOWN`, `AbstractIterator` and `AbstractChainedBatch` include a `nextTick(fn, ...args)` method that uses [`process.nextTick()`](https://nodejs.org/api/process.html#processnexttickcallback-args) in Node.js and [`queueMicrotask()`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) in browsers.
+
+Where possible, the default private methods are sensible noops that do nothing. For example, `_open(callback)` will merely invoke `callback` on a next tick. Other methods have functional defaults. Each method documents whether implementing it is mandatory.
+
+When throwing or yielding an error, prefer using a [known error code](#errors). If new codes are required for your implementation and you wish to use the `LEVEL_` prefix for consistency, feel free to open an issue to discuss. We'll likely want to document those codes here.
+
+### Example
+
+Let's implement a simplistic in-memory database:
+
+```js
+const { AbstractLevelDOWN } = require('abstract-leveldown')
+
+class FakeLevelDOWN extends AbstractLevelDOWN {
+  // This in-memory example doesn't have a location
+  constructor (location, options) {
+    // Declare supported encodings
+    const encodings = { utf8: true }
+
+    // Call AbstractLevelDOWN constructor
+    super({ encodings }, options)
+
+    // Create a map to store entries
+    this._entries = new Map()
+  }
+
+  _open (options, callback) {
+    // Here you would open any necessary resources.
+    // Use nextTick to be a nice async citizen
+    this.nextTick(callback)
+  }
+
+  _put (key, value, options, callback) {
+    this._entries.set(key, value)
+    this.nextTick(callback)
+  }
+
+  _get (key, options, callback) {
+    const value = this._entries.get(key)
+
+    if (value === undefined) {
+      // 'NotFound' error, consistent with LevelDOWN API
+      return this.nextTick(callback, new Error('NotFound'))
+    }
+
+    this.nextTick(callback, null, value)
+  }
+
+  _del (key, options, callback) {
+    this._entries.delete(key)
+    this.nextTick(callback)
+  }
+}
+```
+
+Now we can use our implementation:
+
+```js
+const db = new FakeLevelDOWN()
+
+await db.put('foo', 'bar')
+const value = await db.get('foo')
+
+console.log(value) // 'bar'
+```
+
+Although our simple implementation only supports `utf8` strings internally, we do get to use [encodings](#encodings) that _encode to_ that. For example, the `json` encoding which encodes to `utf8`:
+
+```js
+const db = new FakeLevelDOWN({ valueEncoding: 'json' })
+await db.put('foo', { a: 123 })
+const value = await db.get('foo')
+
+console.log(value) // { a: 123 }
+```
+
+See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory implementation.
 
 ### `db = AbstractLevelDOWN(manifest[, options][, callback])`
 
@@ -614,46 +628,39 @@ class LevelDOWN extends AbstractLevelDOWN {
 }
 ```
 
-Both the public and private API of `abstract-leveldown` are encoding-aware. This means that private methods receive `keyEncoding` and `valueEncoding` options too. Implementations don't need to perform encoding or decoding themselves. Rather, the `keyEncoding` and `valueEncoding` options are lower-level and typically idempotent encodings that specify the type of input data or the expected type of output data.
+Both the public and private API of `abstract-leveldown` are encoding-aware. This means that private methods receive `keyEncoding` and `valueEncoding` options too. Implementations don't need to perform encoding or decoding themselves. Rather, the `keyEncoding` and `valueEncoding` options are lower-level encodings that indicate the type of already-encoded input data or the expected type of yet-to-be-decoded output data. They're one of `'buffer'`, `'view'`, `'utf8'` and always strings in the private API.
 
-If the manifest declared support of `buffer`, then `keyEncoding` and `valueEncoding` (which are always strings in the private API) will always be `'buffer'`. If the manifest declared support of `utf8` then `keyEncoding` and `valueEncoding` will always be `'utf8'`.
+If the manifest declared support of `buffer`, then `keyEncoding` and `valueEncoding` will always be `'buffer'`. If the manifest declared support of `utf8` then `keyEncoding` and `valueEncoding` will be `'utf8'`.
 
 For example: a call like `await db.put(key, { x: 2 }, { valueEncoding: 'json' })` will encode the `{ x: 2 }` value and might forward it to the private API as `db._put(key, '{"x":2}', { valueEncoding: 'utf8' }, callback)`. Same for the key (omitted for brevity).
 
-The public API will cast and encode user input as necessary. If the manifest declared support of `utf8` then `await db.get(24)` will forward that number key as a string key: `db._get('24', { keyEncoding: 'utf8', ... }, callback)`. However, this is _not_ true for output: a private API call like `db._get(key, { keyEncoding: 'utf8', valueEncoding: 'utf8' }, callback)` _must_ yield a string value to the callback.
+The public API will coerce user input as necessary. If the manifest declared support of `utf8` then `await db.get(24)` will forward that number key as a string: `db._get('24', { keyEncoding: 'utf8', ... }, callback)`. However, this is _not_ true for output: a private API call like `db._get(key, { keyEncoding: 'utf8', valueEncoding: 'utf8' }, callback)` _must_ yield a string value to the callback.
 
-All private methods below that take a `key` argument, `value` argument or range option, will receive that data in encoded form. That includes `db._iterator()` with its range options and `iterator._seek()` with its `target` argument. So if the manifest declared support of `buffer` then `db.iterator({ gt: 2 })` translates into `db._iterator({ gt: Buffer.from('2'), ...options })` and `iterator.seek(128)` translates into `iterator._seek(Buffer.from('128'), options)`.
+All private methods below that take a `key` argument, `value` argument or range option, will receive that data in encoded form. That includes `iterator._seek()` with its `target` argument. So if the manifest declared support of `buffer` then `db.iterator({ gt: 2 })` translates into `db._iterator({ gt: Buffer.from('2'), ...options })` and `iterator.seek(128)` translates into `iterator._seek(Buffer.from('128'), options)`.
 
 The `AbstractLevelDOWN` constructor will add other supported encodings to the public manifest. If the private API only supports `buffer`, the resulting `db.supports.encodings` will nevertheless be as follows because all other encodings can be transcoded to `buffer`:
 
 ```js
-{
-  buffer: true,
-  view: true,
-  utf8: true,
-  json: true,
-  hex: true,
-  base64: true
-}
+{ buffer: true, view: true, utf8: true, json: true, ... }
 ```
 
-Implementations can also declare support of multiple encodings; keys and values will then be encoded and decoded via the most optimal path. In `leveldown` for example it's (or will be):
+Implementations can also declare support of multiple encodings. Keys and values will then be encoded and decoded via the most optimal path. In `leveldown` for example it's (or will be):
 
 ```js
 super({ encodings: { buffer: true, utf8: true } }, options, callback)
 ```
 
-This has the benefit that user input needs less conversion steps: if the input is a string then `leveldown` can pass that to the underlying LevelDB store as-is. Vice versa for output.
+This has the benefit that user input needs less conversion steps: if the input is a string then `leveldown` can pass that to its underlying store as-is. Vice versa for output.
 
 ### `db._open(options, callback)`
 
-Open the store. The `options` object will always have the following properties: `createIfMissing`, `errorIfExists`. If opening failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Open the database. The `options` object will always have the following properties: `createIfMissing`, `errorIfExists`. If opening failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
 
 The default `_open()` is a sensible noop and invokes `callback` on a next tick.
 
 ### `db._close(callback)`
 
-Close the store. When this is called, `db.status` will be `'closing'`. If closing failed, call the `callback` function with an `Error`, which resets the `status` to `'open'`. Otherwise call `callback` without any arguments, which sets `status` to `'closed'`. Make an effort to avoid failing, or if it does happen that it is subsequently safe to keep using the store. If the db was never opened or failed to open then `_close()` will not be called.
+Close the database. When this is called, `db.status` will be `'closing'`. If closing failed, call the `callback` function with an `Error`, which resets the `status` to `'open'`. Otherwise call `callback` without any arguments, which sets `status` to `'closed'`. Make an effort to avoid failing, or if it does happen that it is subsequently safe to keep using the database. If the database was never opened or failed to open then `_close()` will not be called.
 
 The default `_close()` is a sensible noop and invokes `callback` on a next tick.
 
@@ -683,7 +690,7 @@ The default `_del()` invokes `callback` on a next tick. It must be overridden.
 
 ### `db._batch(operations, options, callback)`
 
-Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an `Array` containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object. If the batch failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an `Array` containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. The `_batch()` method will not be called if the `operations` array is empty. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object. If the batch failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
 
 The default `_batch()` invokes `callback` on a next tick. It must be overridden.
 
@@ -715,7 +722,7 @@ The `options` object will always have the following properties: `reverse`, `keys
 
 Delete all entries or a range. Does not have to be atomic. It is recommended (and possibly mandatory in the future) to operate on a snapshot so that writes scheduled after a call to `clear()` will not be affected.
 
-Implementations that wrap another `db` can typically forward the `_clear()` call to that `db`, having transformed range options if necessary.
+Implementations that wrap another database can typically forward the `_clear()` call to that database, having transformed range options if necessary.
 
 The `options` object will always have the following properties: `reverse`, `limit` and `keyEncoding`. If the user passed range options to `db.clear()`, those will be encoded and set in `options`.
 
@@ -757,7 +764,13 @@ Clear all queued operations on this batch.
 
 #### `chainedBatch._write(options, callback)`
 
-The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the queued operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the queued operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments. The `_write()` method will not be called if the chained batch has zero queued operations.
+
+## Differences from `level(up)`
+
+WIP notes:
+
+- The constructor does not take a callback argument. Instead call `db.open()` if you wish to wait for opening (which is not necessary to use the database) or to capture an open error.
 
 ## Test Suite
 
@@ -882,5 +895,3 @@ Support us with a monthly donation on [Open Collective](https://opencollective.c
 [MIT](LICENSE)
 
 [level-badge]: https://leveljs.org/img/badge.svg
-
-[leveldown]: https://github.com/Level/leveldown

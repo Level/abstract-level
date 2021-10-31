@@ -26,17 +26,23 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-// TODO: document new options and callback arguments
+// TODO: document new options
 // TODO: and test them, also as testCommon.factory() arguments
 // TODO: document promise support
-function AbstractLevelDOWN (manifest, options, callback) {
-  if (typeof manifest !== 'object' && manifest != null) {
-    throw new TypeError('First argument must be null, undefined or an object')
+function AbstractLevelDOWN (manifest, options, _callback) {
+  if (typeof manifest !== 'object' || manifest === null) {
+    throw new TypeError("First argument 'manifest' must be an object")
   }
 
-  callback = getCallback(options, callback)
+  _callback = getCallback(options, _callback)
   options = getOptions(options)
-  manifest = manifest || {}
+
+  // To help migrating to abstract-level
+  if (typeof _callback === 'function') {
+    throw new ModuleError('The levelup-style callback argument has been removed', {
+      code: 'LEVEL_LEGACY'
+    })
+  }
 
   EventEmitter.call(this)
 
@@ -48,7 +54,6 @@ function AbstractLevelDOWN (manifest, options, callback) {
   this[kOptions] = forward
   this[kStatus] = 'opening'
 
-  // TODO: add openCallback
   this.supports = supports(manifest, {
     status: true,
     promises: true,
@@ -57,7 +62,6 @@ function AbstractLevelDOWN (manifest, options, callback) {
     idempotentOpen: true,
     passiveOpen: true,
     deferredOpen: true,
-    serialize: true,
     snapshots: manifest.snapshots !== false,
     permanence: manifest.permanence !== false,
     encodings: manifest.encodings || {},
@@ -74,7 +78,7 @@ function AbstractLevelDOWN (manifest, options, callback) {
     }
   })
 
-  // Get encoding formats supported by implementation
+  // Get encodings supported by implementation
   const formats = Object.keys(this.supports.encodings)
     .filter(k => !!this.supports.encodings[k])
 
@@ -82,31 +86,28 @@ function AbstractLevelDOWN (manifest, options, callback) {
   this[kKeyEncoding] = this[kTranscoder].encoding(keyEncoding || 'utf8')
   this[kValueEncoding] = this[kTranscoder].encoding(valueEncoding || 'utf8')
 
-  // Add types of custom & transcoder encodings to manifest
-  for (const type of this[kTranscoder].types()) {
-    if (!this.supports.encodings[type]) {
-      this.supports.encodings[type] = true
+  // Add custom and transcoder encodings to manifest
+  for (const encoding of this[kTranscoder].encodings()) {
+    if (!this.supports.encodings[encoding.commonName]) {
+      this.supports.encodings[encoding.commonName] = true
     }
   }
 
   this[kDefaultOptions] = {
     empty: {},
     entry: {
-      // TODO: if transcoded, these will not match typical user options
-      keyEncoding: this[kKeyEncoding].type,
-      valueEncoding: this[kValueEncoding].type
+      keyEncoding: this[kKeyEncoding].commonName,
+      valueEncoding: this[kValueEncoding].commonName
     },
     key: {
-      keyEncoding: this[kKeyEncoding].type
+      keyEncoding: this[kKeyEncoding].commonName
     }
   }
 
   // Let subclass finish its constructor
   this.nextTick(() => {
     if (this[kDeferOpen]) {
-      this.open({ passive: false }, callback || noop)
-    } else if (callback) {
-      this.open({ passive: true }, callback)
+      this.open({ passive: false }, noop)
     }
   })
 }
@@ -307,8 +308,8 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
     }
   }
 
-  // eslint-disable-next-line multiline-ternary, no-extra-parens
-  const wrapped = valueEncoding.idempotent ? callback : ((err, value) => {
+  // TODO: handle notfound errors (or go with undefined)
+  this._get(keyEncoding.encode(key), options, (err, value) => {
     if (err) return callback(err)
 
     try {
@@ -323,8 +324,6 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
     callback(null, value)
   })
 
-  // TODO: handle notfound errors (or go with undefined)
-  this._get(keyEncoding.encode(key), options, wrapped)
   return callback[kPromise]
 }
 
@@ -383,8 +382,7 @@ AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
     encoded[i] = keyEncoding.encode(key)
   }
 
-  // eslint-disable-next-line multiline-ternary, no-extra-parens
-  const wrapped = valueEncoding.idempotent ? callback : ((err, values) => {
+  this._getMany(encoded, options, (err, values) => {
     if (err) return callback(err)
 
     try {
@@ -403,7 +401,6 @@ AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
     callback(null, values)
   })
 
-  this._getMany(encoded, options, wrapped)
   return callback[kPromise]
 }
 

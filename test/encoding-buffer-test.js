@@ -2,6 +2,7 @@
 
 const { Buffer } = require('buffer')
 const { concat } = require('./util')
+const textEncoder = new TextEncoder()
 
 exports.all = function (test, testCommon) {
   if (!testCommon.supports.encodings.buffer) return
@@ -106,6 +107,49 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory({ keyEncoding: 'buffer', valueEncoding: 'buffer' })
     await db.open()
     await db.put(Buffer.from('🐄'), Buffer.from('🐄'))
+
+    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
+    const entries = await concat(it)
+
+    t.same(entries, [{ key: '🐄', value: '🐄' }])
+    return db.close()
+  })
+
+  test('put() as view, iterate as view', async function (t) {
+    const db = testCommon.factory({ keyEncoding: 'view', valueEncoding: 'view' })
+    const cow = textEncoder.encode('🐄')
+    await db.open()
+    await db.put(cow, cow)
+
+    const it = db.iterator()
+    const entries = await concat(it)
+    const key = Buffer.isBuffer(entries[0].key) ? Buffer.from(cow) : cow // Valid, Buffer is a Uint8Array
+    const value = Buffer.isBuffer(entries[0].value) ? Buffer.from(cow) : cow
+
+    t.same(entries, [{ key, value }])
+    return db.close()
+  })
+
+  test('put() as string, iterate as view', async function (t) {
+    const db = testCommon.factory({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
+    const cow = textEncoder.encode('🐄')
+    await db.open()
+    await db.put('🐄', '🐄')
+
+    const it = db.iterator({ keyEncoding: 'view', valueEncoding: 'view' })
+    const entries = await concat(it)
+    const key = Buffer.isBuffer(entries[0].key) ? Buffer.from(cow) : cow // Valid, Buffer is a Uint8Array
+    const value = Buffer.isBuffer(entries[0].value) ? Buffer.from(cow) : cow
+
+    t.same(entries, [{ key, value }])
+    return db.close()
+  })
+
+  test('put() as view, iterate as string', async function (t) {
+    const db = testCommon.factory({ keyEncoding: 'view', valueEncoding: 'view' })
+    const cow = textEncoder.encode('🐄')
+    await db.open()
+    await db.put(cow, cow)
 
     const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
     const entries = await concat(it)

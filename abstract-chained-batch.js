@@ -109,6 +109,8 @@ AbstractChainedBatch.prototype.write = function (options, callback) {
 
   if (this[kStatus] !== 'open') {
     this.nextTick(callback, new Error('Batch is not open'))
+  } else if (this.length === 0) {
+    this.close(callback)
   } else {
     this[kStatus] = 'writing'
     this._write(options, (err) => {

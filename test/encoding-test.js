@@ -15,37 +15,35 @@ exports.all = function (test, testCommon) {
 
   // NOTE: adapted from encoding-down
   test('encodings default to utf8', function (t) {
-    const expected = ['utf8', 'utf8+buffer', 'utf8+view']
-    t.ok(expected.includes(db.keyEncoding().type))
-    t.ok(expected.includes(db.valueEncoding().type))
+    t.is(db.keyEncoding().commonName, 'utf8')
+    t.is(db.valueEncoding().commonName, 'utf8')
     t.end()
   })
 
   test('can set encoding options in factory', async function (t) {
-    const norm = (type) => type.split('+')[0]
     const dbs = []
 
-    for (const enc of ['buffer', 'view', 'json']) {
-      if (!testCommon.supports.encodings[enc]) continue
+    for (const name of ['buffer', 'view', 'json']) {
+      if (!testCommon.supports.encodings[name]) continue
 
-      const db1 = testCommon.factory({ keyEncoding: enc })
-      const db2 = testCommon.factory({ valueEncoding: enc })
-      const db3 = testCommon.factory({ keyEncoding: enc, valueEncoding: enc })
+      const db1 = testCommon.factory({ keyEncoding: name })
+      const db2 = testCommon.factory({ valueEncoding: name })
+      const db3 = testCommon.factory({ keyEncoding: name, valueEncoding: name })
 
-      t.is(norm(db1.keyEncoding().type), enc)
-      t.is(db1.keyEncoding(), db1.keyEncoding(enc))
-      t.is(norm(db1.valueEncoding().type), 'utf8')
+      t.is(db1.keyEncoding().commonName, name)
+      t.is(db1.keyEncoding(), db1.keyEncoding(name))
+      t.is(db1.valueEncoding().commonName, 'utf8')
       t.is(db1.valueEncoding(), db1.valueEncoding('utf8'))
 
-      t.is(norm(db2.keyEncoding().type), 'utf8')
+      t.is(db2.keyEncoding().commonName, 'utf8')
       t.is(db2.keyEncoding(), db2.keyEncoding('utf8'))
-      t.is(norm(db2.valueEncoding().type), enc)
-      t.is(db2.valueEncoding(), db2.valueEncoding(enc))
+      t.is(db2.valueEncoding().commonName, name)
+      t.is(db2.valueEncoding(), db2.valueEncoding(name))
 
-      t.is(norm(db3.keyEncoding().type), enc)
-      t.is(db3.keyEncoding(), db3.keyEncoding(enc))
-      t.is(norm(db3.valueEncoding().type), enc)
-      t.is(db3.valueEncoding(), db3.valueEncoding(enc))
+      t.is(db3.keyEncoding().commonName, name)
+      t.is(db3.keyEncoding(), db3.keyEncoding(name))
+      t.is(db3.valueEncoding().commonName, name)
+      t.is(db3.valueEncoding(), db3.valueEncoding(name))
 
       dbs.push(db1, db2, db3)
     }

@@ -2,10 +2,9 @@
 
 const test = require('tape')
 const { Buffer } = require('buffer')
-const { mockDown, mockChainedBatch, mockIterator } = require('../util')
+const { mockDown, mockChainedBatch, mockIterator, nullishEncoding } = require('../util')
 
 const utf8Manifest = { encodings: { utf8: true } }
-const idManifest = { encodings: { id: true } }
 const dualManifest = { encodings: { utf8: true, buffer: true } }
 const hasOwnProperty = Object.prototype.hasOwnProperty
 
@@ -473,14 +472,14 @@ for (const deferred of [false, true]) {
 
     const db1 = mockDown({
       _iterator (options) {
-        t.is(options.gt, null)
-        t.is(options.gte, null)
-        t.is(options.lt, null)
-        t.is(options.lte, null)
+        t.is(options.gt, '\x00', 'encoded null')
+        t.is(options.gte, '\x00', 'encoded null')
+        t.is(options.lt, '\x00', 'encoded null')
+        t.is(options.lte, '\x00', 'encoded null')
 
         return mockIterator(this, options)
       }
-    }, idManifest, { keyEncoding: 'id', valueEncoding: 'id' })
+    }, utf8Manifest, { keyEncoding: nullishEncoding, valueEncoding: nullishEncoding })
 
     const db2 = mockDown({
       _iterator (options) {
@@ -489,14 +488,14 @@ for (const deferred of [false, true]) {
         t.is(hasOwnProperty.call(options, 'lt'), true)
         t.is(hasOwnProperty.call(options, 'lte'), true)
 
-        t.is(options.gt, undefined)
-        t.is(options.gte, undefined)
-        t.is(options.lt, undefined)
-        t.is(options.lte, undefined)
+        t.is(options.gt, '\xff', 'encoded undefined')
+        t.is(options.gte, '\xff', 'encoded undefined')
+        t.is(options.lt, '\xff', 'encoded undefined')
+        t.is(options.lte, '\xff', 'encoded undefined')
 
         return mockIterator(this, options)
       }
-    }, idManifest, { keyEncoding: 'id', valueEncoding: 'id' })
+    }, utf8Manifest, { keyEncoding: nullishEncoding, valueEncoding: nullishEncoding })
 
     if (!deferred) {
       await Promise.all([db1.open(), db2.open()])
@@ -671,13 +670,13 @@ for (const deferred of [false, true]) {
 
     const db1 = mockDown({
       _clear: function (options, callback) {
-        t.is(options.gt, null)
-        t.is(options.gte, null)
-        t.is(options.lt, null)
-        t.is(options.lte, null)
+        t.is(options.gt, '\x00', 'encoded null')
+        t.is(options.gte, '\x00', 'encoded null')
+        t.is(options.lt, '\x00', 'encoded null')
+        t.is(options.lte, '\x00', 'encoded null')
         this.nextTick(callback)
       }
-    }, idManifest, { keyEncoding: 'id', valueEncoding: 'id' })
+    }, utf8Manifest, { keyEncoding: nullishEncoding, valueEncoding: nullishEncoding })
 
     const db2 = mockDown({
       _clear: function (options, callback) {
@@ -686,14 +685,14 @@ for (const deferred of [false, true]) {
         t.is(hasOwnProperty.call(options, 'lt'), true)
         t.is(hasOwnProperty.call(options, 'lte'), true)
 
-        t.is(options.gt, undefined)
-        t.is(options.gte, undefined)
-        t.is(options.lt, undefined)
-        t.is(options.lte, undefined)
+        t.is(options.gt, '\xff', 'encoded undefined')
+        t.is(options.gte, '\xff', 'encoded undefined')
+        t.is(options.lt, '\xff', 'encoded undefined')
+        t.is(options.lte, '\xff', 'encoded undefined')
 
         this.nextTick(callback)
       }
-    }, idManifest, { keyEncoding: 'id', valueEncoding: 'id' })
+    }, utf8Manifest, { keyEncoding: nullishEncoding, valueEncoding: nullishEncoding })
 
     if (!deferred) {
       await Promise.all([db1.open(), db2.open()])

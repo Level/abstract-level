@@ -47,21 +47,18 @@ exports.sequence = function (test, testCommon) {
     t.is(error, 'Iterator is busy', 'got error')
   })
 
-  make('iterator#seek() throws after close()', function (db, t, done) {
+  make('iterator#seek() does not throw after close()', function (db, t, done) {
     const ite = db.iterator()
 
     ite.close(function (err) {
       t.error(err, 'no error from close()')
 
-      let error
-
       try {
         ite.seek('two')
       } catch (err) {
-        error = err.message
+        t.fail(err)
       }
 
-      t.is(error, 'Iterator is not open', 'got error')
       done()
     })
   })

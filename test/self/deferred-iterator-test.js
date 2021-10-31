@@ -135,7 +135,7 @@ test('deferred iterators are created in order', function (t) {
 })
 
 test('deferred iterator is closed upon failed open', function (t) {
-  t.plan(6)
+  t.plan(5)
 
   const db = mockDown({
     _open (options, callback) {
@@ -160,7 +160,7 @@ test('deferred iterator is closed upon failed open', function (t) {
 })
 
 test('deferred iterator and real iterator are closed on db.close()', function (t) {
-  t.plan(12)
+  t.plan(10)
 
   const db = mockDown({
     _iterator (options) {
@@ -261,12 +261,6 @@ function verifyClosed (t, it, cb) {
     t.is(err && err.message, 'Iterator is not open', 'correct error on first next()')
 
     // Should account for userland code that ignores errors
-    try {
-      it.seek(123)
-    } catch (err) {
-      t.is(err && err.message, 'Iterator is not open', 'correct error on seek()')
-    }
-
     it.next(function (err) {
       t.is(err && err.message, 'Iterator is not open', 'correct error on second next()')
       cb()

@@ -117,7 +117,8 @@ AbstractIterator.prototype.seek = function (target, options) {
   options = getOptions(options)
 
   if (this[kClosing]) {
-    throw new Error('Iterator is not open')
+    // Don't throw here, to be kind to implementations that wrap
+    // another db and don't necessarily control when the db is closed
   } else if (this[kNexting]) {
     throw new Error('Iterator is busy')
   } else {

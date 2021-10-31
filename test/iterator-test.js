@@ -15,7 +15,7 @@ exports.setUp = function (test, testCommon) {
 exports.args = function (test, testCommon) {
   test('test iterator has db reference', function (t) {
     const iterator = db.iterator()
-    // For levelup & deferred-leveldown compat: may return iterator of an underlying db, that's okay.
+    // May return iterator of an underlying db, that's okay.
     t.ok(iterator.db === db || iterator.db === (db.db || db._db || db))
     iterator.close(t.end.bind(t))
   })
@@ -115,6 +115,30 @@ exports.iterator = function (test, testCommon) {
     })
   })
 
+  // NOTE: adapted from leveldown
+  test('key-only iterator', function (t) {
+    const it = db.iterator({ values: false })
+
+    it.next(function (err, key, value) {
+      t.ifError(err, 'no next() error')
+      t.is(key, 'foobatch1')
+      t.is(value, undefined)
+      it.close(t.end.bind(t))
+    })
+  })
+
+  // NOTE: adapted from leveldown
+  test('value-only iterator', function (t) {
+    const it = db.iterator({ keys: false })
+
+    it.next(function (err, key, value) {
+      t.ifError(err, 'no next() error')
+      t.is(key, undefined)
+      t.is(value, 'bar1')
+      it.close(t.end.bind(t))
+    })
+  })
+
   // NOTE: adapted from memdown
   test('iterator() sorts lexicographically', async function (t) {
     const db = testCommon.factory()
@@ -155,6 +179,10 @@ exports.iterator = function (test, testCommon) {
       { key: '🐄', value: '🐄' }
     ])
 
+    t.same(await concat(db.iterator({ lte: '' })), [
+      { key: '', value: 'empty' }
+    ])
+
     return db.close()
   })
 
@@ -183,30 +211,74 @@ exports.iterator = function (test, testCommon) {
       })
     })
 
-    // NOTE: adapted from memdown
-    test(`test iterator() with byte range (${keyEncoding} encoding)`, function (t) {
+    // NOTE: adapted from memdown and level-js
+    test(`test iterator() with byte range (${keyEncoding} encoding)`, async function (t) {
       const db = testCommon.factory({ keyEncoding })
+      await db.open()
 
-      db.open(function (err) {
-        t.ifError(err, 'no open() error')
+      await db.put(Uint8Array.from([0x0]), '0')
+      await db.put(Uint8Array.from([128]), '128')
+      await db.put(Uint8Array.from([160]), '160')
+      await db.put(Uint8Array.from([192]), '192')
 
-        db.put(Buffer.from('a0', 'hex'), 'A', function (err) {
-          t.ifError(err, 'no put() error')
+      const collect = async (range) => {
+        const entries = await concat(db.iterator(range))
+        t.ok(entries.every(e => e.key instanceof Uint8Array)) // True for both encodings
+        t.ok(entries.every(e => e.value === String(e.key[0])))
+        return entries.map(e => e.key[0])
+      }
 
-          const it = db.iterator({ lt: Buffer.from('ff', 'hex') })
+      t.same(await collect({ gt: Uint8Array.from([255]) }), [])
+      t.same(await collect({ gt: Uint8Array.from([192]) }), [])
+      t.same(await collect({ gt: Uint8Array.from([160]) }), [192])
+      t.same(await collect({ gt: Uint8Array.from([128]) }), [160, 192])
+      t.same(await collect({ gt: Uint8Array.from([0x0]) }), [128, 160, 192])
+      t.same(await collect({ gt: Uint8Array.from([]) }), [0x0, 128, 160, 192])
 
-          it.next(function (err, key, value) {
-            t.ifError(err, 'no next() error')
-            t.is(key && key.toString('hex'), 'a0')
-            t.is(value, 'A')
+      t.same(await collect({ lt: Uint8Array.from([255]) }), [0x0, 128, 160, 192])
+      t.same(await collect({ lt: Uint8Array.from([192]) }), [0x0, 128, 160])
+      t.same(await collect({ lt: Uint8Array.from([160]) }), [0x0, 128])
+      t.same(await collect({ lt: Uint8Array.from([128]) }), [0x0])
+      t.same(await collect({ lt: Uint8Array.from([0x0]) }), [])
+      t.same(await collect({ lt: Uint8Array.from([]) }), [])
 
-            it.close(function (err) {
-              t.ifError(err, 'no close() error')
-              db.close(t.end.bind(t))
-            })
-          })
+      t.same(await collect({ gte: Uint8Array.from([255]) }), [])
+      t.same(await collect({ gte: Uint8Array.from([192]) }), [192])
+      t.same(await collect({ gte: Uint8Array.from([160]) }), [160, 192])
+      t.same(await collect({ gte: Uint8Array.from([128]) }), [128, 160, 192])
+      t.same(await collect({ gte: Uint8Array.from([0x0]) }), [0x0, 128, 160, 192])
+      t.same(await collect({ gte: Uint8Array.from([]) }), [0x0, 128, 160, 192])
+
+      t.same(await collect({ lte: Uint8Array.from([255]) }), [0x0, 128, 160, 192])
+      t.same(await collect({ lte: Uint8Array.from([192]) }), [0x0, 128, 160, 192])
+      t.same(await collect({ lte: Uint8Array.from([160]) }), [0x0, 128, 160])
+      t.same(await collect({ lte: Uint8Array.from([128]) }), [0x0, 128])
+      t.same(await collect({ lte: Uint8Array.from([0x0]) }), [0x0])
+      t.same(await collect({ lte: Uint8Array.from([]) }), [])
+
+      return db.close()
+    })
+
+    // NOTE: adapted from leveldown
+    test('test iterator.close() via db.close()', async function (t) {
+      t.plan(1)
+
+      const db = testCommon.factory()
+      await db.open()
+      await db.put('a', 'a')
+      await db.put('b', 'b')
+
+      const it = db.iterator()
+
+      // The first call should succeed, because it was scheduled before close()
+      const promise = it.next().then(() => {
+        // The second call should fail, because it was scheduled after close()
+        return it.next().catch(err => {
+          t.is(err.message, 'Iterator is not open')
         })
       })
+
+      await Promise.all([db.close(), promise])
     })
   }
 }
