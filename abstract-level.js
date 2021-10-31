@@ -26,7 +26,7 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-function AbstractLevelDOWN (manifest, options, _callback) {
+function AbstractLevel (manifest, options, _callback) {
   if (typeof manifest !== 'object' || manifest === null) {
     throw new TypeError("The first argument 'manifest' must be an object")
   }
@@ -109,24 +109,24 @@ function AbstractLevelDOWN (manifest, options, _callback) {
   })
 }
 
-Object.setPrototypeOf(AbstractLevelDOWN.prototype, EventEmitter.prototype)
+Object.setPrototypeOf(AbstractLevel.prototype, EventEmitter.prototype)
 
-Object.defineProperty(AbstractLevelDOWN.prototype, 'status', {
+Object.defineProperty(AbstractLevel.prototype, 'status', {
   enumerable: true,
   get () {
     return this[kStatus]
   }
 })
 
-AbstractLevelDOWN.prototype.keyEncoding = function (encoding) {
+AbstractLevel.prototype.keyEncoding = function (encoding) {
   return this[kTranscoder].encoding(encoding != null ? encoding : this[kKeyEncoding])
 }
 
-AbstractLevelDOWN.prototype.valueEncoding = function (encoding) {
+AbstractLevel.prototype.valueEncoding = function (encoding) {
   return this[kTranscoder].encoding(encoding != null ? encoding : this[kValueEncoding])
 }
 
-AbstractLevelDOWN.prototype.open = function (options, callback) {
+AbstractLevel.prototype.open = function (options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
 
@@ -192,11 +192,11 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._open = function (options, callback) {
+AbstractLevel.prototype._open = function (options, callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.close = function (callback) {
+AbstractLevel.prototype.close = function (callback) {
   callback = fromCallback(callback, kPromise)
 
   const maybeClosed = (err) => {
@@ -247,7 +247,7 @@ AbstractLevelDOWN.prototype.close = function (callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype[kCloseResources] = function (callback) {
+AbstractLevel.prototype[kCloseResources] = function (callback) {
   if (this[kResources].size === 0) {
     return this.nextTick(callback)
   }
@@ -272,11 +272,11 @@ AbstractLevelDOWN.prototype[kCloseResources] = function (callback) {
   this[kResources].clear()
 }
 
-AbstractLevelDOWN.prototype._close = function (callback) {
+AbstractLevel.prototype._close = function (callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.get = function (key, options, callback) {
+AbstractLevel.prototype.get = function (key, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options, this[kDefaultOptions].entry)
@@ -337,11 +337,11 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._get = function (key, options, callback) {
+AbstractLevel.prototype._get = function (key, options, callback) {
   this.nextTick(callback, new Error('NotFound'))
 }
 
-AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
+AbstractLevel.prototype.getMany = function (keys, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options, this[kDefaultOptions].entry)
@@ -414,11 +414,11 @@ AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._getMany = function (keys, options, callback) {
+AbstractLevel.prototype._getMany = function (keys, options, callback) {
   this.nextTick(callback, null, new Array(keys.length).fill(undefined))
 }
 
-AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
+AbstractLevel.prototype.put = function (key, value, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options, this[kDefaultOptions].entry)
@@ -461,11 +461,11 @@ AbstractLevelDOWN.prototype.put = function (key, value, options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._put = function (key, value, options, callback) {
+AbstractLevel.prototype._put = function (key, value, options, callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.del = function (key, options, callback) {
+AbstractLevel.prototype.del = function (key, options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options, this[kDefaultOptions].key)
@@ -502,11 +502,11 @@ AbstractLevelDOWN.prototype.del = function (key, options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._del = function (key, options, callback) {
+AbstractLevel.prototype._del = function (key, options, callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.batch = function (operations, options, callback) {
+AbstractLevel.prototype.batch = function (operations, options, callback) {
   if (!arguments.length) {
     if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
     if (this[kStatus] !== 'open') {
@@ -596,11 +596,11 @@ AbstractLevelDOWN.prototype.batch = function (operations, options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._batch = function (operations, options, callback) {
+AbstractLevel.prototype._batch = function (operations, options, callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.clear = function (options, callback) {
+AbstractLevel.prototype.clear = function (options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
   options = getOptions(options, this[kDefaultOptions].empty)
@@ -630,11 +630,11 @@ AbstractLevelDOWN.prototype.clear = function (options, callback) {
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._clear = function (options, callback) {
+AbstractLevel.prototype._clear = function (options, callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.iterator = function (options) {
+AbstractLevel.prototype.iterator = function (options) {
   const keyEncoding = this.keyEncoding(options && options.keyEncoding)
   const valueEncoding = this.valueEncoding(options && options.valueEncoding)
 
@@ -663,7 +663,7 @@ AbstractLevelDOWN.prototype.iterator = function (options) {
   return this._iterator(options)
 }
 
-AbstractLevelDOWN.prototype._iterator = function (options) {
+AbstractLevel.prototype._iterator = function (options) {
   return new AbstractIterator(this, options)
 }
 
@@ -674,7 +674,7 @@ AbstractLevelDOWN.prototype._iterator = function (options) {
 // db has finished opening). Resources that can be closed on their own (like iterators
 // and chained batches) should however first check such state before deferring, in
 // order to reject operations after close (including when the db was reopened).
-AbstractLevelDOWN.prototype.defer = function (fn) {
+AbstractLevel.prototype.defer = function (fn) {
   if (typeof fn !== 'function') {
     throw new TypeError('The first argument must be a function')
   }
@@ -682,7 +682,7 @@ AbstractLevelDOWN.prototype.defer = function (fn) {
   this[kOperations].push(fn)
 }
 
-AbstractLevelDOWN.prototype[kUndefer] = function () {
+AbstractLevel.prototype[kUndefer] = function () {
   if (this[kOperations].length === 0) {
     return
   }
@@ -696,7 +696,7 @@ AbstractLevelDOWN.prototype[kUndefer] = function () {
 }
 
 // TODO: docs
-AbstractLevelDOWN.prototype.attachResource = function (resource) {
+AbstractLevel.prototype.attachResource = function (resource) {
   if (typeof resource !== 'object' || resource === null ||
     typeof resource.close !== 'function') {
     throw new TypeError('The first argument must be a resource object')
@@ -706,15 +706,15 @@ AbstractLevelDOWN.prototype.attachResource = function (resource) {
 }
 
 // TODO: docs
-AbstractLevelDOWN.prototype.detachResource = function (resource) {
+AbstractLevel.prototype.detachResource = function (resource) {
   this[kResources].delete(resource)
 }
 
-AbstractLevelDOWN.prototype._chainedBatch = function () {
+AbstractLevel.prototype._chainedBatch = function () {
   return new DefaultChainedBatch(this)
 }
 
-AbstractLevelDOWN.prototype._checkKey = function (key) {
+AbstractLevel.prototype._checkKey = function (key) {
   if (key === null || key === undefined) {
     return new ModuleError('Key cannot be null or undefined', {
       code: 'LEVEL_INVALID_KEY'
@@ -722,7 +722,7 @@ AbstractLevelDOWN.prototype._checkKey = function (key) {
   }
 }
 
-AbstractLevelDOWN.prototype._checkValue = function (value) {
+AbstractLevel.prototype._checkValue = function (value) {
   if (value === null || value === undefined) {
     return new ModuleError('Value cannot be null or undefined', {
       code: 'LEVEL_INVALID_VALUE'
@@ -732,9 +732,9 @@ AbstractLevelDOWN.prototype._checkValue = function (value) {
 
 // Expose browser-compatible nextTick for dependents
 // TODO: after we drop node 10, also use queueMicrotask in node
-AbstractLevelDOWN.prototype.nextTick = require('./next-tick')
+AbstractLevel.prototype.nextTick = require('./next-tick')
 
-module.exports = AbstractLevelDOWN
+module.exports = AbstractLevel
 
 function maybeError (db, callback) {
   if (db[kStatus] !== 'open') {

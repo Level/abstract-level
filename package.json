@@ -1,7 +1,7 @@
 {
-  "name": "abstract-leveldown",
+  "name": "abstract-level",
   "version": "7.2.0",
-  "description": "An abstract prototype matching the LevelDOWN API",
+  "description": "Abstract prototype for a lexicographically sorted key-value database",
   "license": "MIT",
   "main": "index.js",
   "browser": {
@@ -19,7 +19,7 @@
   "files": [
     "abstract-chained-batch.js",
     "abstract-iterator.js",
-    "abstract-leveldown.js",
+    "abstract-level.js",
     "index.js",
     "lib",
     "next-tick-browser.js",
@@ -51,14 +51,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Level/abstract-leveldown.git"
+    "url": "https://github.com/Level/abstract-level.git"
   },
-  "homepage": "https://github.com/Level/abstract-leveldown",
+  "homepage": "https://github.com/Level/abstract-level",
   "keywords": [
+    "abstract-level",
     "level",
-    "leveldb",
-    "leveldown",
-    "levelup"
+    "leveldb"
   ],
   "engines": {
     "node": ">=12"

@@ -1,7 +1,7 @@
 'use strict'
 
 const { fromCallback } = require('catering')
-const { AbstractLevelDOWN, AbstractIterator, AbstractChainedBatch } = require('..')
+const { AbstractLevel, AbstractIterator, AbstractChainedBatch } = require('..')
 const concat = require('level-concat-iterator')
 
 const kPromise = Symbol('promise')
@@ -81,7 +81,7 @@ exports.assertAsync.with = function (t, cb) {
 }
 
 exports.mockDown = function (methods, ...args) {
-  class TestDown extends AbstractLevelDOWN {}
+  class TestDown extends AbstractLevel {}
   for (const k in methods) TestDown.prototype[k] = methods[k]
   if (!args.length) args = [{ encodings: { utf8: true } }]
   return new TestDown(...args)

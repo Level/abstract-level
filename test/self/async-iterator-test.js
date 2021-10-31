@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('tape')
-const { AbstractLevelDOWN, AbstractIterator } = require('../..')
+const { AbstractLevel, AbstractIterator } = require('../..')
 const DeferredIterator = require('../../lib/deferred-iterator')
 
 function withIterator (methods) {
@@ -11,7 +11,7 @@ function withIterator (methods) {
     TestIterator.prototype[k] = methods[k]
   }
 
-  class Test extends AbstractLevelDOWN {
+  class Test extends AbstractLevel {
     _iterator (options) {
       return new TestIterator(this, options)
     }
