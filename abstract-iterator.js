@@ -212,7 +212,7 @@ for (const k of ['_ended property', '_nexting property', '_end method']) {
   })
 }
 
-// Exposed so that AbstractLevelDOWN can set these options
+// Exposed so that AbstractLevel can set these options
 AbstractIterator.keyEncoding = kKeyEncoding
 AbstractIterator.valueEncoding = kValueEncoding
 

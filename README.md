@@ -1,12 +1,8 @@
-# abstract-leveldown
+# abstract-level
 
-**Base prototype for a key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for implementors.**
+**Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The (not yet official) successor to `abstract-leveldown`.
 
 [![level badge][level-badge]](https://github.com/Level/awesome)
-[![npm](https://img.shields.io/npm/v/abstract-leveldown.svg)](https://www.npmjs.com/package/abstract-leveldown)
-[![Node version](https://img.shields.io/node/v/abstract-leveldown.svg)](https://www.npmjs.com/package/abstract-leveldown)
-[![Test](https://img.shields.io/github/workflow/status/Level/abstract-leveldown/Test?label=test)](https://github.com/Level/abstract-leveldown/actions/workflows/test.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/Level/abstract-leveldown?label=&logo=codecov&logoColor=fff)](https://codecov.io/gh/Level/abstract-leveldown)
 [![Standard](https://img.shields.io/badge/standard-informational?logo=javascript&logoColor=fff)](https://standardjs.com)
 [![Common Changelog](https://common-changelog.org/badge.svg)](https://common-changelog.org)
 [![Donate](https://img.shields.io/badge/donate-orange?logo=open-collective&logoColor=fff)](https://opencollective.com/level)
@@ -15,7 +11,8 @@
 
 <details><summary>Click to expand</summary>
 
-- [Browser Support](#browser-support)
+- [Usage](#usage)
+- [Supported Platforms](#supported-platforms)
 - [Public API For Consumers](#public-api-for-consumers)
   - [`db = constructor(...[, options])`](#db--constructor-options)
   - [`db.status`](#dbstatus)
@@ -64,7 +61,7 @@
     - [`LEVEL_LEGACY`](#level_legacy)
 - [Private API For Implementors](#private-api-for-implementors)
   - [Example](#example)
-  - [`db = AbstractLevelDOWN(manifest[, options])`](#db--abstractleveldownmanifest-options)
+  - [`db = AbstractLevel(manifest[, options])`](#db--abstractlevelmanifest-options)
   - [`db._open(options, callback)`](#db_openoptions-callback)
   - [`db._close(callback)`](#db_closecallback)
   - [`db._get(key, options, callback)`](#db_getkey-options-callback)
@@ -97,7 +94,32 @@
 
 </details>
 
-## Browser Support
+## Usage
+
+Typical usage of an implementation looks like this:
+
+```js
+// Create a database
+const db = level({ valueEncoding: 'json' })
+
+// Add an entry with key 'a' and value 1
+await db.put('a', 1)
+
+// Add multiple entries
+await db.batch([{ type: 'put', key: 'b', value: 2 }])
+
+// Get value of key 'a': 1
+const value = await db.get('a')
+
+// Iterate entries with keys that are greater than 'b'
+for await (const [key, value] of db.iterator({ gt: 'b' })) {
+  console.log(value) // 2
+}
+```
+
+## Supported Platforms
+
+We aim to support Active LTS and Current Node.js releases as well as browsers. Supported environments may differ per implementation. The following browsers are supported and continuously tested:
 
 [![Sauce Test Status](https://app.saucelabs.com/browser-matrix/abstract-leveldown.svg)](https://app.saucelabs.com/u/abstract-leveldown)
 
@@ -404,7 +426,7 @@ const buffer = await db.get('example', { valueEncoding: 'buffer' })
 
 In browser environments it may be preferable to only use `view` in order to reduce JavaScript bundle size, as use of Buffer requires a shim (injected by Webpack, Browserify or other tooling).
 
-Regardless of the choice of encoding, a `key` or `value` may not be `null` or `undefined` due to preexisting significance in iterators and streams. No such restriction exists on range options because `null` and `undefined` are significant types in encodings like [`charwise`](https://github.com/dominictarr/charwise) as well as some underlying stores like IndexedDB. Consumers of an `abstract-leveldown` implementation must assume that range options like `{ gt: undefined }` are _not_ the same as `{}`. The [abstract test suite](#test-suite) does not test these types. Whether they are supported or how they sort may differ per implementation. An implementation can choose to:
+Regardless of the choice of encoding, a `key` or `value` may not be `null` or `undefined` due to preexisting significance in iterators and streams. No such restriction exists on range options because `null` and `undefined` are significant types in encodings like [`charwise`](https://github.com/dominictarr/charwise) as well as some underlying stores like IndexedDB. Consumers of an `abstract-level` implementation must assume that range options like `{ gt: undefined }` are _not_ the same as `{}`. The [abstract test suite](#test-suite) does not test these types. Whether they are supported or how they sort may differ per implementation. An implementation can choose to:
 
 - Encode these types to make them meaningful
 - Have no defined behavior (moving the concern to a higher level)
@@ -414,7 +436,7 @@ Lastly, one way or another, every implementation _must_ support `data` of type S
 
 ### Events
 
-`abstract-leveldown` is an [`EventEmitter`](https://nodejs.org/api/events.html) and emits the following events.
+An `abstract-level` database is an [`EventEmitter`](https://nodejs.org/api/events.html) and emits the following events.
 
 | Event     | Description          | Arguments            |
 | :-------- | :------------------- | :------------------- |
@@ -535,11 +557,11 @@ When a method, option or other property was used that has been removed from the 
 
 ## Private API For Implementors
 
-To implement a `abstract-leveldown` database, extend its prototype and override the private underscored versions of the methods. For example, to implement the public `put()` method, override the private `_put()` method.
+To implement a `abstract-level` database, extend its prototype and override the private underscored versions of the methods. For example, to implement the public `put()` method, override the private `_put()` method.
 
 Each of the private methods listed below will receive exactly the number and types of arguments described, regardless of what is passed in through the public API. Public methods provide type checking: if a consumer calls `batch(123)` they'll get an error that the first argument must be an array. Optional arguments get sensible defaults: a `get(key)` call translates to `_get(key, options, callback)`.
 
-All callbacks are error-first and must be asynchronous. If an operation within your implementation is synchronous, invoke the callback on a next tick using microtask scheduling. For convenience, instances of `AbstractLevelDOWN`, `AbstractIterator` and `AbstractChainedBatch` include a `nextTick(fn, ...args)` method that uses [`process.nextTick()`](https://nodejs.org/api/process.html#processnexttickcallback-args) in Node.js and [`queueMicrotask()`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) in browsers.
+All callbacks are error-first and must be asynchronous. If an operation within your implementation is synchronous, invoke the callback on a next tick using microtask scheduling. For convenience, instances of `AbstractLevel`, `AbstractIterator` and `AbstractChainedBatch` include a `nextTick(fn, ...args)` method that uses [`process.nextTick()`](https://nodejs.org/api/process.html#processnexttickcallback-args) in Node.js and [`queueMicrotask()`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) in browsers.
 
 Where possible, the default private methods are sensible noops that do nothing. For example, `_open(callback)` will merely invoke `callback` on a next tick. Other methods have functional defaults. Each method documents whether implementing it is mandatory.
 
@@ -550,16 +572,16 @@ When throwing or yielding an error, prefer using a [known error code](#errors). 
 Let's implement a simplistic in-memory database:
 
 ```js
-const { AbstractLevelDOWN } = require('abstract-leveldown')
+const { AbstractLevel } = require('abstract-level')
 const ModuleError = require('module-error')
 
-class FakeLevelDOWN extends AbstractLevelDOWN {
+class ExampleLevel extends AbstractLevel {
   // This in-memory example doesn't have a location
   constructor (location, options) {
     // Declare supported encodings
     const encodings = { utf8: true }
 
-    // Call AbstractLevelDOWN constructor
+    // Call AbstractLevel constructor
     super({ encodings }, options)
 
     // Create a map to store entries
@@ -599,7 +621,7 @@ class FakeLevelDOWN extends AbstractLevelDOWN {
 Now we can use our implementation (with either callbacks or promises):
 
 ```js
-const db = new FakeLevelDOWN()
+const db = new ExampleLevel()
 
 await db.put('foo', 'bar')
 const value = await db.get('foo')
@@ -607,10 +629,10 @@ const value = await db.get('foo')
 console.log(value) // 'bar'
 ```
 
-Although our simple implementation only supports `utf8` strings internally, we do get to use [encodings](#encodings) that _encode to_ that. For example, the `json` encoding which encodes to `utf8`:
+Although our simple implementation only supports `utf8` strings internally, we do get to use [encodings](#encodings) that encode _to_ that. For example, the `json` encoding which encodes to `utf8`:
 
 ```js
-const db = new FakeLevelDOWN({ valueEncoding: 'json' })
+const db = new ExampleLevel({ valueEncoding: 'json' })
 await db.put('foo', { a: 123 })
 const value = await db.get('foo')
 
@@ -619,25 +641,25 @@ console.log(value) // { a: 123 }
 
 See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory implementation.
 
-### `db = AbstractLevelDOWN(manifest[, options])`
+### `db = AbstractLevel(manifest[, options])`
 
-The constructor. Sets the `.status` to `'opening'`. Takes a [manifest](https://github.com/Level/supports) object that `abstract-leveldown` will enrich. At minimum, the manifest must declare which `encodings` are supported in the private API. For example:
+The constructor. Sets the [`status`](#dbstatus) to `'opening'`. Takes a [manifest](https://github.com/Level/supports) object that `abstract-level` will enrich. At minimum, the manifest must declare which `encodings` are supported in the private API. For example:
 
 ```js
-class LevelDOWN extends AbstractLevelDOWN {
+class ExampleLevel extends AbstractLevel {
   constructor (location, options) {
     const manifest = {
       encodings: { buffer: true }
     }
 
-    // Call AbstractLevelDOWN constructor.
-    // Location is not handled by AbstractLevelDOWN.
+    // Call AbstractLevel constructor.
+    // Location is not handled by AbstractLevel.
     super(manifest, options)
   }
 }
 ```
 
-Both the public and private API of `abstract-leveldown` are encoding-aware. This means that private methods receive `keyEncoding` and `valueEncoding` options too. Implementations don't need to perform encoding or decoding themselves. Rather, the `keyEncoding` and `valueEncoding` options are lower-level encodings that indicate the type of already-encoded input data or the expected type of yet-to-be-decoded output data. They're one of `'buffer'`, `'view'`, `'utf8'` and always strings in the private API.
+Both the public and private API of `abstract-level` are encoding-aware. This means that private methods receive `keyEncoding` and `valueEncoding` options too. Implementations don't need to perform encoding or decoding themselves. Rather, the `keyEncoding` and `valueEncoding` options are lower-level encodings that indicate the type of already-encoded input data or the expected type of yet-to-be-decoded output data. They're one of `'buffer'`, `'view'`, `'utf8'` and always strings in the private API.
 
 If the manifest declared support of `buffer`, then `keyEncoding` and `valueEncoding` will always be `'buffer'`. If the manifest declared support of `utf8` then `keyEncoding` and `valueEncoding` will be `'utf8'`.
 
@@ -647,7 +669,7 @@ The public API will coerce user input as necessary. If the manifest declared sup
 
 All private methods below that take a `key` argument, `value` argument or range option, will receive that data in encoded form. That includes `iterator._seek()` with its `target` argument. So if the manifest declared support of `buffer` then `db.iterator({ gt: 2 })` translates into `db._iterator({ gt: Buffer.from('2'), ...options })` and `iterator.seek(128)` translates into `iterator._seek(Buffer.from('128'), options)`.
 
-The `AbstractLevelDOWN` constructor will add other supported encodings to the public manifest. If the private API only supports `buffer`, the resulting `db.supports.encodings` will nevertheless be as follows because all other encodings can be transcoded to `buffer`:
+The `AbstractLevel` constructor will add other supported encodings to the public manifest. If the private API only supports `buffer`, the resulting `db.supports.encodings` will nevertheless be as follows because all other encodings can be transcoded to `buffer`:
 
 ```js
 { buffer: true, view: true, utf8: true, json: true, ... }
@@ -708,7 +730,7 @@ The default `_batch()` invokes `callback` on a next tick. It must be overridden.
 The default `_chainedBatch()` returns a functional `AbstractChainedBatch` instance that uses `db._batch(array, options, callback)` under the hood. The prototype is available on the main exports for you to extend. If you want to implement chainable batch operations in a different manner then you should extend `AbstractChainedBatch` and return an instance of this prototype in the `_chainedBatch()` method:
 
 ```js
-const { AbstractChainedBatch } = require('abstract-leveldown')
+const { AbstractChainedBatch } = require('abstract-level')
 
 class ChainedBatch extends AbstractChainedBatch {
   constructor (db) {
@@ -716,7 +738,7 @@ class ChainedBatch extends AbstractChainedBatch {
   }
 }
 
-class LevelDown extends AbstractLevelDOWN {
+class ExampleLevel extends AbstractLevel {
   _chainedBatch () {
     return new ChainedBatch(this)
   }
@@ -739,7 +761,7 @@ The `options` object will always have the following properties: `reverse`, `limi
 
 ### `iterator = AbstractIterator(db)`
 
-The first argument to this constructor must be an instance of your `AbstractLevelDOWN` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it.
+The first argument to this constructor must be an instance of your `AbstractLevel` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it.
 
 #### `iterator._next(callback)`
 
@@ -749,7 +771,7 @@ The default `_next()` invokes `callback` on a next tick. It must be overridden.
 
 #### `iterator._seek(target, options)`
 
-Seek the iterator to a given key or the closest key. This method is optional. The `options` object will always have the following properties: `keyEncoding`.
+Seek the iterator to a given key or the closest key. The `options` object will always have the following properties: `keyEncoding`. This method is optional. If supported, set `db.supports.seek` to `true` via the manifest passed to the database constructor.
 
 #### `iterator._close(callback)`
 
@@ -759,7 +781,7 @@ The default `_close()` invokes `callback` on a next tick. Overriding is optional
 
 ### `chainedBatch = AbstractChainedBatch(db)`
 
-The first argument to this constructor must be an instance of your `AbstractLevelDOWN` implementation. The constructor will set `chainedBatch.db` which is used to access (among other things) encodings and ensures that `db` will not be garbage collected in case there are no other references to it.
+The first argument to this constructor must be an instance of your `AbstractLevel` implementation. The constructor will set `chainedBatch.db` which is used to access (among other things) encodings and ensures that `db` will not be garbage collected in case there are no other references to it.
 
 #### `chainedBatch._put(key, value, options)`
 
@@ -786,35 +808,35 @@ WIP notes:
 
 ## Test Suite
 
-To prove that your implementation is `abstract-leveldown` compliant, include the abstract test suite in your `test.js` (or similar):
+To prove that your implementation is `abstract-level` compliant, include the abstract test suite in your `test.js` (or similar):
 
 ```js
 const test = require('tape')
-const suite = require('abstract-leveldown/test')
-const YourDOWN = require('.')
+const suite = require('abstract-level/test')
+const ExampleLevel = require('.')
 
 suite({
   test,
   factory () {
-    return new YourDOWN()
+    return new ExampleLevel()
   }
 })
 ```
 
-The `test` option _must_ be a function that is API-compatible with `tape`. The `factory` option _must_ be a function that returns a unique and isolated instance of your implementation. The factory will be called many times by the test suite.
+The `test` option _must_ be a function that is API-compatible with [`tape`](https://github.com/substack/tape). The `factory` option _must_ be a function that returns a unique and isolated instance of your implementation. The factory will be called many times by the test suite.
 
 If your implementation is disk-based we recommend using [`tempy`](https://github.com/sindresorhus/tempy) (or similar) to create unique temporary directories. Your setup could look something like:
 
 ```js
 const test = require('tape')
 const tempy = require('tempy')
-const suite = require('abstract-leveldown/test')
-const YourDOWN = require('.')
+const suite = require('abstract-level/test')
+const ExampleLevel = require('.')
 
 suite({
   test,
   factory () {
-    return new YourDOWN(tempy.directory())
+    return new ExampleLevel(tempy.directory())
   }
 })
 ```
@@ -824,9 +846,9 @@ suite({
 As not every implementation can be fully compliant due to limitations of its underlying storage, some tests may be skipped. This must be done via `db.supports` which is set via the constructor. For example, to skip snapshot tests:
 
 ```js
-const { AbstractLevelDOWN } = require('abstract-leveldown')
+const { AbstractLevel } = require('abstract-level')
 
-class MyLevelDOWN extends AbstractLevelDOWN {
+class ExampleLevel extends AbstractLevel {
   constructor (location, options) {
     super({ snapshots: false }, options)
   }
@@ -841,13 +863,13 @@ The input to the test suite is a `testCommon` object. Should you need to reuse `
 
 ```js
 const test = require('tape')
-const suite = require('abstract-leveldown/test')
-const YourDOWN = require('.')
+const suite = require('abstract-level/test')
+const ExampleLevel = require('.')
 
 const testCommon = suite.common({
   test,
   factory () {
-    return new YourDOWN()
+    return new ExampleLevel()
   }
 })
 
@@ -881,12 +903,12 @@ If you'd like to share your awesome implementation with the world, here's what y
 With [npm](https://npmjs.org) do:
 
 ```
-npm install abstract-leveldown
+npm install abstract-level
 ```
 
 ## Contributing
 
-[`Level/abstract-leveldown`](https://github.com/Level/abstract-leveldown) is an **OPEN Open Source Project**. This means that:
+[`Level/abstract-level`](https://github.com/Level/abstract-level) is an **OPEN Open Source Project**. This means that:
 
 > Individuals making significant and valuable contributions are given commit-access to the project to contribute as they see fit. This project is more like an open wiki than a standard guarded open source project.
 
