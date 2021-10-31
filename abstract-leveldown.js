@@ -26,8 +26,6 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-// TODO: document new options
-// TODO: and test them, also as testCommon.factory() arguments
 // TODO: document promise support
 function AbstractLevelDOWN (manifest, options, _callback) {
   if (typeof manifest !== 'object' || manifest === null) {
@@ -46,7 +44,7 @@ function AbstractLevelDOWN (manifest, options, _callback) {
 
   EventEmitter.call(this)
 
-  const { keyEncoding, valueEncoding, ...forward } = options
+  const { keyEncoding, valueEncoding, passive, ...forward } = options
 
   this[kResources] = new Set()
   this[kOperations] = []

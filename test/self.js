@@ -217,6 +217,30 @@ test('test opening explicitly gives a chance to capture an error with promise', 
   }
 })
 
+test('test constructor options are forwarded to open()', function (t) {
+  t.plan(3)
+
+  const spy = sinon.spy(function (options, cb) { this.nextTick(cb) })
+  const Test = implement(AbstractLevelDOWN, { _open: spy })
+  const test = new Test({ encodings: { utf8: true } }, {
+    passive: true,
+    keyEncoding: 'json',
+    valueEncoding: 'json',
+    createIfMissing: false,
+    foo: 123
+  })
+
+  test.open(function (err) {
+    t.ifError(err, 'no open() error')
+    t.is(spy.callCount, 1, 'got _open() call')
+    t.same(spy.getCall(0).args[0], {
+      foo: 123,
+      createIfMissing: false,
+      errorIfExists: false
+    }, 'does not forward passive, keyEncoding and valueEncoding options')
+  })
+})
+
 test('test close() extensibility when open', function (t) {
   t.plan(4)
 

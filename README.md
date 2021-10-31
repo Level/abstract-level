@@ -114,7 +114,7 @@ The optional `options` object may contain:
 - `keyEncoding` (string or object, default `'utf8'`): encoding to use for keys
 - `valueEncoding` (string or object, default `'utf8'`): encoding to use for values.
 
-See [Encodings](#encodings) for a full description of these options. Other `options` are forwarded to `db.open()` which is automatically called. Any read & write operations are queued internally until the database has finished opening. If opening fails, those queued operations will yield errors.
+See [Encodings](#encodings) for a full description of these options. Other `options` (except the `passive` option) are forwarded to `db.open()` which is automatically called. Any read & write operations are queued internally until the database has finished opening. If opening fails, those queued operations will yield errors.
 
 ### `db.status`
 
