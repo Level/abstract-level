@@ -26,7 +26,6 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-// TODO: document promise support
 function AbstractLevelDOWN (manifest, options, _callback) {
   if (typeof manifest !== 'object' || manifest === null) {
     throw new TypeError("The first argument 'manifest' must be an object")
@@ -131,7 +130,6 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
   callback = getCallback(options, callback)
   callback = fromCallback(callback, kPromise)
 
-  // TODO: document that levelup did not merge option objects
   options = { ...this[kOptions], ...getOptions(options) }
 
   options.createIfMissing = options.createIfMissing !== false
@@ -509,7 +507,6 @@ AbstractLevelDOWN.prototype._del = function (key, options, callback) {
 }
 
 AbstractLevelDOWN.prototype.batch = function (operations, options, callback) {
-  // TODO: deprecate in favor of an explicit db.chainedBatch() method
   if (!arguments.length) {
     if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
     if (this[kStatus] !== 'open') {
@@ -734,7 +731,6 @@ AbstractLevelDOWN.prototype._checkValue = function (value) {
 }
 
 // Expose browser-compatible nextTick for dependents
-// TODO: docs
 // TODO: after we drop node 10, also use queueMicrotask in node
 AbstractLevelDOWN.prototype.nextTick = require('./next-tick')
 
