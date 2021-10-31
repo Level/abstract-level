@@ -41,10 +41,10 @@ exports.sequence = function (test, testCommon) {
     try {
       ite.seek('two')
     } catch (err) {
-      error = err.message
+      error = err.code
     }
 
-    t.is(error, 'Iterator is busy', 'got error')
+    t.is(error, 'LEVEL_ITERATOR_BUSY', 'got error')
   })
 
   make('iterator#seek() does not throw after close()', function (db, t, done) {

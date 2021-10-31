@@ -1,6 +1,7 @@
 'use strict'
 
 const { fromCallback } = require('catering')
+const ModuleError = require('module-error')
 const { getCallback, getOptions } = require('./lib/common')
 
 const kPromise = Symbol('promise')
@@ -11,7 +12,8 @@ const kCloseCallbacks = Symbol('closeCallbacks')
 
 function AbstractChainedBatch (db) {
   if (typeof db !== 'object' || db === null) {
-    throw new TypeError('First argument must be an abstract-leveldown compliant store')
+    const hint = db === null ? 'null' : typeof db
+    throw new TypeError(`The first argument must be an abstract-level database, received ${hint}`)
   }
 
   this[kOperations] = []
@@ -33,7 +35,9 @@ Object.defineProperty(AbstractChainedBatch.prototype, 'length', {
 
 AbstractChainedBatch.prototype.put = function (key, value, options) {
   if (this[kStatus] !== 'open') {
-    throw new Error('Batch is not open')
+    throw new ModuleError('Batch is not open: cannot call put() after write() or close()', {
+      code: 'LEVEL_BATCH_NOT_OPEN'
+    })
   }
 
   const err = this.db._checkKey(key) || this.db._checkValue(value)
@@ -65,7 +69,9 @@ AbstractChainedBatch.prototype._put = function (key, value, options) {}
 
 AbstractChainedBatch.prototype.del = function (key, options) {
   if (this[kStatus] !== 'open') {
-    throw new Error('Batch is not open')
+    throw new ModuleError('Batch is not open: cannot call del() after write() or close()', {
+      code: 'LEVEL_BATCH_NOT_OPEN'
+    })
   }
 
   const err = this.db._checkKey(key)
@@ -91,7 +97,9 @@ AbstractChainedBatch.prototype._del = function (key, options) {}
 
 AbstractChainedBatch.prototype.clear = function () {
   if (this[kStatus] !== 'open') {
-    throw new Error('Batch is not open')
+    throw new ModuleError('Batch is not open: cannot call clear() after write() or close()', {
+      code: 'LEVEL_BATCH_NOT_OPEN'
+    })
   }
 
   this._clear()
@@ -108,7 +116,9 @@ AbstractChainedBatch.prototype.write = function (options, callback) {
   options = getOptions(options)
 
   if (this[kStatus] !== 'open') {
-    this.nextTick(callback, new Error('Batch is not open'))
+    this.nextTick(callback, new ModuleError('Batch is not open: cannot call write() after write() or close()', {
+      code: 'LEVEL_BATCH_NOT_OPEN'
+    }))
   } else if (this.length === 0) {
     this.close(callback)
   } else {

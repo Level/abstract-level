@@ -50,8 +50,8 @@ test('deferred iterator', function (t) {
     t.equal(value, 'value')
   })
 
-  it.end(function (err) {
-    t.error(err, 'no end() error')
+  it.close(function (err) {
+    t.error(err, 'no close() error')
     t.ok(nextFirst)
   })
 })
@@ -258,11 +258,11 @@ test('deferred iterator defers underlying close()', function (t) {
 
 function verifyClosed (t, it, cb) {
   it.next(function (err) {
-    t.is(err && err.message, 'Iterator is not open', 'correct error on first next()')
+    t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct error on first next()')
 
     // Should account for userland code that ignores errors
     it.next(function (err) {
-      t.is(err && err.message, 'Iterator is not open', 'correct error on second next()')
+      t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct error on second next()')
       cb()
     })
   })

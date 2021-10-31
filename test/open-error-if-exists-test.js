@@ -13,8 +13,8 @@ exports.errorIfExists = function (test, testCommon) {
         let async = false
 
         db.open({ createIfMissing: false, errorIfExists: true }, function (err) {
-          t.ok(err, 'error')
-          t.ok(/exists/.test(err.message), 'error is about already existing')
+          t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+          t.ok(err && /exists/.test(err.cause && err.cause.message), 'error is about already existing')
           t.ok(async, 'callback is asynchronous')
           t.end()
         })

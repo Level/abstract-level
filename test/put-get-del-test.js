@@ -29,8 +29,8 @@ function makeTest (test, type, key, value, expectedResult) {
 
           db.get(key, function (err, value) {
             t.ok(err, 'entry properly deleted')
-            t.ok(verifyNotFoundError(err), 'should have correct error message')
-            t.equal(typeof value, 'undefined', 'value is undefined')
+            t.ok(verifyNotFoundError(err), 'correct error')
+            t.is(value, undefined, 'value is undefined')
             t.ok(async, 'callback is asynchronous')
             t.end()
           })

@@ -14,151 +14,108 @@ exports.setUp = function (test, testCommon) {
 }
 
 exports.args = function (test, testCommon) {
-  test('test batch() with missing `value`', function (t) {
-    t.plan(2)
+  test('test batch() with missing `value`', assertAsync.ctx(function (t) {
+    t.plan(3)
 
-    db.batch([{ type: 'put', key: 'foo1' }], function (err) {
-      t.is(err && err.message, 'value cannot be `null` or `undefined`', 'correct error message')
-    })
+    db.batch([{ type: 'put', key: 'foo1' }], assertAsync(function (err) {
+      t.is(err && err.code, 'LEVEL_INVALID_VALUE', 'correct error code (callback)')
+    }))
 
     db.batch([{ type: 'put', key: 'foo1' }]).catch((err) => {
-      t.is(err.message, 'value cannot be `null` or `undefined`', 'correct error message')
+      t.is(err.code, 'LEVEL_INVALID_VALUE', 'correct error code (promise)')
     })
-  })
+  }))
 
   test('test batch() with illegal values', assertAsync.ctx(function (t) {
     t.plan(illegalValues.length * 6)
 
-    for (const { name, value, regex } of illegalValues) {
+    for (const { name, value } of illegalValues) {
       db.batch([{ type: 'put', key: 'foo1', value }], assertAsync(function (err) {
         t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_VALUE', 'correct error code (callback)')
       }))
 
       db.batch([{ type: 'put', key: 'foo1', value }]).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_VALUE', name + ' - correct error code (promise)')
       })
     }
   }))
 
-  test('test batch() with missing `key`', function (t) {
+  test('test batch() with missing `key`', assertAsync.ctx(function (t) {
     t.plan(3)
 
-    let async = false
-
-    db.batch([{ type: 'put', value: 'foo1' }], function (err) {
-      t.is(err && err.message, 'key cannot be `null` or `undefined`', 'correct error message')
-      t.ok(async, 'callback is asynchronous')
-    })
-
-    async = true
+    db.batch([{ type: 'put', value: 'foo1' }], assertAsync(function (err) {
+      t.is(err && err.code, 'LEVEL_INVALID_KEY', 'correct error code (callback)')
+    }))
 
     db.batch([{ type: 'put', value: 'foo1' }]).catch(function (err) {
-      t.is(err.message, 'key cannot be `null` or `undefined`', 'correct error message')
+      t.is(err.code, 'LEVEL_INVALID_KEY', 'correct error code (promise)')
     })
-  })
+  }))
 
   test('test batch() with illegal keys', assertAsync.ctx(function (t) {
     t.plan(illegalKeys.length * 6)
 
-    for (const { name, key, regex } of illegalKeys) {
+    for (const { name, key } of illegalKeys) {
       db.batch([{ type: 'put', key, value: 'foo1' }], assertAsync(function (err) {
         t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_KEY', 'correct error code (callback)')
       }))
 
       db.batch([{ type: 'put', key, value: 'foo1' }]).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (promise)')
       })
     }
   }))
 
-  test('test batch() with missing `key` and `value`', function (t) {
-    t.plan(3)
+  test('test batch() with missing or incorrect type', assertAsync.ctx(function (t) {
+    t.plan(10)
 
-    let async = false
+    db.batch([{ key: 'key', value: 'value' }], assertAsync(function (err) {
+      t.is(err && err.name, 'TypeError')
+      t.is(err && err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (callback)')
+    }))
 
-    db.batch([{ type: 'put' }], function (err) {
-      t.is(err && err.message, 'key cannot be `null` or `undefined`', 'correct error message')
-      t.ok(async, 'callback is asynchronous')
-    })
-
-    async = true
-
-    db.batch([{ type: 'put' }]).catch(function (err) {
-      t.is(err.message, 'key cannot be `null` or `undefined`', 'correct error message')
-    })
-  })
-
-  test('test batch() with missing `type`', function (t) {
-    t.plan(3)
-
-    let async = false
-
-    db.batch([{ key: 'key', value: 'value' }], function (err) {
-      t.is(err && err.message, "`type` must be 'put' or 'del'", 'correct error message')
-      t.ok(async, 'callback is asynchronous')
-    })
-
-    async = true
+    db.batch([{ key: 'key', value: 'value', type: 'foo' }], assertAsync(function (err) {
+      t.is(err && err.name, 'TypeError')
+      t.is(err && err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (callback)')
+    }))
 
     db.batch([{ key: 'key', value: 'value' }]).catch(function (err) {
-      t.is(err.message, "`type` must be 'put' or 'del'", 'correct error message')
+      t.is(err.name, 'TypeError')
+      t.is(err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (promise)')
     })
-  })
-
-  test('test batch() with wrong `type`', function (t) {
-    t.plan(3)
-
-    let async = false
-
-    db.batch([{ key: 'key', value: 'value', type: 'foo' }], function (err) {
-      t.is(err && err.message, "`type` must be 'put' or 'del'", 'correct error message')
-      t.ok(async, 'callback is asynchronous')
-    })
-
-    async = true
 
     db.batch([{ key: 'key', value: 'value', type: 'foo' }]).catch(function (err) {
-      t.is(err.message, "`type` must be 'put' or 'del'", 'correct error message')
+      t.is(err.name, 'TypeError')
+      t.is(err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (promise)')
     })
-  })
+  }))
 
-  test('test batch() with missing array', function (t) {
-    let async = false
+  test('test batch() with missing or nullish operations', assertAsync.ctx(function (t) {
+    t.plan(13)
 
-    db.batch(function (err) {
-      t.ok(err, 'got error')
-      t.equal(err.message, 'batch(array) requires an array argument', 'correct error message')
-      t.ok(async, 'callback is asynchronous')
-      t.end()
-    })
-
-    async = true
-  })
-
-  test('test batch() with null or undefined array', function (t) {
-    t.plan(2 * 3)
+    db.batch(assertAsync(function (err) {
+      t.is(err && err.name, 'TypeError')
+      t.is(err && err.message, "The first argument 'operations' must be an array", 'correct error message (callback)')
+    }))
 
     for (const array of [null, undefined]) {
-      let async = false
-
-      db.batch(array, function (err) {
-        t.is(err && err.message, 'batch(array) requires an array argument', 'correct error message')
-        t.ok(async, 'callback is asynchronous')
-      })
-
-      async = true
+      db.batch(array, assertAsync(function (err) {
+        t.is(err && err.name, 'TypeError')
+        t.is(err && err.message, "The first argument 'operations' must be an array", 'correct error message (callback)')
+      }))
 
       db.batch(array).catch(function (err) {
-        t.is(err.message, 'batch(array) requires an array argument', 'correct error message')
+        t.is(err.name, 'TypeError')
+        t.is(err.message, "The first argument 'operations' must be an array", 'correct error message (promise)')
       })
     }
-  })
+  }))
 
   test('test batch() with null options', function (t) {
     t.plan(2)
@@ -172,43 +129,35 @@ exports.args = function (test, testCommon) {
     }).catch(t.fail.bind(t))
   })
 
-  ;[null, undefined, 1, true].forEach(function (element) {
-    const type = element === null ? 'null' : typeof element
+  ;[null, undefined, 1, true].forEach(function (operation) {
+    const type = operation === null ? 'null' : typeof operation
 
-    test('test batch() with ' + type + ' element', function (t) {
-      t.plan(3)
+    test('test batch() with ' + type + ' operation', assertAsync.ctx(function (t) {
+      t.plan(5)
 
-      let async = false
+      db.batch([operation], assertAsync(function (err) {
+        t.is(err && err.name, 'TypeError')
+        t.is(err && err.message, 'A batch operation must be an object', 'correct error message (callback)')
+      }))
 
-      db.batch([element], function (err) {
-        t.is(err && err.message, 'batch(array) element must be an object and not `null`', 'correct error message')
-        t.ok(async, 'callback is asynchronous')
+      db.batch([operation]).catch(function (err) {
+        t.is(err.name, 'TypeError')
+        t.is(err.message, 'A batch operation must be an object', 'correct error message (promise)')
       })
-
-      async = true
-
-      db.batch([element]).catch(function (err) {
-        t.is(err.message, 'batch(array) element must be an object and not `null`', 'correct error message')
-      })
-    })
+    }))
   })
 
-  test('test batch() with empty array', function (t) {
+  test('test batch() with empty array', assertAsync.ctx(function (t) {
     t.plan(3)
 
-    let async = false
-
-    db.batch([], function (err) {
+    db.batch([], assertAsync(function (err) {
       t.error(err, 'no error from batch()')
-      t.ok(async, 'callback is asynchronous')
-    })
-
-    async = true
+    }))
 
     db.batch([]).then(function () {
       t.pass('resolved')
     }).catch(t.fail.bind(t))
-  })
+  }))
 }
 
 exports.batch = function (test, testCommon) {

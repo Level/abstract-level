@@ -150,13 +150,13 @@ exports.all = function (test, testCommon) {
         t.ifError(err)
 
         db.put('foo', 'bar', function (err) {
-          t.is(err && err.message, 'Database is not open')
+          t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
         })
 
         try {
           db.iterator()
         } catch (err) {
-          t.is(err.message, 'Database is not open')
+          t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
         }
       })
     })
@@ -176,13 +176,13 @@ exports.all = function (test, testCommon) {
       })
 
       db.put('foo', 'bar', function (err) {
-        t.is(err && err.message, 'Database is not open')
+        t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
       })
 
       try {
         db.iterator()
       } catch (err) {
-        t.is(err.message, 'Database is not open')
+        t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
       }
     })
   })
@@ -200,11 +200,11 @@ exports.all = function (test, testCommon) {
         t.ifError(err)
 
         it.next(function (err, key, value) {
-          t.is(err && err.message, 'Iterator is not open')
+          t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN')
         })
 
         it.next().catch(function (err) {
-          t.is(err.message, 'Iterator is not open')
+          t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
         })
 
         // Was already closed
@@ -243,11 +243,11 @@ exports.all = function (test, testCommon) {
       })
 
       it.next(function (err, key, value) {
-        t.is(err && err.message, 'Iterator is not open')
+        t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN')
       })
 
       it.next().catch(function (err) {
-        t.is(err.message, 'Iterator is not open')
+        t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
       })
 
       // Is already closing

@@ -19,8 +19,9 @@ This document describes breaking changes and how to upgrade. For a complete list
   - [3. Auto-closing resources](#3-auto-closing-resources)
     - [3.1. Closing iterators is idempotent](#31-closing-iterators-is-idempotent)
     - [3.2. Chained batch can be closed](#32-chained-batch-can-be-closed)
-  - [4. Semi-private properties have been made private](#4-semi-private-properties-have-been-made-private)
-  - [5. Breaking changes to test suite](#5-breaking-changes-to-test-suite)
+  - [4. Error codes](#4-error-codes)
+  - [5. Removed semi-private properties](#5-removed-semi-private-properties)
+  - [6. Breaking changes to test suite](#6-breaking-changes-to-test-suite)
 - [7.0.0](#700)
 - [6.0.0](#600)
   - [Changes to public API](#changes-to-public-api)
@@ -54,11 +55,11 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 ## Upcoming
 
-**This release removes the need for `levelup`, `encoding-down`, `deferred-leveldown` and `level-packager`. This means that an `abstract-leveldown` compliant db is a complete solution that doesn't need to be wrapped. It has the same API as `level(up)` including encodings, promises and events. In addition, implementations can use typed arrays (Uint8Array) instead of Buffer if they want to. Consumers of an implementation can use both.**
+**This release removes the need for `levelup`, `encoding-down`, `deferred-leveldown` and `level-packager`. This means that an `abstract-level` database is a complete solution that doesn't need to be wrapped. It has the same API as `level(up)` including encodings, promises and events. In addition, implementations can choose to use Uint8Array for keys and values instead of Buffer. Consumers of an implementation can use both.**
 
 Support of Node.js 10 has been dropped.
 
-For most folks an upgraded `abstract-leveldown` db can be a drop-in replacement for a `level(up)` db. Let's start this upgrade guide there: all methods have been enhanced and tuned to reach API parity with `levelup` and `level`.
+For most folks, a database that upgraded from `abstract-leveldown` to `abstract-level` can be a drop-in replacement for a `level(up)` database. Let's start this upgrade guide there: all methods have been enhanced and tuned to reach API parity with `levelup` and `level`.
 
 ### 1. API parity with `levelup`
 
@@ -68,51 +69,43 @@ All methods that take a callback now also support promises. They return a promis
 
 #### 1.2. New: events & idempotent open
 
-The prototype of `require('abstract-leveldown').AbstractLevelDOWN` now inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and an instance emits the same events as `levelup` would (with the exception of the 'ready' alias that `levelup` has for the 'open' event - `abstract-leveldown` only emits 'open').
+The prototype of `require('abstract-level').AbstractLevelDOWN` inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and an instance emits the same events as `levelup` would (with the exception of the 'ready' alias that `levelup` has for the 'open' event - `abstract-level` only emits 'open').
 
 #### 1.3. New: deferred open
 
-Deferred open is built-in. This means an `abstract-leveldown` instance opens itself a tick after its constructor returns. Any operations made until opening has completed are queued up in memory. When opening completes the operations are replayed. If opening has failed (and this is a new behavior compared to `levelup`) the operations will yield errors. The `abstract-leveldown` prototype has a new `defer()` method for an implementation to defer custom operations.
+Deferred open is built-in. This means an `abstract-level` database opens itself a tick after its constructor returns (unless `open()` was called in the mean time). Any operations made until opening has completed are queued up in memory. When opening completes the operations are replayed. If opening failed (and this is a new behavior compared to `levelup`) the operations will yield errors. The `abstract-level` prototype has a new `defer()` method for an implementation to defer custom operations.
 
-The initial `status` of an `abstract-leveldown` instance is now 'opening', and the previous `status` 'new' is gone. Wrapping an `abstract-leveldown` instance with `deferred-leveldown` or `levelup` is no longer supported. It will either throw or exhibit undefined behavior.
+The initial `status` of an `abstract-level` database is 'opening' rather than 'new', which no longer exists. Wrapping an `abstract-level` database with `levelup` or `deferred-leveldown` is not supported and will exhibit undefined behavior.
 
 #### 1.4. New: state checks
 
-On any operation, `abstract-leveldown` now checks if it's open. If not, it will either throw an error (if the relevant API is synchronous) or asynchronously yield an error. For example:
+On any operation, an `abstract-level` database checks if it's open. If not, it will either throw an error (if the relevant API is synchronous) or asynchronously yield an error. For example:
 
 ```js
 try {
   db.iterator()
 } catch (err) {
-  // Error: Database is not open
+  console.log(err.code) // LEVEL_DATABASE_NOT_OPEN
 }
 ```
 
-```js
-try {
-  await db.get('example')
-} catch (err) {
-  // Error: Database is not open
-}
-```
+_Errors now have a `code` property. More on that below._
 
-```js
-db.get('example', function (err) {
-  // Error: Database is not open
-})
-```
-
-This may be a breaking change downstream because it changes error messages for implementations that had their own safety checks (which will now be ineffective because `abstract-leveldown` checks are performed first) or implicitly relied on `levelup` checks. By safety we mean mainly that yielding a JavaScript error is preferred over segmentation faults, though non-native implementations also benefit from detecting incorrect usage.
+This may be a breaking change downstream because it changes error messages for implementations that had their own safety checks (which will now be ineffective because `abstract-level` checks are performed first) or implicitly relied on `levelup` checks. By safety we mean mainly that yielding a JavaScript error is preferred over segmentation faults, though non-native implementations also benefit from detecting incorrect usage.
 
 Implementations that have additional methods should add or align their own safety checks for consistency. Like so:
 
 ```js
+const ModuleError = require('module-error')
+
 // For brevity this example does not implement promises or encodings
 LevelDOWN.prototype.approximateSize = function (start, end, callback) {
   if (this.status === 'opening') {
     this.defer(() => this.approximateSize(start, end, callback))
   } else if (this.status !== 'open') {
-    this.nextTick(callback, new Error('Database is not open'))
+    this.nextTick(callback, new ModuleError('Database is not open', {
+      code: 'LEVEL_DATABASE_NOT_OPEN'
+    }))
   } else {
     // ..
   }
@@ -121,11 +114,11 @@ LevelDOWN.prototype.approximateSize = function (start, end, callback) {
 
 #### 1.5. New: chained batch length
 
-The `AbstractChainedBatch` prototype has a new `length` property that, like a chained batch in `levelup`, returns the number of operations in the batch. Implementations should not have to make changes for this unless they monkey-patched public methods of `AbstractChainedBatch`.
+The `AbstractChainedBatch` prototype has a new `length` property that, like a chained batch in `levelup`, returns the number of queued operations in the batch. Implementations should not have to make changes for this unless they monkey-patched public methods of `AbstractChainedBatch`.
 
 ### 2. API parity with `level`
 
-It was previously necessary to use `level` (or similar: `level-mem`, `level-rocksdb` and more) to get the "full experience". These modules combined an `abstract-leveldown` implementation with `encoding-down` and `levelup`, using the `level-packager` utility. Encodings are now built-in to `abstract-leveldown`.
+It was previously necessary to use `level` (or similar: `level-mem`, `level-rocksdb` and more) to get the "full experience". These modules combined an `abstract-leveldown` implementation with `encoding-down` and `levelup`, using the `level-packager` utility. Encodings are now built-in to `abstract-level`. A future version of `level` will likely simply export `leveldown` in Node.js and `level-js` in browsers.
 
 #### 2.1. New: encodings
 
@@ -163,17 +156,17 @@ And non-breaking:
 
 ### 3. Auto-closing resources
 
-To further improve safety and consistency, additional changes were made that make an `abstract-leveldown` database safer to use than `levelup`.
+To further improve safety and consistency, additional changes were made that make an `abstract-level` database safer to use than `abstract-leveldown` wrapped with `levelup`.
 
 #### 3.1. Closing iterators is idempotent
 
-The `iterator.end()` method has been renamed to `iterator.close()`, with `end()` being an alias for now. The term "close" makes it easier to differentiate between the iterator having reached its natural end (data-wise) versus closing it to cleanup resources.
+The `iterator.end()` method has been renamed to `iterator.close()`, with `end()` being an alias until a next major version in the future. The term "close" makes it easier to differentiate between the iterator having reached its natural end (data-wise) versus closing it to cleanup resources.
 
 Likewise, `_end()` has been renamed to `_close()` but without an alias. This method is no longer allowed to yield an error.
 
-On `db.close()`, non-closed iterators are now automatically closed. This may be a breaking change but only if an implementation has (at its own risk) overridden the public `end()` method, because `close()` or `end()` is now an idempotent operation rather than yielding a `new Error('end() already called on iterator')`. If a `next()` is in progress, closing the iterator (or db) will wait for that.
+On `db.close()`, non-closed iterators are now automatically closed. This may be a breaking change but only if an implementation has (at its own risk) overridden the public `end()` method, because `close()` or `end()` is now an idempotent operation rather than yielding an `end() already called on iterator` error. If a `next()` is in progress, closing the iterator (or database) will wait for that.
 
-The error message `cannot call next() after end()` has been replaced with `Iterator is not open`, the error `cannot call seek() after end()` has been removed in favor of a silent return, and `cannot call next() before previous next() has completed` and `cannot call seek() before next() has completed` have been replaced with `Iterator is busy`.
+The error message `cannot call next() after end()` has been replaced with code `LEVEL_ITERATOR_NOT_OPEN`, the error `cannot call seek() after end()` has been removed in favor of a silent return, and `cannot call next() before previous next() has completed` and `cannot call seek() before next() has completed` have been replaced with code `LEVEL_ITERATOR_BUSY`.
 
 The `next()` method no longer returns `this` (when a callback is provided).
 
@@ -181,9 +174,15 @@ The `next()` method no longer returns `this` (when a callback is provided).
 
 Chained batch has a new method `close()` which is an idempotent operation and automatically called after `write()` (for backwards compatibility) or on `db.close()`. This to ensure batches can't be used after closing and reopening a db. If a `write()` is in progress, closing will wait for that. If `write()` is never called then `close()` must be.
 
-These changes could be breaking for an implementation that has (at its own risk) overridden the public `write()` method. In addition, the error message `write() already called on this batch` has been replaced with `Batch is not open`.
+These changes could be breaking for an implementation that has (at its own risk) overridden the public `write()` method. In addition, the error message `write() already called on this batch` has been replaced with code `LEVEL_BATCH_NOT_OPEN`.
 
-### 4. Semi-private properties have been made private
+### 4. Error codes
+
+The [`level-errors`](https://github.com/Level/errors) module as used by `levelup` and friends, is not used or exposed by `abstract-level`. Instead errors thrown or yielded from a database have a `code` property. See [`README`](./README.md#errors) for details. Going forward, the semver contract will be on `code` and error messages will change without a semver-major bump.
+
+To minimize breakage, the most used error as yielded by `get()` when an entry is not found, has the same properties that `level-errors` added (`notFound` and `status`) in addition to code `LEVEL_NOT_FOUND`. Those properties will be removed in a future version. Implementations can still yield an error that matches `/NotFound/i.test(err)` or they can start using the code. Either way `abstract-level` will normalize the error.
+
+### 5. Removed semi-private properties
 
 The following properties and methods can no longer be accessed, as they've been removed or replaced with internal [symbols](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol):
 
@@ -194,7 +193,7 @@ The following properties and methods can no longer be accessed, as they've been 
 - `AbstractChainedBatch#_operations`
 - `AbstractLevelDOWN#_setupIteratorOptions()`
 
-### 5. Breaking changes to test suite
+### 6. Breaking changes to test suite
 
 - Options to skip tests have been removed in favor of `db.supports`
 - Support of `db.clear()` and `db.getMany()` is now mandatory. The default (slow) implementation of `_clear()` has been removed.

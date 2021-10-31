@@ -29,7 +29,7 @@ const noop = () => {}
 // TODO: document promise support
 function AbstractLevelDOWN (manifest, options, _callback) {
   if (typeof manifest !== 'object' || manifest === null) {
-    throw new TypeError("First argument 'manifest' must be an object")
+    throw new TypeError("The first argument 'manifest' must be an object")
   }
 
   _callback = getCallback(options, _callback)
@@ -142,7 +142,10 @@ AbstractLevelDOWN.prototype.open = function (options, callback) {
       // Wait until pending state changes are done
       this.once(kLanded, err ? () => maybeOpened(err) : maybeOpened)
     } else if (this[kStatus] !== 'open') {
-      callback(err || new Error('Database is not open'))
+      callback(new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN',
+        cause: err
+      }))
     } else {
       callback()
     }
@@ -203,7 +206,10 @@ AbstractLevelDOWN.prototype.close = function (callback) {
       // Wait until pending state changes are done
       this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
     } else if (this[kStatus] !== 'closed') {
-      callback(err || new Error('Database is not closed'))
+      callback(new ModuleError('Database is not closed', {
+        code: 'LEVEL_DATABASE_NOT_CLOSED',
+        cause: err
+      }))
     } else {
       callback()
     }
@@ -306,9 +312,17 @@ AbstractLevelDOWN.prototype.get = function (key, options, callback) {
     }
   }
 
-  // TODO: handle notfound errors (or go with undefined)
   this._get(keyEncoding.encode(key), options, (err, value) => {
-    if (err) return callback(err)
+    if (err) {
+      // Normalize not found error for backwards compatibility with abstract-leveldown and level(up)
+      if (err.code === 'LEVEL_NOT_FOUND' || err.notFound || /NotFound/i.test(err)) {
+        if (!err.code) err.code = 'LEVEL_NOT_FOUND' // Preferred way going forward
+        if (!err.notFound) err.notFound = true // Same as level-errors
+        if (!err.status) err.status = 404 // Same as level-errors
+      }
+
+      return callback(err)
+    }
 
     try {
       value = valueEncoding.decode(value)
@@ -344,7 +358,7 @@ AbstractLevelDOWN.prototype.getMany = function (keys, options, callback) {
   }
 
   if (!Array.isArray(keys)) {
-    this.nextTick(callback, new Error('getMany() requires an array argument'))
+    this.nextTick(callback, new TypeError("The first argument 'keys' must be an array"))
     return callback[kPromise]
   }
 
@@ -494,22 +508,26 @@ AbstractLevelDOWN.prototype._del = function (key, options, callback) {
   this.nextTick(callback)
 }
 
-AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
+AbstractLevelDOWN.prototype.batch = function (operations, options, callback) {
   // TODO: deprecate in favor of an explicit db.chainedBatch() method
   if (!arguments.length) {
     if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
-    if (this[kStatus] !== 'open') throw new Error('Database is not open')
+    if (this[kStatus] !== 'open') {
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
     return this._chainedBatch()
   }
 
-  if (typeof array === 'function') callback = array
+  if (typeof operations === 'function') callback = operations
   else callback = getCallback(options, callback)
 
   callback = fromCallback(callback, kPromise)
   options = getOptions(options, this[kDefaultOptions].entry)
 
   if (this[kStatus] === 'opening') {
-    this.defer(() => this.batch(array, options, callback))
+    this.defer(() => this.batch(operations, options, callback))
     return callback[kPromise]
   }
 
@@ -517,29 +535,29 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
     return callback[kPromise]
   }
 
-  if (!Array.isArray(array)) {
-    this.nextTick(callback, new Error('batch(array) requires an array argument'))
+  if (!Array.isArray(operations)) {
+    this.nextTick(callback, new TypeError("The first argument 'operations' must be an array"))
     return callback[kPromise]
   }
 
-  if (array.length === 0) {
+  if (operations.length === 0) {
     this.nextTick(callback)
     return callback[kPromise]
   }
 
-  const encoded = new Array(array.length)
+  const encoded = new Array(operations.length)
   const { keyEncoding: ke, valueEncoding: ve, ...rest } = options
 
-  for (let i = 0; i < array.length; i++) {
-    if (typeof array[i] !== 'object' || array[i] === null) {
-      this.nextTick(callback, new Error('batch(array) element must be an object and not `null`'))
+  for (let i = 0; i < operations.length; i++) {
+    if (typeof operations[i] !== 'object' || operations[i] === null) {
+      this.nextTick(callback, new TypeError('A batch operation must be an object'))
       return callback[kPromise]
     }
 
-    const op = Object.assign({}, array[i])
+    const op = Object.assign({}, operations[i])
 
     if (op.type !== 'put' && op.type !== 'del') {
-      this.nextTick(callback, new Error("`type` must be 'put' or 'del'"))
+      this.nextTick(callback, new TypeError("A batch operation must have a type property that is 'put' or 'del'"))
       return callback[kPromise]
     }
 
@@ -574,14 +592,14 @@ AbstractLevelDOWN.prototype.batch = function (array, options, callback) {
 
   this._batch(encoded, rest, (err) => {
     if (err) return callback(err)
-    this.emit('batch', array)
+    this.emit('batch', operations)
     callback()
   })
 
   return callback[kPromise]
 }
 
-AbstractLevelDOWN.prototype._batch = function (array, options, callback) {
+AbstractLevelDOWN.prototype._batch = function (operations, options, callback) {
   this.nextTick(callback)
 }
 
@@ -640,7 +658,9 @@ AbstractLevelDOWN.prototype.iterator = function (options) {
   }
 
   if (this[kStatus] !== 'open') {
-    throw new Error('Database is not open')
+    throw new ModuleError('Database is not open', {
+      code: 'LEVEL_DATABASE_NOT_OPEN'
+    })
   }
 
   return this._iterator(options)
@@ -676,18 +696,13 @@ AbstractLevelDOWN.prototype[kUndefer] = function () {
   for (const op of operations) {
     op()
   }
-
-  /* istanbul ignore if: assertion */
-  if (this[kOperations].length > 0) {
-    throw new Error('Did not expect further operations')
-  }
 }
 
 // TODO: docs
 AbstractLevelDOWN.prototype.attachResource = function (resource) {
   if (typeof resource !== 'object' || resource === null ||
     typeof resource.close !== 'function') {
-    throw new TypeError('First argument must be a resource')
+    throw new TypeError('The first argument must be a resource object')
   }
 
   this[kResources].add(resource)
@@ -704,13 +719,17 @@ AbstractLevelDOWN.prototype._chainedBatch = function () {
 
 AbstractLevelDOWN.prototype._checkKey = function (key) {
   if (key === null || key === undefined) {
-    return new Error('key cannot be `null` or `undefined`')
+    return new ModuleError('Key cannot be null or undefined', {
+      code: 'LEVEL_INVALID_KEY'
+    })
   }
 }
 
 AbstractLevelDOWN.prototype._checkValue = function (value) {
   if (value === null || value === undefined) {
-    return new Error('value cannot be `null` or `undefined`')
+    return new ModuleError('Value cannot be null or undefined', {
+      code: 'LEVEL_INVALID_VALUE'
+    })
   }
 }
 
@@ -723,7 +742,9 @@ module.exports = AbstractLevelDOWN
 
 function maybeError (db, callback) {
   if (db[kStatus] !== 'open') {
-    db.nextTick(callback, new Error('Database is not open'))
+    db.nextTick(callback, new ModuleError('Database is not open', {
+      code: 'LEVEL_DATABASE_NOT_OPEN'
+    }))
     return true
   }
 

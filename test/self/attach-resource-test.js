@@ -13,7 +13,7 @@ test('resource must be an object with a close() method', function (t) {
     try {
       db.attachResource(invalid)
     } catch (err) {
-      t.is(err && err.message, 'First argument must be a resource')
+      t.is(err && err.message, 'The first argument must be a resource object')
     }
   }
 

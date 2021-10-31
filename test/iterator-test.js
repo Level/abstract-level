@@ -45,8 +45,7 @@ exports.sequence = function (test, testCommon) {
 
       iterator.next(function (err2) {
         t.ok(err2, 'returned error')
-        t.is(err2.name, 'Error', 'correct error')
-        t.is(err2.message, 'Iterator is not open', 'correct message')
+        t.is(err2.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct message')
         t.ok(async, 'callback is asynchronous')
         t.end()
       })
@@ -69,8 +68,7 @@ exports.sequence = function (test, testCommon) {
 
     iterator.next(function (err) {
       t.ok(err, 'returned error')
-      t.is(err.name, 'Error', 'correct error')
-      t.is(err.message, 'Iterator is busy')
+      t.is(err.code, 'LEVEL_ITERATOR_BUSY')
       t.ok(async, 'callback is asynchronous')
     })
 
@@ -274,7 +272,7 @@ exports.iterator = function (test, testCommon) {
       const promise = it.next().then(() => {
         // The second call should fail, because it was scheduled after close()
         return it.next().catch(err => {
-          t.is(err.message, 'Iterator is not open')
+          t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
         })
       })
 

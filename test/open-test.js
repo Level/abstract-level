@@ -100,7 +100,7 @@ exports.open = function (test, testCommon) {
 
     db.open(assertAsync(function (err) {
       order.push('A')
-      t.is(err && err.message, 'Database is not open', 'got open() error')
+      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN', 'got open() error')
       t.is(db.status, 'closed', 'is closed')
     }))
 
@@ -139,7 +139,7 @@ exports.open = function (test, testCommon) {
     // This wins from the open() call
     db.close(assertAsync(function (err) {
       order.push('B')
-      t.is(err && err.message, 'Database is not closed')
+      t.is(err && err.code, 'LEVEL_DATABASE_NOT_CLOSED')
       t.is(db.status, 'open', 'is open')
     }))
 
@@ -255,7 +255,7 @@ exports.open = function (test, testCommon) {
 
     db.open(function (err) {
       order.push('A')
-      t.is(err && err.message, 'Database is not open', 'got open() error')
+      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN', 'got open() error')
       t.is(db.status, 'closed', 'is closed')
     })
 
@@ -278,7 +278,7 @@ exports.open = function (test, testCommon) {
     await db.open({ passive: true }) // OK, already opening
     await db.close()
     await db.open({ passive: true }).catch(err => {
-      t.is(err.message, 'Database is not open')
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
     })
     await db.open()
     await db.open({ passive: true }) // OK, already open

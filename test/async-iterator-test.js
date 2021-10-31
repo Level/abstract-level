@@ -118,7 +118,7 @@ exports.asyncIterator = function (test, testCommon) {
         t.fail('should not be called')
       }
     } catch (err) {
-      t.is(err.message, 'Iterator is not open')
+      t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
     }
   })
 }
