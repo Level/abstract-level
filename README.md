@@ -59,7 +59,7 @@
     - [`LEVEL_DECODE_ERROR`](#level_decode_error)
     - [`LEVEL_INVALID_KEY`](#level_invalid_key)
     - [`LEVEL_INVALID_VALUE`](#level_invalid_value)
-    - [`LEVEL_INVALID_BATCH`](#level_invalid_batch)
+    - [`LEVEL_CORRUPTION`](#level_corruption)
     - [`LEVEL_NOT_SUPPORTED`](#level_not_supported)
     - [`LEVEL_LEGACY`](#level_legacy)
 - [Private API For Implementors](#private-api-for-implementors)
@@ -166,7 +166,7 @@ Get a value from the database by `key`. The optional `options` object may contai
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
 
-The `callback` function will be called with an `Error` if the operation failed for any reason, including if the key was not found. If successful the first argument will be `null` and the second argument will be the value.
+The `callback` function will be called with an error if the operation failed. If the key was not found, the error will have code [`LEVEL_NOT_FOUND`](#errors). If successful the first argument will be `null` and the second argument will be the value.
 
 ### `db.getMany(keys[, options][, callback])`
 
@@ -175,7 +175,7 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
 
-The `callback` function will be called with an `Error` if the operation failed for any reason. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
+The `callback` function will be called with an error if the operation failed. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
 If no callback is provided, a promise is returned.
 
@@ -443,31 +443,42 @@ Any keys, values and range options in these events are the original arguments pa
 
 ### Errors
 
-Most errors have a `code` property. Error codes will not change between major versions, but error messages might. Messages may also differ between implementations; they are free and encouraged to tune messages.
+Errors thrown or yielded from the methods above will have a `code` property that is an uppercase string. Error codes will not change between major versions, but error messages will. Messages may also differ between implementations; they are free and encouraged to tune messages. A database may also throw [`TypeError`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypeError) errors (or other core error constructors in JavaScript) without a `code`. Used for invalid arguments and other programming mistakes, so for these no guarantee is given on the stability of their properties.
+
+Error codes will be one of the following.
 
 #### `LEVEL_NOT_FOUND`
 
-Not yet implemented. When an entry (a key-value pair) was not found.
+When a key was not found.
 
 #### `LEVEL_DATABASE_NOT_OPEN`
 
-Not yet implemented. When an operation was made on a database while it was closing or closed, or when a database failed to `open()`, including when `close()` was called in the mean time.
+When an operation was made on a database while it was closing or closed, or when a database failed to `open()`. Including when `close()` was called in the mean time, thus changing the eventual `status`. The error may have a `cause` property that explains a failure to open:
+
+```js
+try {
+  await db.open()
+} catch (err) {
+  console.error(err.code) // 'LEVEL_DATABASE_NOT_OPEN'
+  console.error(err.cause) // 'Error: Failed to acquire lock'
+}
+```
 
 #### `LEVEL_DATABASE_NOT_CLOSED`
 
-Not yet implemented. When a database failed to `close()`.
+When a database failed to `close()`. Including when `open()` was called in the mean time, thus changing the eventual `status`. The error may have a `cause` property that explains a failure to close.
 
 #### `LEVEL_ITERATOR_NOT_OPEN`
 
-Not yet implemented. When an operation was made on an iterator while it was closing or closed, which may also be the result of the database being closed.
+When an operation was made on an iterator while it was closing or closed, which may also be the result of the database being closed.
 
 #### `LEVEL_ITERATOR_BUSY`
 
-Not yet implemented. When `iterator.next()` or `seek()` was called while a previous `next()` call did not yet complete.
+When `iterator.next()` or `seek()` was called while a previous `next()` call did not yet complete.
 
 #### `LEVEL_BATCH_NOT_OPEN`
 
-Not yet implemented. When an operation was made on a chained batch while it was closing or closed, which may also be the result of the database being closed or that `write()` was called on the chained batch.
+When an operation was made on a chained batch while it was closing or closed, which may also be the result of the database being closed or that `write()` was called on the chained batch.
 
 #### `LEVEL_ENCODING_NOT_FOUND`
 
@@ -494,19 +505,19 @@ try {
 
 #### `LEVEL_INVALID_KEY`
 
-Not yet implemented.
+When a key is `null`, `undefined` or (if an implementation deems it so) otherwise invalid.
 
 #### `LEVEL_INVALID_VALUE`
 
-Not yet implemented.
+When a value is `null`, `undefined` or (if an implementation deems it so) otherwise invalid.
 
-#### `LEVEL_INVALID_BATCH`
+#### `LEVEL_CORRUPTION`
 
-Not yet implemented. When a `batch()` operation has a `type` property that is not `put` or `del`.
+Data could not be read (from an underlying store) due to a corruption.
 
 #### `LEVEL_NOT_SUPPORTED`
 
-When a module needs a certain feature, typically as indicated by `db.supports`, but that feature is not available on an input. For example:
+When a module needs a certain feature, typically as indicated by `db.supports`, but that feature is not available on a database argument or other. For example, some kind of plugin may depend on `seek()`:
 
 ```js
 const ModuleError = require('module-error')
@@ -770,7 +781,8 @@ The default `_write` method uses `db._batch`. If the `_write` method is overridd
 
 WIP notes:
 
-- The constructor does not take a callback argument. Instead call `db.open()` if you wish to wait for opening (which is not necessary to use the database) or to capture an open error.
+- The constructor does not take a callback argument. Instead call `db.open()` if you wish to wait for opening (which is not necessary to use the database) or to capture an error.
+- Use of `level-errors` has been replaced with [error codes](#errors).
 
 ## Test Suite
 

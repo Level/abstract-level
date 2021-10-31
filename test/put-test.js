@@ -13,35 +13,33 @@ exports.setUp = function (test, testCommon) {
 
 exports.args = function (test, testCommon) {
   test('test put() with illegal keys', assertAsync.ctx(function (t) {
-    t.plan(illegalKeys.length * 6)
+    t.plan(illegalKeys.length * 5)
 
-    for (const { name, key, regex } of illegalKeys) {
+    for (const { name, key } of illegalKeys) {
       db.put(key, 'value', assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
       }))
 
       db.put(key, 'value').catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (promise)')
       })
     }
   }))
 
   test('test put() with illegal values', assertAsync.ctx(function (t) {
-    t.plan(illegalValues.length * 6)
+    t.plan(illegalValues.length * 5)
 
-    for (const { name, value, regex } of illegalValues) {
+    for (const { name, value } of illegalValues) {
       db.put('key', value, assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + '- is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_VALUE', name + ' - correct error code (callback)')
       }))
 
       db.put('key', value).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_VALUE', name + ' - correct error code (promise)')
       })
     }
   }))

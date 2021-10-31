@@ -16,13 +16,13 @@ exports.args = function (test, testCommon) {
       try {
         db.clear({ start: 'foo' }, t.fail.bind(t))
       } catch (err) {
-        t.is(err.message, 'Legacy range options ("start" and "end") have been removed')
+        t.is(err.code, 'LEVEL_LEGACY')
       }
 
       try {
-        db.clear({ start: 'foo' }).catch(t.fail.bind(t))
+        db.clear({ end: 'foo' }).catch(t.fail.bind(t))
       } catch (err) {
-        t.is(err.message, 'Legacy range options ("start" and "end") have been removed')
+        t.is(err.code, 'LEVEL_LEGACY')
       }
 
       db.close(t.ifError.bind(t))

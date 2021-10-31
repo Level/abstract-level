@@ -73,23 +73,23 @@ test('deferred chained batch is closed upon failed open', function (t) {
   batch.del('123')
 
   batch.write(function (err) {
-    t.is(err && err.message, 'Batch is not open')
+    t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
 
     // Should account for userland code that ignores errors
     try {
       batch.put('beep', 'boop')
     } catch (err) {
-      t.is(err && err.message, 'Batch is not open')
+      t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
     }
 
     try {
       batch.del('456')
     } catch (err) {
-      t.is(err && err.message, 'Batch is not open')
+      t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
     }
 
     batch.write(function (err) {
-      t.is(err && err.message, 'Batch is not open')
+      t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
     })
   })
 })

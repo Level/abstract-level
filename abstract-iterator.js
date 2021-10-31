@@ -19,7 +19,8 @@ const kValues = Symbol('values')
 
 function AbstractIterator (db, options) {
   if (typeof db !== 'object' || db === null) {
-    throw new TypeError('First argument must be an abstract-leveldown compliant store')
+    const hint = db === null ? 'null' : typeof db
+    throw new TypeError(`The first argument must be an abstract-level database, received ${hint}`)
   }
 
   if (typeof options !== 'object' || options === null) {
@@ -59,9 +60,13 @@ AbstractIterator.prototype.next = function (callback) {
   }
 
   if (this[kClosing]) {
-    this.nextTick(callback, new Error('Iterator is not open'))
+    this.nextTick(callback, new ModuleError('Iterator is not open: cannot call next() after close()', {
+      code: 'LEVEL_ITERATOR_NOT_OPEN'
+    }))
   } else if (this[kNexting]) {
-    this.nextTick(callback, new Error('Iterator is busy'))
+    this.nextTick(callback, new ModuleError('Iterator is busy: cannot call next() until previous call has completed', {
+      code: 'LEVEL_ITERATOR_BUSY'
+    }))
   } else {
     this[kNexting] = true
     this[kNextCallback] = callback
@@ -120,7 +125,9 @@ AbstractIterator.prototype.seek = function (target, options) {
     // Don't throw here, to be kind to implementations that wrap
     // another db and don't necessarily control when the db is closed
   } else if (this[kNexting]) {
-    throw new Error('Iterator is busy')
+    throw new ModuleError('Iterator is busy: cannot call seek() until next() has completed', {
+      code: 'LEVEL_ITERATOR_BUSY'
+    })
   } else {
     const keyEncoding = this.db.keyEncoding(
       options.keyEncoding || this[kKeyEncoding]
@@ -159,8 +166,17 @@ AbstractIterator.prototype._close = function (callback) {
   this.nextTick(callback)
 }
 
-// TODO: log deprecation message
+let warnedEnd = false
 AbstractIterator.prototype.end = function (callback) {
+  if (!warnedEnd && typeof console !== 'undefined') {
+    warnedEnd = true
+    // TODO: update level-concat-iterator
+    // console.warn(new ModuleError(
+    //   'The iterator.end() method was renamed to close() and end() is an alias that will be removed in a future version',
+    //   { code: 'LEVEL_LEGACY' }
+    // ))
+  }
+
   return this.close(callback)
 }
 
@@ -188,11 +204,11 @@ AbstractIterator.prototype[Symbol.asyncIterator] = async function * () {
   }
 }
 
-// Temporary to catch issues upgrading to abstract-leveldown@8
+// To help migrating to abstract-level
 for (const k of ['_ended property', '_nexting property', '_end method']) {
   Object.defineProperty(AbstractIterator.prototype, k.split(' ')[0], {
-    get () { throw new Error(`The ${k} has been removed`) },
-    set () { throw new Error(`The ${k} has been removed`) }
+    get () { throw new ModuleError(`The ${k} has been removed`, { code: 'LEVEL_LEGACY' }) },
+    set () { throw new ModuleError(`The ${k} has been removed`, { code: 'LEVEL_LEGACY' }) }
   })
 }
 

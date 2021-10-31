@@ -20,55 +20,58 @@ exports.setUp = function (test, testCommon) {
 exports.args = function (test, testCommon) {
   test('test getMany() requires an array argument (callback)', assertAsync.ctx(function (t) {
     // Add 1 assertion for every assertAsync()
-    t.plan(4)
+    t.plan(6)
 
     db.getMany('foo', assertAsync(function (err) {
-      t.is(err && err.message, 'getMany() requires an array argument')
+      t.is(err.name, 'TypeError')
+      t.is(err && err.message, "The first argument 'keys' must be an array")
     }))
     db.getMany('foo', {}, assertAsync(function (err) {
-      t.is(err && err.message, 'getMany() requires an array argument')
+      t.is(err.name, 'TypeError')
+      t.is(err && err.message, "The first argument 'keys' must be an array")
     }))
   }))
 
   test('test getMany() requires an array argument (promise)', function (t) {
-    t.plan(3)
+    t.plan(6)
 
     db.getMany().catch(function (err) {
-      t.is(err && err.message, 'getMany() requires an array argument')
+      t.is(err.name, 'TypeError')
+      t.is(err && err.message, "The first argument 'keys' must be an array")
     })
     db.getMany('foo').catch(function (err) {
-      t.is(err && err.message, 'getMany() requires an array argument')
+      t.is(err.name, 'TypeError')
+      t.is(err && err.message, "The first argument 'keys' must be an array")
     })
     db.getMany('foo', {}).catch(function (err) {
-      t.is(err && err.message, 'getMany() requires an array argument')
+      t.is(err.name, 'TypeError')
+      t.is(err && err.message, "The first argument 'keys' must be an array")
     })
   })
 
   test('test getMany() with illegal keys', assertAsync.ctx(function (t) {
     // Add 1 assertion for every assertAsync()
-    t.plan(illegalKeys.length * 12)
+    t.plan(illegalKeys.length * 10)
 
-    for (const { name, key, regex } of illegalKeys) {
+    for (const { name, key } of illegalKeys) {
       db.getMany([key], assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
       }))
 
       db.getMany(['valid', key], assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback, second key)')
         t.ok(err instanceof Error, name + ' - is Error (callback, second key)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback, second key)')
+        t.is(err && err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback, second key)')
       }))
 
       db.getMany([key]).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (promise)')
       })
 
       db.getMany(['valid', key]).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise, second key)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise, second key)')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (promise, second key)')
       })
     }
   }))
@@ -185,7 +188,7 @@ exports.getMany = function (test, testCommon) {
     })
   })
 
-  test('test getMany() on new db', assertAsync.ctx(function (t) {
+  test('test getMany() on opening db', assertAsync.ctx(function (t) {
     t.plan(2 * 2 * 5)
 
     // Also test empty array because it has a fast-path
@@ -194,19 +197,11 @@ exports.getMany = function (test, testCommon) {
       for (const open of [true, false]) {
         const db = testCommon.factory()
 
-        t.is(db.status, db.supports.deferredOpen ? 'opening' : 'closed')
-
-        // Must be true if db supports deferredOpen
-        const operational = db.supports.deferredOpen
+        t.is(db.status, 'opening')
 
         db.getMany(keys, assertAsync(function (err, values) {
-          if (operational) {
-            t.ifError(err, 'no error')
-            t.same(values, keys.map(_ => undefined))
-          } else {
-            t.is(err && err.message, 'Database is not open')
-            t.is(values, undefined)
-          }
+          t.ifError(err, 'no error')
+          t.same(values, keys.map(_ => undefined))
         }))
 
         if (open) {
@@ -215,31 +210,6 @@ exports.getMany = function (test, testCommon) {
           t.pass()
         }
       }
-    }
-  }))
-
-  test('test getMany() on opening db', assertAsync.ctx(function (t) {
-    t.plan(2 * 5)
-
-    // Also test empty array because it has a fast-path
-    for (const keys of [['foo'], []]) {
-      const db = testCommon.factory()
-
-      // Is a noop if db supports deferredOpen
-      db.open(assertAsync(t.error.bind(t), 'open'))
-
-      // Must be true if db supports deferredOpen
-      const operational = db.supports.deferredOpen
-
-      db.getMany(keys, assertAsync(function (err, values) {
-        if (operational) {
-          t.ifError(err, 'no error')
-          t.same(values, keys.map(_ => undefined))
-        } else {
-          t.is(err && err.message, 'Database is not open')
-          t.is(values, undefined)
-        }
-      }))
     }
   }))
 
@@ -257,7 +227,7 @@ exports.getMany = function (test, testCommon) {
           t.ifError(err)
 
           db.getMany(keys, assertAsync(function (err) {
-            t.is(err && err.message, 'Database is not open')
+            t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
           }))
         }))
       })
@@ -279,7 +249,7 @@ exports.getMany = function (test, testCommon) {
         })
 
         db.getMany(keys, assertAsync(function (err) {
-          t.is(err && err.message, 'Database is not open')
+          t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
         }))
       }))
     }

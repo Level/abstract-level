@@ -190,7 +190,7 @@ test('test open() extensibility when open', function (t) {
 })
 
 test('test opening explicitly gives a chance to capture an error', function (t) {
-  t.plan(2)
+  t.plan(3)
 
   const spy = sinon.spy(function (options, cb) { this.nextTick(cb, new Error('_open error')) })
   const Test = implement(AbstractLevelDOWN, { _open: spy })
@@ -198,12 +198,13 @@ test('test opening explicitly gives a chance to capture an error', function (t) 
 
   test.open(function (err) {
     t.is(spy.callCount, 1, 'got _open() call')
-    t.is(err && err.message, '_open error')
+    t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    t.is(err && err.cause && err.cause.message, '_open error')
   })
 })
 
 test('test opening explicitly gives a chance to capture an error with promise', async function (t) {
-  t.plan(2)
+  t.plan(3)
 
   const spy = sinon.spy(function (options, cb) { this.nextTick(cb, new Error('_open error')) })
   const Test = implement(AbstractLevelDOWN, { _open: spy })
@@ -213,7 +214,8 @@ test('test opening explicitly gives a chance to capture an error with promise', 
     await test.open()
   } catch (err) {
     t.is(spy.callCount, 1, 'got _open() call')
-    t.is(err && err.message, '_open error')
+    t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    t.is(err.cause && err.cause.message, '_open error')
   }
 })
 
@@ -274,7 +276,7 @@ test('test close() extensibility when new', function (t) {
 })
 
 test('test open(), close(), open() with twice failed open', function (t) {
-  t.plan(6)
+  t.plan(8)
 
   const db = testCommon.factory()
   const order = []
@@ -290,7 +292,8 @@ test('test open(), close(), open() with twice failed open', function (t) {
   }
 
   db.open(function (err) {
-    t.is(err && err.message, 'test1')
+    t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    t.is(err && err.cause && err.cause.message, 'test1')
     order.push('A')
   })
 
@@ -300,7 +303,8 @@ test('test open(), close(), open() with twice failed open', function (t) {
   })
 
   db.open(function (err) {
-    t.is(err && err.message, 'test2')
+    t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    t.is(err && err.cause && err.cause.message, 'test2')
     order.push('C')
     t.same(order, ['A', 'B', 'C'], 'order is ok')
   })
@@ -329,7 +333,7 @@ test('test open(), close(), open() with first failed open', function (t) {
   })
 
   db.close(function (err) {
-    t.is(err && err.message, 'Database is not closed')
+    t.is(err && err.code, 'LEVEL_DATABASE_NOT_CLOSED')
     t.is(db.status, 'open')
     order.push('B')
   })
@@ -343,7 +347,7 @@ test('test open(), close(), open() with first failed open', function (t) {
 })
 
 test('test open(), close(), open() with second failed open', function (t) {
-  t.plan(9)
+  t.plan(10)
 
   const db = testCommon.factory()
   const order = []
@@ -359,7 +363,7 @@ test('test open(), close(), open() with second failed open', function (t) {
   }
 
   db.open(function (err) {
-    t.is(err && err.message, 'Database is not open')
+    t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
     t.is(db.status, 'closed')
     order.push('A')
   })
@@ -371,7 +375,8 @@ test('test open(), close(), open() with second failed open', function (t) {
   })
 
   db.open(function (err) {
-    t.is(err && err.message, 'test')
+    t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    t.is(err && err.cause.message, 'test')
     t.is(db.status, 'closed')
     order.push('C')
     t.same(order, ['A', 'B', 'C'], 'order is ok')
@@ -662,7 +667,7 @@ test('test AbstractChainedBatch expects a db', function (t) {
   try {
     Test()
   } catch (err) {
-    t.is(err.message, 'First argument must be an abstract-leveldown compliant store')
+    t.is(err.message, 'The first argument must be an abstract-level database, received undefined')
   }
 })
 
@@ -844,12 +849,14 @@ test('test AbstractIterator throws on invalid db argument', function (t) {
   t.plan(4 * 2)
 
   for (const args of [[], [null], [undefined], 'foo']) {
+    const hint = args[0] === null ? 'null' : typeof args[0]
+
     try {
       // eslint-disable-next-line no-new
       new AbstractIterator(...args)
     } catch (err) {
       t.is(err.name, 'TypeError')
-      t.is(err.message, 'First argument must be an abstract-leveldown compliant store')
+      t.is(err.message, 'The first argument must be an abstract-level database, received ' + hint)
     }
   }
 })
@@ -921,13 +928,13 @@ test('test AbstractIterator throws when accessing legacy properties', async func
       // eslint-disable-next-line no-unused-expressions
       it[k.split(' ')[0]]
     } catch (err) {
-      t.is(err.message, `The ${k} has been removed`)
+      t.is(err.code, 'LEVEL_LEGACY')
     }
 
     try {
       it[k.split(' ')[0]] = 123
     } catch (err) {
-      t.is(err.message, `The ${k} has been removed`)
+      t.is(err.code, 'LEVEL_LEGACY')
     }
   }
 })
@@ -1372,7 +1379,8 @@ test('.status', function (t) {
     const test = new Test({ encodings: { utf8: true } })
 
     test.open(function (err) {
-      t.is(err && err.message, '_open error')
+      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.is(err && err.cause && err.cause.message, '_open error')
       t.equal(test.status, 'closed')
       t.end()
     })
@@ -1388,7 +1396,8 @@ test('.status', function (t) {
     const test = new Test({ encodings: { utf8: true } })
     test.open(function () {
       test.close(function (err) {
-        t.is(err && err.message, '_close error')
+        t.is(err && err.code, 'LEVEL_DATABASE_NOT_CLOSED')
+        t.is(err && err.cause && err.cause.message, '_close error')
         t.equal(test.status, 'open')
         t.end()
       })
@@ -1546,7 +1555,7 @@ test('rangeOptions', function (t) {
       try {
         getRangeOptions(options, db.keyEncoding('utf8'))
       } catch (err) {
-        t.is(err.message, 'Legacy range options ("start" and "end") have been removed')
+        t.is(err.code, 'LEVEL_LEGACY')
       }
     }
   })

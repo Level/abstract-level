@@ -5,21 +5,20 @@ const { AbstractLevelDOWN, AbstractIterator, AbstractChainedBatch } = require('.
 const concat = require('level-concat-iterator')
 
 const kPromise = Symbol('promise')
-const nfre = /NotFound/i
 const spies = []
 
-exports.verifyNotFoundError = function verifyNotFoundError (err) {
-  return nfre.test(err.message) || nfre.test(err.name)
+exports.verifyNotFoundError = function (err) {
+  return err.code === 'LEVEL_NOT_FOUND' && err.notFound === true && err.status === 404
 }
 
 exports.illegalKeys = [
-  { name: 'null key', key: null, regex: /key cannot be `null` or `undefined`/ },
-  { name: 'undefined key', key: undefined, regex: /key cannot be `null` or `undefined`/ }
+  { name: 'null key', key: null },
+  { name: 'undefined key', key: undefined }
 ]
 
 exports.illegalValues = [
-  { name: 'null key', value: null, regex: /value cannot be `null` or `undefined`/ },
-  { name: 'undefined value', value: undefined, regex: /value cannot be `null` or `undefined`/ }
+  { name: 'null key', value: null },
+  { name: 'undefined value', value: undefined }
 ]
 
 /**

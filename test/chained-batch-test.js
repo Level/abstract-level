@@ -26,37 +26,24 @@ exports.args = function (test, testCommon) {
       try {
         batch.put('key', ...args)
       } catch (err) {
-        t.is(err.message, 'value cannot be `null` or `undefined`', 'correct error message')
+        t.is(err.code, 'LEVEL_INVALID_VALUE', 'correct error code')
         t.is(batch.length, 0, 'length is not incremented on error')
       }
     }
   })
 
-  test('test batch#put() with null or undefined `key`', function (t) {
-    t.plan(2 * 2)
+  test('test batch#put() with missing, null or undefined `key`', function (t) {
+    t.plan(3 * 2)
 
-    for (const key of [null, undefined]) {
+    for (const args of [[], [null, 'foo'], [undefined, 'foo']]) {
       const batch = db.batch()
 
       try {
-        batch.put(key, 'foo1')
+        batch.put(...args)
       } catch (err) {
-        t.equal(err.message, 'key cannot be `null` or `undefined`', 'correct error message')
+        t.is(err.code, 'LEVEL_INVALID_KEY', 'correct error code')
         t.is(batch.length, 0, 'length is not incremented on error')
       }
-    }
-  })
-
-  test('test batch#put() with missing `key` and `value`', function (t) {
-    t.plan(2)
-
-    const batch = db.batch()
-
-    try {
-      batch.put()
-    } catch (err) {
-      t.equal(err.message, 'key cannot be `null` or `undefined`', 'correct error message')
-      t.is(batch.length, 0, 'length is not incremented on error')
     }
   })
 
@@ -69,7 +56,7 @@ exports.args = function (test, testCommon) {
       try {
         batch.del(...args)
       } catch (err) {
-        t.equal(err.message, 'key cannot be `null` or `undefined`', 'correct error message')
+        t.is(err.code, 'LEVEL_INVALID_KEY', 'correct error code')
         t.is(batch.length, 0, 'length is not incremented on error')
       }
     }
@@ -86,7 +73,7 @@ exports.args = function (test, testCommon) {
     try {
       batch.put('boom', 'bang')
     } catch (err) {
-      t.equal(err.message, 'Batch is not open', 'correct error message')
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN', 'correct error code')
       return t.end()
     }
     t.fail('should have thrown')
@@ -99,7 +86,7 @@ exports.args = function (test, testCommon) {
     try {
       batch.del('foo')
     } catch (err) {
-      t.equal(err.message, 'Batch is not open', 'correct error message')
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN', 'correct error code')
       return t.end()
     }
     t.fail('should have thrown')
@@ -112,7 +99,7 @@ exports.args = function (test, testCommon) {
     try {
       batch.clear()
     } catch (err) {
-      t.equal(err.message, 'Batch is not open', 'correct error message')
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN', 'correct error code')
       return t.end()
     }
     t.fail('should have thrown')
@@ -124,7 +111,7 @@ exports.args = function (test, testCommon) {
     const batch = db.batch().put('foo', 'bar')
     batch.write(function () {})
     batch.write(function (err) {
-      t.is(err && err.message, 'Batch is not open', 'correct error message')
+      t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN', 'correct error code')
     })
   })
 

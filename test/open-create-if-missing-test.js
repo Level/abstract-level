@@ -7,8 +7,8 @@ exports.createIfMissing = function (test, testCommon) {
     let async = false
 
     db.open({ createIfMissing: false }, function (err) {
-      t.ok(err, 'error')
-      t.ok(/does not exist/.test(err.message), 'error is about dir not existing')
+      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.ok(err && /does not exist/.test(err.cause && err.cause.message), 'error is about dir not existing')
       t.ok(async, 'callback is asynchronous')
       t.end()
     })

@@ -14,18 +14,17 @@ exports.setUp = function (test, testCommon) {
 
 exports.args = function (test, testCommon) {
   test('test get() with illegal keys', assertAsync.ctx(function (t) {
-    t.plan(illegalKeys.length * 6)
+    t.plan(illegalKeys.length * 5)
 
-    for (const { name, key, regex } of illegalKeys) {
+    for (const { name, key } of illegalKeys) {
       db.get(key, assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
       }))
 
       db.get(key).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (promise)')
       })
     }
   }))
@@ -72,7 +71,7 @@ exports.get = function (test, testCommon) {
 
         db.get('not found').catch(function (err) {
           t.ok(err, 'should error')
-          t.ok(verifyNotFoundError(err), 'should have correct error message')
+          t.ok(verifyNotFoundError(err), 'correct error')
 
           if (!db.supports.encodings.buffer) {
             return t.end()
@@ -107,7 +106,7 @@ exports.get = function (test, testCommon) {
       for (let i = 0; i < 10; ++i) {
         db.get('not found', function (err, value) {
           t.ok(err, 'should error')
-          t.ok(verifyNotFoundError(err), 'should have correct error message')
+          t.ok(verifyNotFoundError(err), 'correct error')
           t.ok(typeof value === 'undefined', 'value is undefined')
           done()
         })
@@ -122,7 +121,7 @@ exports.get = function (test, testCommon) {
 
     db.get('not found', function (err, value) {
       t.ok(err, 'should error')
-      t.ok(verifyNotFoundError(err), 'should have correct error message')
+      t.ok(verifyNotFoundError(err), 'correct error')
       t.ok(typeof value === 'undefined', 'value is undefined')
       t.ok(async, 'callback is asynchronous')
     })

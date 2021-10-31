@@ -13,18 +13,17 @@ exports.setUp = function (test, testCommon) {
 
 exports.args = function (test, testCommon) {
   test('test del() with illegal keys', assertAsync.ctx(function (t) {
-    t.plan(illegalKeys.length * 6)
+    t.plan(illegalKeys.length * 5)
 
-    for (const { name, key, regex } of illegalKeys) {
+    for (const { name, key } of illegalKeys) {
       db.del(key, assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
         t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.ok(err.message.match(regex), name + ' - correct error message (callback)')
+        t.is(err && err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
       }))
 
       db.del(key).catch(function (err) {
         t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.ok(err.message.match(regex), name + ' - correct error message (promise)')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
       })
     }
   }))
