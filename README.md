@@ -19,24 +19,24 @@
 - [Public API For Consumers](#public-api-for-consumers)
   - [`db = constructor(...[, options])`](#db--constructor-options)
   - [`db.status`](#dbstatus)
-  - [`db.open([options, ][callback])`](#dbopenoptions-callback)
+  - [`db.open([options][, callback])`](#dbopenoptions-callback)
   - [`db.close([callback])`](#dbclosecallback)
   - [`db.supports`](#dbsupports)
-  - [`db.get(key[, options], callback)`](#dbgetkey-options-callback)
+  - [`db.get(key[, options][, callback])`](#dbgetkey-options-callback)
   - [`db.getMany(keys[, options][, callback])`](#dbgetmanykeys-options-callback)
-  - [`db.put(key, value[, options], callback)`](#dbputkey-value-options-callback)
-  - [`db.del(key[, options], callback)`](#dbdelkey-options-callback)
-  - [`db.batch(operations[, options], callback)`](#dbbatchoperations-options-callback)
+  - [`db.put(key, value[, options][, callback])`](#dbputkey-value-options-callback)
+  - [`db.del(key[, options][, callback])`](#dbdelkey-options-callback)
+  - [`db.batch(operations[, options][, callback])`](#dbbatchoperations-options-callback)
   - [`db.batch()`](#dbbatch)
   - [`db.iterator([options])`](#dbiteratoroptions)
-  - [`db.clear([options, ]callback)`](#dbclearoptions-callback)
+  - [`db.clear([options][, callback])`](#dbclearoptions-callback)
   - [`encoding = db.keyEncoding([encoding]`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
   - [`chainedBatch`](#chainedbatch)
     - [`chainedBatch.put(key, value[, options])`](#chainedbatchputkey-value-options)
     - [`chainedBatch.del(key[, options])`](#chainedbatchdelkey-options)
     - [`chainedBatch.clear()`](#chainedbatchclear)
-    - [`chainedBatch.write([options, ]callback)`](#chainedbatchwriteoptions-callback)
+    - [`chainedBatch.write([options][, callback])`](#chainedbatchwriteoptions-callback)
     - [`chainedBatch.length`](#chainedbatchlength)
     - [`chainedBatch.db`](#chainedbatchdb)
   - [`iterator`](#iterator)
@@ -64,7 +64,7 @@
     - [`LEVEL_LEGACY`](#level_legacy)
 - [Private API For Implementors](#private-api-for-implementors)
   - [Example](#example)
-  - [`db = AbstractLevelDOWN(manifest[, options][, callback])`](#db--abstractleveldownmanifest-options-callback)
+  - [`db = AbstractLevelDOWN(manifest[, options])`](#db--abstractleveldownmanifest-options)
   - [`db._open(options, callback)`](#db_openoptions-callback)
   - [`db._close(callback)`](#db_closecallback)
   - [`db._get(key, options, callback)`](#db_getkey-options-callback)
@@ -125,7 +125,7 @@ A read-only property. A database can be in one of the following states:
 - `'closing'` - waiting for the database to be closed
 - `'closed'` - database has been successfully closed, should not be used.
 
-### `db.open([options, ][callback])`
+### `db.open([options][, callback])`
 
 Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably `memdown` and `level-js`).
 
@@ -141,7 +141,7 @@ The `open()` and `close()` methods are idempotent. If the database is already op
 
 ### `db.close([callback])`
 
-Close the database. The `callback` function will be called with no arguments if the operation is successful or with a single `error` argument if closing failed for any reason. If no callback is provided, a promise is returned.
+Close the database. The `callback` function will be called with no arguments if closing succeeded or with a single `error` argument if closing failed. If no callback is provided, a promise is returned.
 
 A database may have associated resources like file handles and locks. When you no longer need the database (for the remainder of your program) call `close()` to free up resources.
 
@@ -159,14 +159,14 @@ if (db.supports.encodings.buffer) {
 }
 ```
 
-### `db.get(key[, options], callback)`
+### `db.get(key[, options][, callback])`
 
 Get a value from the database by `key`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
 
-The `callback` function will be called with an error if the operation failed. If the key was not found, the error will have code [`LEVEL_NOT_FOUND`](#errors). If successful the first argument will be `null` and the second argument will be the value.
+The `callback` function will be called with an error if the operation failed. If the key was not found, the error will have code [`LEVEL_NOT_FOUND`](#errors). If successful the first argument will be `null` and the second argument will be the value. If no callback is provided, a promise is returned.
 
 ### `db.getMany(keys[, options][, callback])`
 
@@ -175,28 +175,26 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
 
-The `callback` function will be called with an error if the operation failed. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
+The `callback` function will be called with an error if the operation failed. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`. If no callback is provided, a promise is returned.
 
-If no callback is provided, a promise is returned.
+### `db.put(key, value[, options][, callback])`
 
-### `db.put(key, value[, options], callback)`
-
-Store a new entry or overwrite an existing entry. The optional `options` object may contain:
+Add a new entry or overwrite an existing entry. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
 
-The `callback` function will be called with no arguments if the operation is successful or with an `Error` if putting failed for any reason.
+The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
-### `db.del(key[, options], callback)`
+### `db.del(key[, options][, callback])`
 
-Delete an entry. The optional `options` object may contain:
+Delete an entry by `key`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 
-The `callback` function will be called with no arguments if the operation is successful or with an `Error` if deletion failed for any reason.
+The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
-### `db.batch(operations[, options], callback)`
+### `db.batch(operations[, options][, callback])`
 
 Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument must be an `Array` containing a list of operations to be executed sequentially, although as a whole they are performed as an atomic operation.
 
@@ -207,7 +205,7 @@ The optional `options` object may contain:
 - `keyEncoding`: custom key encoding for this batch.
 - `valueEncoding`: custom value encoding for this batch.
 
-These options can also be set on individual operation objects, taking precedence. The `callback` function will be called with no arguments if the batch is successful or with an error if the batch failed for any reason.
+These options can also be set on individual operation objects, taking precedence. The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
 ### `db.batch()`
 
@@ -219,29 +217,29 @@ Returns an [`iterator`](#iterator). Accepts the following range options:
 
 - `gt` (greater than), `gte` (greater than or equal) define the lower bound of the range to be iterated. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse=true` the order will be reversed, but the entries iterated will be the same.
 - `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be iterated. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse=true` the order will be reversed, but the entries iterated will be the same.
-- `reverse` _(boolean, default: `false`)_: iterate entries in reverse order. Beware that a reverse seek can be slower than a forward seek.
-- `limit` _(number, default: `-1`)_: limit the number of entries collected by this iterator. This number represents a _maximum_ number of entries and may not be reached if you get to the end of the range first. A value of `-1` means there is no limit. When `reverse=true` the entries with the highest keys will be returned instead of the lowest keys.
+- `reverse` (boolean, default: `false`): iterate entries in reverse order. Beware that a reverse seek can be slower than a forward seek.
+- `limit` (number, default: `-1`): limit the number of entries collected by this iterator. This number represents a _maximum_ number of entries and may not be reached if you get to the end of the range first. A value of `-1` means there is no limit. When `reverse=true` the entries with the highest keys will be returned instead of the lowest keys.
 
 In addition to range options, `iterator()` takes the following options:
 
-- `keys` _(boolean, default: `true`)_: whether to return the key of each entry. If set to `false`, calls to `iterator.next(callback)` will yield keys with a value of `undefined`.
-- `values` _(boolean, default: `true`)_: whether to return the value of each entry. If set to `false`, calls to `iterator.next(callback)` will yield values with a value of `undefined`.
+- `keys` (boolean, default: `true`): whether to return the key of each entry. If set to `false`, calls to `iterator.next(callback)` will yield keys with a value of `undefined`.
+- `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, calls to `iterator.next(callback)` will yield values with a value of `undefined`.
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 
 Lastly, an implementation is free to add its own options.
 
-### `db.clear([options, ]callback)`
+### `db.clear([options][, callback])`
 
 Delete all entries or a range. Not guaranteed to be atomic. Accepts the following options (with the same rules as on iterators):
 
 - `gt` (greater than), `gte` (greater than or equal) define the lower bound of the range to be deleted. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse=true` the order will be reversed, but the entries deleted will be the same.
 - `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be deleted. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse=true` the order will be reversed, but the entries deleted will be the same.
-- `reverse` _(boolean, default: `false`)_: delete entries in reverse order. Only effective in combination with `limit`, to remove the last N records.
-- `limit` _(number, default: `-1`)_: limit the number of entries to be deleted. This number represents a _maximum_ number of entries and may not be reached if you get to the end of the range first. A value of `-1` means there is no limit. When `reverse=true` the entries with the highest keys will be deleted instead of the lowest keys.
+- `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to remove the last N records.
+- `limit` (number, default: `-1`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and may not be reached if you get to the end of the range first. A value of `-1` means there is no limit. When `reverse=true` the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
 
-If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an `Error` if it failed for any reason.
+If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
 ### `encoding = db.keyEncoding([encoding]`
 
@@ -260,7 +258,7 @@ Assume that e.g. `db.keyEncoding().encode(key)` is safe to call at any time incl
 
 ### `encoding = db.valueEncoding([encoding])`
 
-Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the database if the `encoding` argument is omitted, `null` or `undefined`.
+Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the database (if the `encoding` argument is omitted, `null` or `undefined`).
 
 ### `chainedBatch`
 
@@ -281,15 +279,15 @@ Queue a `del` operation on this batch. This may throw if `key` is invalid. The o
 
 Clear all queued operations on this batch.
 
-#### `chainedBatch.write([options, ]callback)`
+#### `chainedBatch.write([options][, callback])`
 
 Commit the queued operations for this batch. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
 
 There are no `options` by default but implementations may add theirs. Note that `write()` does not take encoding options. Those can only be set on `put()` and `del()` because implementations may synchronously forward such calls to an underlying store and thus need keys and values to be encoded at that point.
 
-The `callback` function will be called with no arguments if the batch is successful or with an `Error` if the batch failed for any reason.
+The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
-After `write` has been called, no further operations are allowed.
+After `write()` has been called, no further operations are allowed.
 
 #### `chainedBatch.length`
 
@@ -301,7 +299,7 @@ A reference to the database that created this chained batch.
 
 ### `iterator`
 
-An iterator allows you to _iterate_ the entire database or a range. It operates on a snapshot of the database, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee.
+An iterator allows you to _iterate_ the entire database or a range. It operates on a snapshot of the database, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee, which is indicated by `db.supports.snapshots`.
 
 Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing or breaking from a `for await...of` loop automatically calls `iterator.close()`.
 
@@ -331,7 +329,7 @@ Note for implementors: this uses `iterator.next()` and `iterator.close()` under 
 
 #### `iterator.next([callback])`
 
-Advance the iterator and yield the entry at that key. If an error occurs, the `callback` function will be called with an `Error`. Otherwise, the `callback` receives `null`, a `key` and a `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`. If the iterator has reached its natural end, both `key` and `value` will be `undefined`.
+Advance the iterator and yield the entry at that key. If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null`, a `key` and a `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`. If the iterator has reached its natural end, both `key` and `value` will be `undefined`.
 
 If no callback is provided, a promise is returned for either an array (containing a `key` and `value`) or `undefined` if the iterator reached its natural end.
 
@@ -351,9 +349,7 @@ If range options like `gt` were passed to `db.iterator()` and `target` does not 
 
 #### `iterator.close([callback])`
 
-Free up underlying resources. The `callback` function will be called with no arguments.
-
-If no callback is provided, a promise is returned.
+Free up underlying resources. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned.
 
 #### `iterator.db`
 
@@ -422,20 +418,20 @@ Lastly, one way or another, every implementation _must_ support `data` of type S
 
 | Event     | Description          | Arguments            |
 | :-------- | :------------------- | :------------------- |
-| `put`     | Key has been updated | `key, value` (any)   |
-| `del`     | Key has been deleted | `key` (any)          |
+| `put`     | Entry was updated    | `key, value` (any)   |
+| `del`     | Entry was deleted    | `key` (any)          |
 | `batch`   | Batch has executed   | `operations` (array) |
 | `clear`   | Entries were deleted | `options` (object)   |
-| `opening` | Store is opening     | -                    |
-| `open`    | Store has opened     | -                    |
-| `closing` | Store is closing     | -                    |
-| `closed`  | Store has closed.    | -                    |
+| `opening` | Database is opening  | -                    |
+| `open`    | Database has opened  | -                    |
+| `closing` | Database is closing  | -                    |
+| `closed`  | Database has closed. | -                    |
 
 For example you can do:
 
 ```js
 db.on('put', function (key, value) {
-  console.log('inserted', { key, value })
+  console.log('Updated', { key, value })
 })
 ```
 
@@ -555,6 +551,7 @@ Let's implement a simplistic in-memory database:
 
 ```js
 const { AbstractLevelDOWN } = require('abstract-leveldown')
+const ModuleError = require('module-error')
 
 class FakeLevelDOWN extends AbstractLevelDOWN {
   // This in-memory example doesn't have a location
@@ -584,8 +581,9 @@ class FakeLevelDOWN extends AbstractLevelDOWN {
     const value = this._entries.get(key)
 
     if (value === undefined) {
-      // 'NotFound' error, consistent with LevelDOWN API
-      return this.nextTick(callback, new Error('NotFound'))
+      return this.nextTick(callback, new ModuleError(`Key ${key} was not found`, {
+        code: 'LEVEL_NOT_FOUND'
+      }))
     }
 
     this.nextTick(callback, null, value)
@@ -598,7 +596,7 @@ class FakeLevelDOWN extends AbstractLevelDOWN {
 }
 ```
 
-Now we can use our implementation:
+Now we can use our implementation (with either callbacks or promises):
 
 ```js
 const db = new FakeLevelDOWN()
@@ -621,20 +619,20 @@ console.log(value) // { a: 123 }
 
 See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory implementation.
 
-### `db = AbstractLevelDOWN(manifest[, options][, callback])`
+### `db = AbstractLevelDOWN(manifest[, options])`
 
 The constructor. Sets the `.status` to `'opening'`. Takes a [manifest](https://github.com/Level/supports) object that `abstract-leveldown` will enrich. At minimum, the manifest must declare which `encodings` are supported in the private API. For example:
 
 ```js
 class LevelDOWN extends AbstractLevelDOWN {
-  constructor (location, options, callback) {
+  constructor (location, options) {
     const manifest = {
       encodings: { buffer: true }
     }
 
     // Call AbstractLevelDOWN constructor.
     // Location is not handled by AbstractLevelDOWN.
-    super(manifest, options, callback)
+    super(manifest, options)
   }
 }
 ```
@@ -665,43 +663,43 @@ This has the benefit that user input needs less conversion steps: if the input i
 
 ### `db._open(options, callback)`
 
-Open the database. The `options` object will always have the following properties: `createIfMissing`, `errorIfExists`. If opening failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Open the database. The `options` object will always have the following properties: `createIfMissing`, `errorIfExists`. If opening failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
 
 The default `_open()` is a sensible noop and invokes `callback` on a next tick.
 
 ### `db._close(callback)`
 
-Close the database. When this is called, `db.status` will be `'closing'`. If closing failed, call the `callback` function with an `Error`, which resets the `status` to `'open'`. Otherwise call `callback` without any arguments, which sets `status` to `'closed'`. Make an effort to avoid failing, or if it does happen that it is subsequently safe to keep using the database. If the database was never opened or failed to open then `_close()` will not be called.
+Close the database. When this is called, `db.status` will be `'closing'`. If closing failed, call the `callback` function with an error, which resets the `status` to `'open'`. Otherwise call `callback` without any arguments, which sets `status` to `'closed'`. Make an effort to avoid failing, or if it does happen that it is subsequently safe to keep using the database. If the database was never opened or failed to open then `_close()` will not be called.
 
 The default `_close()` is a sensible noop and invokes `callback` on a next tick.
 
 ### `db._get(key, options, callback)`
 
-Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If the key does not exist, call the `callback` function with a `new Error('NotFound')`. Otherwise call `callback` with `null` as the first argument and the value as the second.
+Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If the key does not exist, call the `callback` function with an error that has code [`LEVEL_NOT_FOUND`](#errors). Otherwise call `callback` with `null` as the first argument and the value as the second.
 
-The default `_get()` invokes `callback` on a next tick with a `NotFound` error. It must be overridden.
+The default `_get()` invokes `callback` on a next tick with a `LEVEL_NOT_FOUND` error. It must be overridden.
 
 ### `db._getMany(keys, options, callback)`
 
-Get multiple values by an array of `keys`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If an error occurs, call the `callback` function with an `Error`. Otherwise call `callback` with `null` as the first argument and an array of values as the second. If a key does not exist, set the relevant value to `undefined`.
+Get multiple values by an array of `keys`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If an error occurs, call the `callback` function with an error. Otherwise call `callback` with `null` as the first argument and an array of values as the second. If a key does not exist, set the relevant value to `undefined`.
 
 The default `_getMany()` invokes `callback` on a next tick with an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden.
 
 ### `db._put(key, value, options, callback)`
 
-Store a new entry or overwrite an existing entry. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If putting failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Add a new entry or overwrite an existing entry. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If putting failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
 
 The default `_put()` invokes `callback` on a next tick. It must be overridden.
 
 ### `db._del(key, options, callback)`
 
-Delete an entry. The `options` object will always have the following properties: `keyEncoding`. If deletion failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Delete an entry. The `options` object will always have the following properties: `keyEncoding`. If deletion failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
 
 The default `_del()` invokes `callback` on a next tick. It must be overridden.
 
 ### `db._batch(operations, options, callback)`
 
-Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an `Array` containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. The `_batch()` method will not be called if the `operations` array is empty. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object. If the batch failed, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments.
+Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an `Array` containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. The `_batch()` method will not be called if the `operations` array is empty. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object. If the batch failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
 
 The default `_batch()` invokes `callback` on a next tick. It must be overridden.
 
@@ -712,14 +710,16 @@ The default `_chainedBatch()` returns a functional `AbstractChainedBatch` instan
 ```js
 const { AbstractChainedBatch } = require('abstract-leveldown')
 
-function ChainedBatch (db) {
-  AbstractChainedBatch.call(this, db)
+class ChainedBatch extends AbstractChainedBatch {
+  constructor (db) {
+    super(db)
+  }
 }
 
-Object.setPrototypeOf(ChainedBatch.prototype, AbstractChainedBatch.prototype)
-
-FakeLevelDOWN.prototype._chainedBatch = function () {
-  return new ChainedBatch(this)
+class LevelDown extends AbstractLevelDOWN {
+  _chainedBatch () {
+    return new ChainedBatch(this)
+  }
 }
 ```
 
@@ -743,7 +743,7 @@ The first argument to this constructor must be an instance of your `AbstractLeve
 
 #### `iterator._next(callback)`
 
-Advance the iterator and yield the entry at that key. If nexting failed, call the `callback` function with an `Error`. Otherwise, call `callback` with `null`, a `key` and a `value`.
+Advance the iterator and yield the entry at that key. If nexting failed, call the `callback` function with an error. Otherwise, call `callback` with `null`, a `key` and a `value`.
 
 The default `_next()` invokes `callback` on a next tick. It must be overridden.
 
@@ -775,7 +775,7 @@ Clear all queued operations on this batch.
 
 #### `chainedBatch._write(options, callback)`
 
-The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the queued operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an `Error`. Otherwise call `callback` without any arguments. The `_write()` method will not be called if the chained batch has zero queued operations.
+The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the queued operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an error. Otherwise call `callback` without any arguments. The `_write()` method will not be called if the chained batch has zero queued operations.
 
 ## Differences from `level(up)`
 
@@ -827,8 +827,8 @@ As not every implementation can be fully compliant due to limitations of its und
 const { AbstractLevelDOWN } = require('abstract-leveldown')
 
 class MyLevelDOWN extends AbstractLevelDOWN {
-  constructor (location, options, callback) {
-    super({ snapshots: false }, options, callback)
+  constructor (location, options) {
+    super({ snapshots: false }, options)
   }
 }
 ```
