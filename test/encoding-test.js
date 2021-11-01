@@ -136,62 +136,6 @@ exports.all = function (test, testCommon) {
     return db.close()
   })
 
-  // NOTE: copied from encoding-down
-  // TODO: move to ...?
-  // test.skip('encodes start and end of approximateSize()', function (t) {
-  //   const db = encdown({
-  //     approximateSize: function (start, end) {
-  //       t.is(start, '1')
-  //       t.is(end, '2')
-  //       t.end()
-  //     }
-  //   })
-  //
-  //   db.approximateSize(1, 2, noop)
-  // })
-
-  // NOTE: copied from encoding-down
-  // TODO: move to ...?
-  // test.skip('encodes start and end of compactRange()', function (t) {
-  //   const db = encdown({
-  //     compactRange: function (start, end) {
-  //       t.is(start, '1')
-  //       t.is(end, '2')
-  //       t.end()
-  //     }
-  //   })
-  //
-  //   db.compactRange(1, 2, noop)
-  // })
-
-  // NOTE: copied from encoding-down
-  // TODO: move to ...?
-  // test.skip('encodes start and end of approximateSize() with custom encoding', function (t) {
-  //   const db = encdown({
-  //     approximateSize: function (start, end) {
-  //       t.is(start, '"a"')
-  //       t.is(end, '"b"')
-  //       t.end()
-  //     }
-  //   })
-  //
-  //   db.approximateSize('a', 'b', { keyEncoding: 'json' }, noop)
-  // })
-
-  // NOTE: copied from encoding-down
-  // TODO: move to ...?
-  // test.skip('encodes start and end of compactRange() with custom encoding', function (t) {
-  //   const db = encdown({
-  //     compactRange: function (start, end) {
-  //       t.is(start, '"a"')
-  //       t.is(end, '"b"')
-  //       t.end()
-  //     }
-  //   })
-  //
-  //   db.compactRange('a', 'b', { keyEncoding: 'json' }, noop)
-  // })
-
   test('teardown', async function (t) {
     return db.close()
   })
