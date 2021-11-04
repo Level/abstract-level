@@ -58,8 +58,6 @@ AbstractChainedBatch.prototype.put = function (key, value, options) {
   }
 
   this._put(keyEncoding.encode(key), valueEncoding.encode(value), options)
-
-  // TODO: use original options? or none at all?
   this[kOperations].push({ ...original, type: 'put', key, value })
 
   return this
@@ -86,8 +84,6 @@ AbstractChainedBatch.prototype.del = function (key, options) {
   }
 
   this._del(keyEncoding.encode(key), options)
-
-  // TODO: use original options? or none at all?
   this[kOperations].push({ ...original, type: 'del', key })
 
   return this
@@ -140,7 +136,6 @@ AbstractChainedBatch.prototype.write = function (options, callback) {
 
 AbstractChainedBatch.prototype._write = function (options, callback) {}
 
-// TODO: docs (and recommend that e.g. leveldown should cleanup)
 AbstractChainedBatch.prototype.close = function (callback) {
   callback = fromCallback(callback, kPromise)
 

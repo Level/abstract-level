@@ -1,6 +1,6 @@
 'use strict'
 
-const { concat } = require('./util')
+const concat = require('level-concat-iterator')
 
 let db
 

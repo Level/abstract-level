@@ -614,15 +614,14 @@ AbstractLevel.prototype.clear = function (options, callback) {
     return callback[kPromise]
   }
 
-  const { keyEncoding: ke, ...original } = options
-  const keyEncoding = this.keyEncoding(ke)
+  const original = options
+  const keyEncoding = this.keyEncoding(options.keyEncoding)
 
   options = rangeOptions(options, keyEncoding)
   options.keyEncoding = keyEncoding.format
 
   this._clear(options, (err) => {
     if (err) return callback(err)
-    // TODO: should this include encoding options? a batch event does
     this.emit('clear', original)
     callback()
   })
@@ -667,13 +666,6 @@ AbstractLevel.prototype._iterator = function (options) {
   return new AbstractIterator(this, options)
 }
 
-// TODO: docs
-// When deferring an operation, do it early: after normalizing optional arguments but
-// before serializing (to prevent double serialization and to emit original input if
-// the operation has events) and before any fast paths (to prevent calling back before
-// db has finished opening). Resources that can be closed on their own (like iterators
-// and chained batches) should however first check such state before deferring, in
-// order to reject operations after close (including when the db was reopened).
 AbstractLevel.prototype.defer = function (fn) {
   if (typeof fn !== 'function') {
     throw new TypeError('The first argument must be a function')

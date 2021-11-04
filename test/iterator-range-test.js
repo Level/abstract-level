@@ -1,6 +1,6 @@
 'use strict'
 
-const collectEntries = require('level-concat-iterator')
+const concat = require('level-concat-iterator')
 
 let db
 
@@ -39,7 +39,7 @@ exports.range = function (test, testCommon) {
     opts.valueEncoding = 'utf8'
 
     test(name, function (t) {
-      collectEntries(db.iterator(opts), function (err, result) {
+      concat(db.iterator(opts), function (err, result) {
         t.error(err)
         t.is(result.length, expected.length, 'correct number of entries')
         t.same(result, expected)

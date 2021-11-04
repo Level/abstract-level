@@ -114,21 +114,6 @@ exports.events = function (test, testCommon) {
     await db.put(123, 'b')
     await db.close()
   })
-
-  test('test close() on put event', async function () {
-    const db = testCommon.factory()
-    await db.open()
-
-    let promise
-
-    db.on('put', function () {
-      // Should not interfere with the current put() operation
-      promise = db.close()
-    })
-
-    await db.put('a', 'b')
-    await promise
-  })
 }
 
 exports.tearDown = function (test, testCommon) {

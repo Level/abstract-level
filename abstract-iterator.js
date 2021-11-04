@@ -170,11 +170,10 @@ let warnedEnd = false
 AbstractIterator.prototype.end = function (callback) {
   if (!warnedEnd && typeof console !== 'undefined') {
     warnedEnd = true
-    // TODO: update level-concat-iterator
-    // console.warn(new ModuleError(
-    //   'The iterator.end() method was renamed to close() and end() is an alias that will be removed in a future version',
-    //   { code: 'LEVEL_LEGACY' }
-    // ))
+    console.warn(new ModuleError(
+      'The iterator.end() method was renamed to close() and end() is an alias that will be removed in a future version',
+      { code: 'LEVEL_LEGACY' }
+    ))
   }
 
   return this.close(callback)

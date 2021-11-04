@@ -43,7 +43,7 @@ All methods that take a callback now also support promises. They return a promis
 
 #### 1.2. New: events & idempotent open
 
-The prototype of `require('abstract-level').AbstractLevel` inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and an instance emits the same events as `levelup` would (with the exception of the 'ready' alias that `levelup` has for the 'open' event - `abstract-level` only emits 'open').
+The prototype of `require('abstract-level').AbstractLevel` inherits from `require('events').EventEmitter`. Opening and closing is idempotent and safe, and an instance emits the same events as `levelup` would (with the exception of the `'ready'` alias that `levelup` has for the `'open'` event - `abstract-level` only emits `'open'`).
 
 #### 1.3. New: deferred open
 
@@ -92,7 +92,9 @@ The `AbstractChainedBatch` prototype has a new `length` property that, like a ch
 
 ### 2. API parity with `level`
 
-It was previously necessary to use `level` (or similar: `level-mem`, `level-rocksdb` and more) to get the "full experience". These modules combined an `abstract-leveldown` implementation with `encoding-down` and `levelup`, using the `level-packager` utility. Encodings are now built-in to `abstract-level`. A future version of `level` will likely simply export `leveldown` in Node.js and `level-js` in browsers.
+It was previously necessary to use `level` (or similar: `level-mem`, `level-rocksdb` and more) to get the "full experience". These modules combined an `abstract-leveldown` implementation with `encoding-down` and `levelup`. Encodings are now built-in to `abstract-level`, using [`level-transcoder`](https://github.com/Level/transcoder) rather than [`level-codec`](https://github.com/Level/codec).
+
+A future version of `level` will likely simply export `leveldown` in Node.js and `level-js` in browsers.
 
 #### 2.1. New: encodings
 
@@ -112,14 +114,14 @@ The JSON example above would then result in `db._put(key, value, { valueEncoding
 
 There are a few differences from `level` and `encoding-down`. Some breaking:
 
-- The `ascii`, `ucs2` and `utf16le` encodings are not supported
-- The `id` encoding (aliased as `none`) which wasn't supported by any active `abstract-leveldown` implementation, has been removed
+- The `'ascii'`, `'ucs2'` and `'utf16le'` encodings are not supported
+- The `'id'` encoding (aliased as `'none'`) which wasn't supported by any active `abstract-leveldown` implementation, has been removed
 - The undocumented `encoding` option (as an alias for `valueEncoding`) is not supported.
 
 And non-breaking:
 
-- The `binary` encoding has been renamed to `buffer`, with `binary` as an alias
-- The `utf8` encoding previously did not touch Buffers. Now it will call `buffer.toString('utf8')` for consistency. Consumers can use the `buffer` encoding to avoid this conversion.
+- The `'binary'` encoding has been renamed to `'buffer'`, with `'binary'` as an alias
+- The `'utf8'` encoding previously did not touch Buffers. Now it will call `buffer.toString('utf8')` for consistency. Consumers can use the `'buffer'` encoding to avoid this conversion.
 
 #### 2.2. Other notable changes
 
@@ -150,9 +152,11 @@ Chained batch has a new method `close()` which is an idempotent operation and au
 
 These changes could be breaking for an implementation that has (at its own risk) overridden the public `write()` method. In addition, the error message `write() already called on this batch` has been replaced with code `LEVEL_BATCH_NOT_OPEN`.
 
+An implementation can optionally override `AbstractChainedBatch#_close()` if it has resources to free (and wishes to free them earlier than GC would).
+
 ### 4. Error codes
 
-The [`level-errors`](https://github.com/Level/errors) module as used by `levelup` and friends, is not used or exposed by `abstract-level`. Instead errors thrown or yielded from a database have a `code` property. See [`README`](./README.md#errors) for details. Going forward, the semver contract will be on `code` and error messages will change without a semver-major bump.
+The [`level-errors`](https://github.com/Level/errors) module as used by `levelup` and friends, is not used or exposed by `abstract-level`. Instead errors thrown or yielded from a database have a `code` property. See the [`README`](./README.md#errors) for details. Going forward, the semver contract will be on `code` and error messages will change without a semver-major bump.
 
 To minimize breakage, the most used error as yielded by `get()` when an entry is not found, has the same properties that `level-errors` added (`notFound` and `status`) in addition to code `LEVEL_NOT_FOUND`. Those properties will be removed in a future version. Implementations can still yield an error that matches `/NotFound/i.test(err)` or they can start using the code. Either way `abstract-level` will normalize the error.
 

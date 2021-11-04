@@ -1,6 +1,6 @@
 'use strict'
 
-const { concat } = require('./util')
+const concat = require('level-concat-iterator')
 const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
 
@@ -176,21 +176,6 @@ exports.events = function (test, testCommon) {
 
     await db.clear()
     await db.close()
-  })
-
-  test('test close() on clear event', async function () {
-    const db = testCommon.factory()
-    await db.open()
-
-    let promise
-
-    db.on('clear', function () {
-      // Should not interfere with the current clear() operation
-      promise = db.close()
-    })
-
-    await db.clear()
-    await promise
   })
 }
 

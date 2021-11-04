@@ -1,7 +1,7 @@
 'use strict'
 
 const { Buffer } = require('buffer')
-const { concat } = require('./util')
+const concat = require('level-concat-iterator')
 const textEncoder = new TextEncoder()
 
 exports.all = function (test, testCommon) {
