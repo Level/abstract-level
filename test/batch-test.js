@@ -302,21 +302,6 @@ exports.events = function (test, testCommon) {
     await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
     await db.close()
   })
-
-  test('test close() on array-form batch event', async function () {
-    const db = testCommon.factory()
-    await db.open()
-
-    let promise
-
-    db.on('batch', function () {
-      // Should not interfere with the current batch() operation
-      promise = db.close()
-    })
-
-    await db.batch([{ type: 'put', key: 'a', value: 'b' }])
-    await promise
-  })
 }
 
 exports.tearDown = function (test, testCommon) {

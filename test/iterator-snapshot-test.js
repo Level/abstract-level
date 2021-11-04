@@ -19,8 +19,8 @@ exports.snapshot = function (test, testCommon) {
           run(t, db, it, function end (err) {
             t.ifError(err, 'no run error')
 
-            it.end(function (err) {
-              t.ifError(err, 'no iterator end error')
+            it.close(function (err) {
+              t.ifError(err, 'no iterator close error')
               db.close(t.end.bind(t))
             })
           })

@@ -1,10 +1,7 @@
 'use strict'
 
-const { fromCallback } = require('catering')
 const { AbstractLevel, AbstractIterator, AbstractChainedBatch } = require('..')
-const concat = require('level-concat-iterator')
 
-const kPromise = Symbol('promise')
 const spies = []
 
 exports.verifyNotFoundError = function (err) {
@@ -97,13 +94,6 @@ exports.mockChainedBatch = function (db, methods, ...args) {
   class TestBatch extends AbstractChainedBatch {}
   for (const k in methods) TestBatch.prototype[k] = methods[k]
   return new TestBatch(db, ...args)
-}
-
-// TODO: move to level-concat-iterator
-exports.concat = function (iterator, callback) {
-  callback = fromCallback(callback, kPromise)
-  concat(iterator, callback)
-  return callback[kPromise]
 }
 
 // Mock encoding where null and undefined are significant types

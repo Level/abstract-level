@@ -1,12 +1,15 @@
 'use strict'
 
-const { concat } = require('./util')
+const concat = require('level-concat-iterator')
 
 let db
 let keySequence = 0
 
 const testKey = () => 'test' + (++keySequence)
 
+// TODO: test encoding options on every method. This is largely
+// covered (indirectly) by other tests, but a dedicated property-
+// based test for each would be good to have.
 exports.all = function (test, testCommon) {
   test('setup', async function (t) {
     db = testCommon.factory()

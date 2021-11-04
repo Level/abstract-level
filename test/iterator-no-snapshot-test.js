@@ -1,6 +1,6 @@
 'use strict'
 
-const collectEntries = require('level-concat-iterator')
+const concat = require('level-concat-iterator')
 
 exports.noSnapshot = function (test, testCommon) {
   function make (run) {
@@ -33,7 +33,7 @@ exports.noSnapshot = function (test, testCommon) {
   }
 
   function verify (t, it, db) {
-    collectEntries(it, function (err, entries) {
+    concat(it, function (err, entries) {
       t.ifError(err, 'no iterator error')
 
       const kv = entries.map(function (entry) {

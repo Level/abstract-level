@@ -1,11 +1,10 @@
 'use strict'
 
-// TODO: test options via constructor
 exports.errorIfExists = function (test, testCommon) {
   test('test database open errorIfExists:true', function (t) {
     const db = testCommon.factory()
 
-    db.open({}, function (err) {
+    db.open(function (err) {
       t.error(err)
       db.close(function (err) {
         t.error(err)
