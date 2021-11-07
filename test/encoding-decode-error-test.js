@@ -4,6 +4,7 @@ let db
 let keySequence = 0
 
 const testKey = () => 'test' + (++keySequence)
+const identity = (v) => v
 
 exports.all = function (test, testCommon) {
   test('setup', async function (t) {
@@ -68,7 +69,8 @@ exports.all = function (test, testCommon) {
         decode: function (key) {
           t.is(key, 'abc')
           throw new Error('from encoding')
-        }
+        },
+        encode: identity
       }
 
       const db = testCommon.factory()
@@ -102,7 +104,8 @@ exports.all = function (test, testCommon) {
         decode (value) {
           t.is(value, 'abc')
           throw new Error('from encoding')
-        }
+        },
+        encode: identity
       }
 
       const db = testCommon.factory()

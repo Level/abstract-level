@@ -1,13 +1,13 @@
 'use strict'
 
-const supports = require('level-supports')
-const Transcoder = require('level-transcoder')
+const { supports } = require('level-supports')
+const { Transcoder } = require('level-transcoder')
 const { EventEmitter } = require('events')
 const { fromCallback } = require('catering')
 const ModuleError = require('module-error')
-const AbstractIterator = require('./abstract-iterator')
-const DeferredIterator = require('./lib/deferred-iterator')
-const DefaultChainedBatch = require('./lib/default-chained-batch')
+const { AbstractIterator } = require('./abstract-iterator')
+const { DeferredIterator } = require('./lib/deferred-iterator')
+const { DefaultChainedBatch } = require('./lib/default-chained-batch')
 const { getCallback, getOptions } = require('./lib/common')
 const rangeOptions = require('./lib/range-options')
 
@@ -26,21 +26,12 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-function AbstractLevel (manifest, options, _callback) {
+function AbstractLevel (manifest, options) {
   if (typeof manifest !== 'object' || manifest === null) {
     throw new TypeError("The first argument 'manifest' must be an object")
   }
 
-  _callback = getCallback(options, _callback)
   options = getOptions(options)
-
-  // To help migrating to abstract-level
-  if (typeof _callback === 'function') {
-    throw new ModuleError('The levelup-style callback argument has been removed', {
-      code: 'LEVEL_LEGACY'
-    })
-  }
-
   EventEmitter.call(this)
 
   const { keyEncoding, valueEncoding, passive, ...forward } = options
@@ -62,8 +53,7 @@ function AbstractLevel (manifest, options, _callback) {
     snapshots: manifest.snapshots !== false,
     permanence: manifest.permanence !== false,
     encodings: manifest.encodings || {},
-    events: {
-      ...manifest.events,
+    events: Object.assign({}, manifest.events, {
       opening: true,
       open: true,
       closing: true,
@@ -72,14 +62,10 @@ function AbstractLevel (manifest, options, _callback) {
       del: true,
       batch: true,
       clear: true
-    }
+    })
   })
 
-  // Get encodings supported by implementation
-  const formats = Object.keys(this.supports.encodings)
-    .filter(k => !!this.supports.encodings[k])
-
-  this[kTranscoder] = new Transcoder(formats, options)
+  this[kTranscoder] = new Transcoder(formats(this))
   this[kKeyEncoding] = this[kTranscoder].encoding(keyEncoding || 'utf8')
   this[kValueEncoding] = this[kTranscoder].encoding(valueEncoding || 'utf8')
 
@@ -726,9 +712,9 @@ AbstractLevel.prototype._checkValue = function (value) {
 // TODO: after we drop node 10, also use queueMicrotask in node
 AbstractLevel.prototype.nextTick = require('./next-tick')
 
-module.exports = AbstractLevel
+exports.AbstractLevel = AbstractLevel
 
-function maybeError (db, callback) {
+const maybeError = function (db, callback) {
   if (db[kStatus] !== 'open') {
     db.nextTick(callback, new ModuleError('Database is not open', {
       code: 'LEVEL_DATABASE_NOT_OPEN'
@@ -737,4 +723,9 @@ function maybeError (db, callback) {
   }
 
   return false
+}
+
+const formats = function (db) {
+  return Object.keys(db.supports.encodings)
+    .filter(k => !!db.supports.encodings[k])
 }

@@ -2,7 +2,7 @@
 
 const test = require('tape')
 const { AbstractLevel, AbstractIterator } = require('../..')
-const DeferredIterator = require('../../lib/deferred-iterator')
+const { DeferredIterator } = require('../../lib/deferred-iterator')
 
 function withIterator (methods) {
   class TestIterator extends AbstractIterator { }
@@ -21,7 +21,7 @@ function withIterator (methods) {
 }
 
 for (const type of ['explicit', 'deferred']) {
-  function verify (t, db, it) {
+  const verify = function (t, db, it) {
     t.is(db.status, type === 'explicit' ? 'open' : 'opening')
     t.is(it.constructor === DeferredIterator, type !== 'explicit')
   }

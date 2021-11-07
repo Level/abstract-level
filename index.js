@@ -1,5 +1,5 @@
 'use strict'
 
-exports.AbstractLevel = require('./abstract-level')
-exports.AbstractIterator = require('./abstract-iterator')
-exports.AbstractChainedBatch = require('./abstract-chained-batch')
+exports.AbstractLevel = require('./abstract-level').AbstractLevel
+exports.AbstractIterator = require('./abstract-iterator').AbstractIterator
+exports.AbstractChainedBatch = require('./abstract-chained-batch').AbstractChainedBatch

@@ -2,12 +2,9 @@
 
 const test = require('tape')
 const sinon = require('sinon')
-const inherits = require('util').inherits
 const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
-const AbstractLevel = require('../').AbstractLevel
-const AbstractIterator = require('../').AbstractIterator
-const AbstractChainedBatch = require('../').AbstractChainedBatch
+const { AbstractLevel, AbstractIterator, AbstractChainedBatch } = require('..')
 const getRangeOptions = require('../lib/range-options')
 
 const testCommon = require('./common')({
@@ -80,7 +77,7 @@ function implement (ctor, methods) {
     ctor.apply(this, arguments)
   }
 
-  inherits(Test, ctor)
+  Object.setPrototypeOf(Test.prototype, ctor.prototype)
 
   for (const k in methods) {
     Test.prototype[k] = methods[k]

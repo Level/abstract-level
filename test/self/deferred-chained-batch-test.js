@@ -2,7 +2,8 @@
 
 const test = require('tape')
 const { mockDown } = require('../util')
-const DefaultChainedBatch = require('../../lib/default-chained-batch')
+const { DefaultChainedBatch } = require('../../lib/default-chained-batch')
+const identity = (v) => v
 
 // NOTE: adapted from deferred-leveldown
 test('deferred chained batch encodes once', function (t) {
@@ -16,7 +17,8 @@ test('deferred chained batch encodes once', function (t) {
       t.is(called, false, 'not yet called')
       t.is(key, 'foo')
       return key.toUpperCase()
-    }
+    },
+    decode: identity
   }
 
   const valueEncoding = {
@@ -25,7 +27,8 @@ test('deferred chained batch encodes once', function (t) {
       t.is(called, false, 'not yet called')
       t.is(value, 'bar')
       return value.toUpperCase()
-    }
+    },
+    decode: identity
   }
 
   const db = mockDown({

@@ -171,4 +171,4 @@ AbstractChainedBatch.prototype[kFinishClose] = function () {
   }
 }
 
-module.exports = AbstractChainedBatch
+exports.AbstractChainedBatch = AbstractChainedBatch

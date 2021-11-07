@@ -1,5 +1,7 @@
 'use strict'
 
+const identity = (v) => v
+
 exports.all = function (test, testCommon) {
   exports.sequence(test, testCommon)
   exports.seek(test, testCommon)
@@ -129,7 +131,7 @@ exports.seek = function (test, testCommon) {
 
   make('iterator#seek() to target with custom encoding', function (db, t, done) {
     const ite = db.iterator()
-    const keyEncoding = { encode: () => 'two', format: 'utf8' }
+    const keyEncoding = { encode: () => 'two', decode: identity, format: 'utf8' }
     ite.seek('xyz', { keyEncoding })
     ite.next(function (err, key, value) {
       t.error(err, 'no error')
