@@ -1,6 +1,6 @@
 'use strict'
 
-const DeferredIterator = require('../lib/deferred-iterator')
+const { DeferredIterator } = require('../lib/deferred-iterator')
 
 exports.all = function (test, testCommon) {
   function verifyValues (t, db, entries) {

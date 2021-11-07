@@ -102,5 +102,8 @@ exports.nullishEncoding = {
   format: 'utf8',
   encode (v) {
     return v === null ? '\x00' : v === undefined ? '\xff' : String(v)
+  },
+  decode (v) {
+    return v === '\x00' ? null : v === '\xff' ? undefined : v
   }
 }

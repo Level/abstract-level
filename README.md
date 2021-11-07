@@ -177,7 +177,7 @@ After `close()` has been called, no further read & write operations are allowed 
 
 ### `db.supports`
 
-A read-only [manifest](https://github.com/Level/supports). Might be used like so:
+A [manifest](https://github.com/Level/supports) describing the features supported by this database. Might be used like so:
 
 ```js
 if (!db.supports.permanence) {
@@ -252,8 +252,8 @@ Create an [`iterator`](#iterator). Accepts the following range options:
 
 In addition to range options, `iterator()` takes the following options:
 
-- `keys` (boolean, default: `true`): whether to return the key of each entry. If set to `false`, calls to `iterator.next(callback)` will yield keys with a value of `undefined`.
-- `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, calls to `iterator.next(callback)` will yield values with a value of `undefined`.
+- `keys` (boolean, default: `true`): whether to return the key of each entry. If set to `false`, the iterator will yield keys with a value of `undefined`.
+- `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, the iterator will yield values with a value of `undefined`.
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 

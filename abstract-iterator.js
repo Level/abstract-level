@@ -215,4 +215,4 @@ for (const k of ['_ended property', '_nexting property', '_end method']) {
 AbstractIterator.keyEncoding = kKeyEncoding
 AbstractIterator.valueEncoding = kValueEncoding
 
-module.exports = AbstractIterator
+exports.AbstractIterator = AbstractIterator

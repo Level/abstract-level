@@ -7,8 +7,9 @@
   "browser": {
     "./next-tick.js": "./next-tick-browser.js"
   },
+  "types": "./index.d.ts",
   "scripts": {
-    "test": "standard && hallmark && nyc node test/self.js",
+    "test": "ts-standard && tsc && standard && hallmark && nyc node test/self.js",
     "test-browsers": "airtap --coverage test/self.js",
     "test-browser-local": "airtap --coverage -p local --live test/self.js",
     "coverage": "nyc report -r lcovonly",
@@ -21,10 +22,12 @@
     "abstract-iterator.js",
     "abstract-level.js",
     "index.js",
+    "index.d.ts",
     "lib",
     "next-tick-browser.js",
     "next-tick.js",
     "test",
+    "types",
     "CHANGELOG.md",
     "UPGRADING.md",
     "sauce-labs.svg"
@@ -34,12 +37,14 @@
     "catering": "^2.1.0",
     "is-buffer": "^2.0.5",
     "level-concat-iterator": "^3.1.0",
-    "level-supports": "^2.1.0",
-    "level-transcoder": "github:Level/transcoder",
+    "level-supports": "^3.0.0",
+    "level-transcoder": "^1.0.0",
     "module-error": "^1.0.1",
     "queue-microtask": "^1.2.3"
   },
   "devDependencies": {
+    "@types/node": "^16.11.6",
+    "@voxpelli/tsconfig": "^3.0.0",
     "airtap": "^4.0.3",
     "airtap-sauce": "^1.1.0",
     "dependency-check": "^4.1.0",
@@ -47,7 +52,9 @@
     "nyc": "^15.1.0",
     "sinon": "^12.0.1",
     "standard": "^16.0.4",
-    "tape": "^5.0.1"
+    "tape": "^5.0.1",
+    "ts-standard": "^10.0.0",
+    "typescript": "^4.4.4"
   },
   "repository": {
     "type": "git",

@@ -1,9 +1,10 @@
 'use strict'
 
 const test = require('tape')
-const DeferredIterator = require('../../lib/deferred-iterator')
+const { DeferredIterator } = require('../../lib/deferred-iterator')
 const { mockDown, mockIterator } = require('../util')
 const noop = () => {}
+const identity = (v) => v
 
 // NOTE: copied from deferred-leveldown
 test('deferred iterator', function (t) {
@@ -14,7 +15,8 @@ test('deferred iterator', function (t) {
     encode (key) {
       t.is(key, 'foo', 'encoding got key')
       return key.toUpperCase()
-    }
+    },
+    decode: identity
   }
 
   const db = mockDown({

@@ -3,6 +3,7 @@
 const test = require('tape')
 const { Buffer } = require('buffer')
 const { mockDown, mockChainedBatch, mockIterator, nullishEncoding } = require('../util')
+const identity = (v) => v
 
 const utf8Manifest = { encodings: { utf8: true } }
 const dualManifest = { encodings: { utf8: true, buffer: true } }
@@ -55,7 +56,7 @@ for (const deferred of [false, true]) {
       }
     }, dualManifest, {
       keyEncoding: 'utf8',
-      valueEncoding: { format: 'buffer' }
+      valueEncoding: { encode: identity, decode: identity, format: 'buffer' }
     })
 
     if (!deferred) await db.open()
@@ -74,7 +75,7 @@ for (const deferred of [false, true]) {
       }
     }, dualManifest, {
       keyEncoding: 'buffer',
-      valueEncoding: { format: 'utf8' }
+      valueEncoding: { encode: identity, decode: identity, format: 'utf8' }
     })
 
     if (!deferred) await db.open()
@@ -192,7 +193,7 @@ for (const deferred of [false, true]) {
       }
     }, dualManifest, {
       keyEncoding: 'utf8',
-      valueEncoding: { format: 'buffer' }
+      valueEncoding: { encode: identity, decode: identity, format: 'buffer' }
     })
 
     if (!deferred) await db.open()
@@ -210,7 +211,7 @@ for (const deferred of [false, true]) {
       }
     }, dualManifest, {
       keyEncoding: 'buffer',
-      valueEncoding: { format: 'utf8' }
+      valueEncoding: { encode: identity, decode: identity, format: 'utf8' }
     })
 
     if (!deferred) await db.open()
@@ -351,7 +352,7 @@ for (const deferred of [false, true]) {
       }
     }, dualManifest)
 
-    const encoding = { format: 'buffer' }
+    const encoding = { encode: identity, decode: identity, format: 'buffer' }
     if (!deferred) await db.open()
     const kv = await db.iterator({ keyEncoding: encoding, valueEncoding: encoding }).next()
     t.same(kv, [Buffer.from('a'), Buffer.from('b')])
@@ -374,7 +375,7 @@ for (const deferred of [false, true]) {
       }
     }, dualManifest)
 
-    const encoding = { format: 'utf8' }
+    const encoding = { encode: identity, decode: identity, format: 'utf8' }
     if (!deferred) await db.open()
     const kv = await db.iterator({ keyEncoding: encoding, valueEncoding: encoding }).next()
     t.same(kv, ['a', 'b'])
@@ -388,7 +389,8 @@ for (const deferred of [false, true]) {
       format: 'utf8',
       decode (key) {
         t.fail('should not be called')
-      }
+      },
+      encode: identity
     }
 
     const db = mockDown({
@@ -418,7 +420,8 @@ for (const deferred of [false, true]) {
       format: 'utf8',
       decode (value) {
         t.fail('should not be called')
-      }
+      },
+      encode: identity
     }
 
     const db = mockDown({
@@ -448,7 +451,8 @@ for (const deferred of [false, true]) {
       format: 'utf8',
       encode (key) {
         return 'encoded_' + key
-      }
+      },
+      decode: identity
     }
 
     const db = mockDown({
@@ -596,7 +600,7 @@ for (const deferred of [false, true]) {
           }
         })
       }
-    }, utf8Manifest, { keyEncoding: { encode: String, format: 'utf8' } })
+    }, utf8Manifest, { keyEncoding: { encode: String, decode: identity, format: 'utf8' } })
 
     if (!deferred) await db.open()
 
@@ -646,7 +650,8 @@ for (const deferred of [false, true]) {
       format: 'utf8',
       encode: function (key) {
         return 'encoded_' + key
-      }
+      },
+      decode: identity
     }
 
     const db = mockDown({
