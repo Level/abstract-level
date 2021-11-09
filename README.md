@@ -1,6 +1,6 @@
-# abstract-level
+# ![abstract-level](./header.svg)
 
-**Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown).
+**Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) that removes the need for [`levelup`](https://github.com/Level/levelup) and [`encoding-down`](https://github.com/Level/encoding-down). If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md).
 
 [![level badge][level-badge]](https://github.com/Level/awesome)
 [![Standard](https://img.shields.io/badge/standard-informational?logo=javascript&logoColor=fff)](https://standardjs.com)
@@ -130,8 +130,6 @@ We aim to support Active LTS and Current Node.js releases as well as browsers. S
 [![Sauce Test Status](https://app.saucelabs.com/browser-matrix/abstract-leveldown.svg)](https://app.saucelabs.com/u/abstract-leveldown)
 
 ## Public API For Consumers
-
-_If you are upgrading: please see [UPGRADING.md](UPGRADING.md)._
 
 ### `db = constructor(...[, options])`
 
