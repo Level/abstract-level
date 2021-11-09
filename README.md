@@ -572,7 +572,7 @@ When a `keyEncoding` or `valueEncoding` option specified an encoding that isn't 
 When decoding of keys or values failed. The error _may_ have a [`cause`](https://github.com/tc39/proposal-error-cause) property containing an original error. For example, it might be a [`SyntaxError`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SyntaxError) from an internal [`JSON.parse()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse) call:
 
 ```js
-await db.put('key', 'invalid json', { keyEncoding: 'utf8' })
+await db.put('key', 'invalid json', { valueEncoding: 'utf8' })
 
 try {
   const value = await db.get('key', { valueEncoding: 'json' })
