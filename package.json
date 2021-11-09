@@ -30,6 +30,7 @@
     "types",
     "CHANGELOG.md",
     "UPGRADING.md",
+    "header.svg",
     "sauce-labs.svg"
   ],
   "dependencies": {
