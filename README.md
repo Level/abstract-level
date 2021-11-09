@@ -121,7 +121,42 @@ for await (const [key, value] of db.iterator({ gt: 'a' })) {
 }
 ```
 
-All asynchronous methods support both promises and callbacks.
+All asynchronous methods also support callbacks.
+
+<details><summary>Callback example</summary>
+
+```js
+db.put('a', { x: 123 }, function (err) {
+  if (err) throw err
+
+  db.get('a', function (err, value) {
+    console.log(value) // { x: 123 }
+  })
+})
+```
+
+</details>
+
+Usage from TypeScript requires generic type parameters.
+
+<details><summary>TypeScript example</summary>
+
+```ts
+// Specify types of keys and values (any, in the case of json).
+// The generic type parameters default to level<string, string>.
+const db = level<string, any>('./db', { valueEncoding: 'json' })
+
+// All relevant methods then use those types
+await db.put('a', { x: 123 })
+
+// Specify different types when overriding encoding per operation
+await db.get<string, string>('a', { valueEncoding: 'utf8' })
+
+// Though in some cases TypeScript can infer them
+await db.get('a', { valueEncoding: db.valueEncoding('utf8') })
+```
+
+</details>
 
 ## Supported Platforms
 
