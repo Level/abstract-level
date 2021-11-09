@@ -710,7 +710,7 @@ AbstractLevel.prototype._checkValue = function (value) {
 
 // Expose browser-compatible nextTick for dependents
 // TODO: after we drop node 10, also use queueMicrotask in node
-AbstractLevel.prototype.nextTick = require('./next-tick')
+AbstractLevel.prototype.nextTick = require('./lib/next-tick')
 
 exports.AbstractLevel = AbstractLevel
 

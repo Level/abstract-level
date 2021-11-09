@@ -2,7 +2,7 @@
 
 const test = require('tape')
 const { mockDown } = require('../util')
-const nextTick = require('../../next-tick')
+const nextTick = require('../../lib/next-tick')
 
 test('resource must be an object with a close() method', function (t) {
   t.plan(5)

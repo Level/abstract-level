@@ -5,7 +5,7 @@
   "license": "MIT",
   "main": "index.js",
   "browser": {
-    "./next-tick.js": "./next-tick-browser.js"
+    "./lib/next-tick.js": "./lib/next-tick-browser.js"
   },
   "types": "./index.d.ts",
   "scripts": {
@@ -24,8 +24,6 @@
     "index.js",
     "index.d.ts",
     "lib",
-    "next-tick-browser.js",
-    "next-tick.js",
     "test",
     "types",
     "CHANGELOG.md",
