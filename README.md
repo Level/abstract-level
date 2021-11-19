@@ -384,7 +384,7 @@ A reference to the database that created this chained batch.
 
 An iterator allows visiting all entries of a database or a range of it. It operates on a snapshot of the database, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee, which is indicated by `db.supports.snapshots`.
 
-Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing or breaking from a `for await...of` loop automatically calls `iterator.close()`.
+Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing, breaking or returning from a `for await...of` loop automatically calls `iterator.close()`.
 
 An iterator reaches its natural end in the following situations:
 
