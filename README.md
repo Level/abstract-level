@@ -92,7 +92,6 @@
 - [Spread The Word](#spread-the-word)
 - [Install](#install)
 - [Contributing](#contributing)
-- [Big Thanks](#big-thanks)
 - [Donate](#donate)
 - [License](#license)
 
@@ -160,9 +159,13 @@ await db.get('a', { valueEncoding: db.valueEncoding('utf8') })
 
 ## Supported Platforms
 
-We aim to support Active LTS and Current Node.js releases as well as browsers. Supported runtime environments may differ per implementation. As far as `abstract-level` goes, the following browsers are supported and continuously tested.
+We aim to support Active LTS and Current Node.js releases as well as browsers. Supported runtime environments may differ per implementation.
+
+<!--
+As far as `abstract-level` goes, the following browsers are supported and continuously tested.
 
 [![Sauce Test Status](https://app.saucelabs.com/browser-matrix/abstract-leveldown.svg)](https://app.saucelabs.com/u/abstract-leveldown)
+-->
 
 ## Public API For Consumers
 
@@ -1005,11 +1008,13 @@ npm install abstract-level
 
 See the [Contribution Guide](https://github.com/Level/community/blob/master/CONTRIBUTING.md) for more details.
 
+<!--
 ## Big Thanks
 
 Cross-browser Testing Platform and Open Source ♥ Provided by [Sauce Labs](https://saucelabs.com).
 
 [![Sauce Labs logo](./sauce-labs.svg)](https://saucelabs.com)
+-->
 
 ## Donate
 
