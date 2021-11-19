@@ -3,9 +3,9 @@
 **Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) that removes the need for [`levelup`](https://github.com/Level/levelup) and [`encoding-down`](https://github.com/Level/encoding-down). If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md).
 
 [![level badge][level-badge]](https://github.com/Level/awesome)
-[![Standard](https://img.shields.io/badge/standard-informational?logo=javascript&logoColor=fff)](https://standardjs.com)
+[![Standard](https://img.shields.io/badge/standard-informational?logo=javascript\&logoColor=fff)](https://standardjs.com)
 [![Common Changelog](https://common-changelog.org/badge.svg)](https://common-changelog.org)
-[![Donate](https://img.shields.io/badge/donate-orange?logo=open-collective&logoColor=fff)](https://opencollective.com/level)
+[![Donate](https://img.shields.io/badge/donate-orange?logo=open-collective\&logoColor=fff)](https://opencollective.com/level)
 
 ## Table of Contents
 

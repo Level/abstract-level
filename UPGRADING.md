@@ -63,7 +63,7 @@ try {
 }
 ```
 
-_Errors now have a `code` property. More on that below._
+_Errors now have a `code` property. More on that below\._
 
 This may be a breaking change downstream because it changes error messages for implementations that had their own safety checks (which will now be ineffective because `abstract-level` checks are performed first) or implicitly relied on `levelup` checks. By safety we mean mainly that yielding a JavaScript error is preferred over segmentation faults, though non-native implementations also benefit from detecting incorrect usage.
 
@@ -181,6 +181,6 @@ The following properties and methods can no longer be accessed, as they've been 
 
 Lastly, it's recommended to revisit any custom tests of an implementation. In particular if those tests relied upon the previously loose state checking of `abstract-leveldown`. For example, making a `db.put()` call before `db.open()`. Such a test now has a different meaning. The previous meaning can typically be restored by wrapping tests with `db.once('open', ...)` or `await db.open()` logic.
 
-* * *
+---
 
 _For earlier releases, before `abstract-level` was forked from `abstract-leveldown`, please see [the upgrade guide of `abstract-leveldown`](https://github.com/Level/abstract-leveldown/blob/master/UPGRADING.md)._
