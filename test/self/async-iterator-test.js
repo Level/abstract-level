@@ -162,4 +162,39 @@ for (const type of ['explicit', 'deferred']) {
 
     t.ok(closed, 'closed')
   })
+
+  test(`for await...of db.iterator() closes on user return (${type} open)`, async function (t) {
+    t.plan(4)
+
+    const db = withIterator({
+      _next (callback) {
+        this.nextTick(callback, null, n.toString(), n.toString())
+        if (n++ > 10) throw new Error('Infinite loop')
+      },
+
+      _close (callback) {
+        this.nextTick(function () {
+          closed = true
+          callback()
+        })
+      }
+    })
+
+    if (type === 'explicit') await db.open()
+    const it = db.iterator()
+    verify(t, db, it)
+
+    let n = 0
+    let closed = false
+
+    await (async () => {
+      // eslint-disable-next-line no-unused-vars, no-unreachable-loop
+      for await (const kv of it) {
+        t.pass('got a chance to return')
+        return
+      }
+    })()
+
+    t.ok(closed, 'closed')
+  })
 }
