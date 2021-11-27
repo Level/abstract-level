@@ -270,36 +270,4 @@ exports.all = function (test, testCommon) {
     const it = db.iterator({ gt: 'foo' })
     t.ok(it instanceof DeferredIterator)
   })
-
-  // NOTE: adapted from levelup
-  // It should be safe to monkey-patch database methods.
-  // TODO: decide whether to fix this (see actual result below)
-  test.skip('deferred open is patch-safe', async function (t) {
-    const db = testCommon.factory()
-    t.is(db.status, 'opening')
-
-    const calls = []
-
-    for (const method of ['put', 'del', 'batch']) {
-      const original = db[method]
-
-      db[method] = function () {
-        calls.push(method)
-        return original.apply(this, arguments)
-      }
-    }
-
-    await Promise.all([
-      db.put('a', 'value'),
-      db.del('b'),
-      db.batch([{ type: 'del', key: 'c' }])
-    ])
-
-    t.is(db.status, 'open')
-
-    // Actual: ['put', 'del', 'batch', 'put', 'del', 'batch']
-    t.same(calls, ['put', 'del', 'batch'])
-
-    return db.close()
-  })
 }

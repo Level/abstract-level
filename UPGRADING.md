@@ -51,6 +51,17 @@ Deferred open is built-in. This means an `abstract-level` database opens itself 
 
 The initial `status` of an `abstract-level` database is 'opening' rather than 'new', which no longer exists. Wrapping an `abstract-level` database with `levelup` or `deferred-leveldown` is not supported and will exhibit undefined behavior.
 
+Unlike `levelup` an `abstract-level` database is not "patch-safe". If some form of plugin monkey-patches a database like in the following example, it must now also take the responsibility of deferring the operation (as well as handling promises and callbacks) using `db.defer()`. I.e. this example is incomplete:
+
+```js
+function plugin (db) {
+  const original = db.get
+  db.get = function (...args) {
+    original.call(this, ...args)
+  }
+}
+```
+
 #### 1.4. New: state checks
 
 On any operation, an `abstract-level` database checks if it's open. If not, it will either throw an error (if the relevant API is synchronous) or asynchronously yield an error. For example:
