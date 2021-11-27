@@ -312,7 +312,7 @@ If no options are provided, all entries will be deleted. The `callback` function
 Returns the given `encoding` argument as a normalized encoding object that follows the [`level-transcoder`](https://github.com/Level/transcoder) encoding interface. See [Encodings](#encodings) for an introduction. The `encoding` argument may be:
 
 - A string to select a known encoding by its name
-- An object that follows one of the following interfaces: [`level-transcoder`](https://github.com/Level/transcoder#encoding-interface), [`level-codec`](https://github.com/Level/codec#encoding-format), [`codecs`](https://github.com/mafintosh/codecs), [`abstract-encoding`](https://github.com/mafintosh/abstract-encoding), [`multiformats`](https://github.com/multiformats/js-multiformats/blob/master/src/codecs/interface.ts)
+- An object that follows one of the following interfaces: [`level-transcoder`](https://github.com/Level/transcoder#encoding-interface), [`level-codec`](https://github.com/Level/codec#encoding-format), [`abstract-encoding`](https://github.com/mafintosh/abstract-encoding), [`multiformats`](https://github.com/multiformats/js-multiformats/blob/master/src/codecs/interface.ts)
 - A previously normalized encoding, such that `keyEncoding(x)` equals `keyEncoding(keyEncoding(x))`
 - Omitted, `null` or `undefined`, in which case the default `keyEncoding` of the database is returned.
 
