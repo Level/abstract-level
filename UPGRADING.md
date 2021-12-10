@@ -29,9 +29,9 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 **Introducing `abstract-level`: a fork of `abstract-leveldown` that removes the need for `levelup` and `encoding-down`. This means that an `abstract-level` database is a complete solution that doesn't need to be wrapped. It has the same API as `level(up)` including encodings, promises and events. In addition, implementations can now choose to use Uint8Array for keys and values instead of Buffer. Consumers of an implementation can use both.**
 
-This upgrade guide describes how to replace `abstract-leveldown` with `abstract-level`. The npm package name is `abstract-level` and the main export (and prototype) is called `AbstractLevel` rather than `AbstractLevelDOWN`.
+We've put together several upgrade guides for different modules. See the [FAQ](https://github.com/Level/community#faq) to find the best upgrade guide for you. This upgrade guide describes how to replace `abstract-leveldown` with `abstract-level`.
 
-Support of Node.js 10 has been dropped.
+The npm package name is `abstract-level` and the main export (and prototype) is called `AbstractLevel` rather than `AbstractLevelDOWN`. Support of Node.js 10 has been dropped.
 
 For most folks, a database that upgraded from `abstract-leveldown` to `abstract-level` can be a drop-in replacement for a `level(up)` database. Let's start this guide there: all methods have been enhanced and tuned to reach API parity with `levelup` and `level`.
 
