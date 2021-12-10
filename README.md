@@ -87,7 +87,7 @@
     - [`chainedBatch._clear()`](#chainedbatch_clear)
     - [`chainedBatch._write(options, callback)`](#chainedbatch_writeoptions-callback)
     - [`chainedBatch._close(callback)`](#chainedbatch_closecallback)
-- [Differences from `level(up)`](#differences-from-levelup)
+- [Differences from old `level(up)`](#differences-from-old-levelup)
 - [Test Suite](#test-suite)
   - [Excluding tests](#excluding-tests)
   - [Reusing `testCommon`](#reusing-testcommon)
@@ -296,6 +296,8 @@ In addition to range options, `iterator()` takes the following options:
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 
 Lastly, an implementation is free to add its own options.
+
+> :pushpin: To instead consume data using Node.js streams, see [`level-read-stream`](https://github.com/Level/read-stream).
 
 ### `db.clear([options][, callback])`
 
@@ -897,9 +899,10 @@ Free up underlying resources. This method is guaranteed to only be called once. 
 
 The default `_close()` invokes `callback` on a next tick. Overriding is optional.
 
-## Differences from `level(up)`
+## Differences from old `level(up)`
 
 - The constructor does not take a callback argument. Instead call `db.open()` if you wish to wait for opening (which is not necessary to use the database) or to capture an error.
+- Streams are available via [`level-read-stream`](https://github.com/Level/read-stream).
 - Use of `level-errors` has been replaced with [error codes](#errors).
 
 ## Test Suite

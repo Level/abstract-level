@@ -16,12 +16,13 @@ This document describes breaking changes and how to upgrade. For a complete list
   - [2. API parity with `level`](#2-api-parity-with-level)
     - [2.1. New: encodings](#21-new-encodings)
     - [2.2. Other notable changes](#22-other-notable-changes)
-  - [3. Auto-closing resources](#3-auto-closing-resources)
-    - [3.1. Closing iterators is idempotent](#31-closing-iterators-is-idempotent)
-    - [3.2. Chained batch can be closed](#32-chained-batch-can-be-closed)
-  - [4. Error codes](#4-error-codes)
-  - [5. Removed semi-private properties](#5-removed-semi-private-properties)
-  - [6. Breaking changes to test suite](#6-breaking-changes-to-test-suite)
+  - [3. Streams have moved](#3-streams-have-moved)
+  - [4. Resources are auto-closed](#4-resources-are-auto-closed)
+    - [4.1. Closing iterators is idempotent](#41-closing-iterators-is-idempotent)
+    - [4.2. Chained batch can be closed](#42-chained-batch-can-be-closed)
+  - [5. Errors now use codes](#5-errors-now-use-codes)
+  - [6. Semi-private properties have been removed](#6-semi-private-properties-have-been-removed)
+  - [7. Changes to test suite](#7-changes-to-test-suite)
 
 </details>
 
@@ -33,7 +34,7 @@ We've put together several upgrade guides for different modules. See the [FAQ](h
 
 The npm package name is `abstract-level` and the main export (and prototype) is called `AbstractLevel` rather than `AbstractLevelDOWN`. Support of Node.js 10 has been dropped.
 
-For most folks, a database that upgraded from `abstract-leveldown` to `abstract-level` can be a drop-in replacement for a `level(up)` database. Let's start this guide there: all methods have been enhanced and tuned to reach API parity with `levelup` and `level`.
+For most folks, a database that upgraded from `abstract-leveldown` to `abstract-level` can be a drop-in replacement for a `level(up)` database (with the exception of stream methods). Let's start this guide there: all methods have been enhanced and tuned to reach API parity with `levelup` and `level`.
 
 ### 1. API parity with `levelup`
 
@@ -141,11 +142,15 @@ And non-breaking:
 - The `AbstractIterator#_seek()` method got a new `options` argument
 - The `db.supports.bufferKeys` property has been removed.
 
-### 3. Auto-closing resources
+### 3. Streams have moved
+
+Node.js readable streams must now be created with a new standalone module called [`level-read-stream`](https://github.com/Level/read-stream), rather than database methods like `db.createReadStream()`. Please see its [upgrade guide](https://github.com/Level/read-stream/blob/main/UPGRADING.md#100) for details.
+
+### 4. Resources are auto-closed
 
 To further improve safety and consistency, additional changes were made that make an `abstract-level` database safer to use than `abstract-leveldown` wrapped with `levelup`.
 
-#### 3.1. Closing iterators is idempotent
+#### 4.1. Closing iterators is idempotent
 
 The `iterator.end()` method has been renamed to `iterator.close()`, with `end()` being an alias until a next major version in the future. The term "close" makes it easier to differentiate between the iterator having reached its natural end (data-wise) versus closing it to cleanup resources.
 
@@ -157,7 +162,7 @@ The error message `cannot call next() after end()` has been replaced with code `
 
 The `next()` method no longer returns `this` (when a callback is provided).
 
-#### 3.2. Chained batch can be closed
+#### 4.2. Chained batch can be closed
 
 Chained batch has a new method `close()` which is an idempotent operation and automatically called after `write()` (for backwards compatibility) or on `db.close()`. This to ensure batches can't be used after closing and reopening a db. If a `write()` is in progress, closing will wait for that. If `write()` is never called then `close()` must be.
 
@@ -165,13 +170,13 @@ These changes could be breaking for an implementation that has (at its own risk)
 
 An implementation can optionally override `AbstractChainedBatch#_close()` if it has resources to free (and wishes to free them earlier than GC would).
 
-### 4. Error codes
+### 5. Errors now use codes
 
 The [`level-errors`](https://github.com/Level/errors) module as used by `levelup` and friends, is not used or exposed by `abstract-level`. Instead errors thrown or yielded from a database have a `code` property. See the [`README`](./README.md#errors) for details. Going forward, the semver contract will be on `code` and error messages will change without a semver-major bump.
 
 To minimize breakage, the most used error as yielded by `get()` when an entry is not found, has the same properties that `level-errors` added (`notFound` and `status`) in addition to code `LEVEL_NOT_FOUND`. Those properties will be removed in a future version. Implementations can still yield an error that matches `/NotFound/i.test(err)` or they can start using the code. Either way `abstract-level` will normalize the error.
 
-### 5. Removed semi-private properties
+### 6. Semi-private properties have been removed
 
 The following properties and methods can no longer be accessed, as they've been removed or replaced with internal [symbols](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Symbol):
 
@@ -182,13 +187,16 @@ The following properties and methods can no longer be accessed, as they've been 
 - `AbstractChainedBatch#_operations`
 - `AbstractLevel#_setupIteratorOptions()`
 
-### 6. Breaking changes to test suite
+### 7. Changes to test suite
+
+The abstract test suite of `abstract-level` has some breaking changes compared to `abstract-leveldown`:
 
 - Options to skip tests have been removed in favor of `db.supports`
 - Support of `db.clear()` and `db.getMany()` is now mandatory. The default (slow) implementation of `_clear()` has been removed.
 - The `setUp` and `tearDown` functions have been removed from the test suite and `suite.common()`.
 - Added ability to access manifests via `testCommon.supports`, by lazily copying it from `testCommon.factory().supports`. This requires that the manifest does not change during the lifetime of a `db`.
-- Many tests were imported from `levelup`, `encoding-down`, `deferred-leveldown`, `memdown`, `level-js` and `leveldown`. They test the changes described above and improve coverage of existing behavior.
+
+Many tests were imported from `levelup`, `encoding-down`, `deferred-leveldown`, `memdown`, `level-js` and `leveldown`. They test the changes described above and improve coverage of existing behavior.
 
 Lastly, it's recommended to revisit any custom tests of an implementation. In particular if those tests relied upon the previously loose state checking of `abstract-leveldown`. For example, making a `db.put()` call before `db.open()`. Such a test now has a different meaning. The previous meaning can typically be restored by wrapping tests with `db.once('open', ...)` or `await db.open()` logic.
 
