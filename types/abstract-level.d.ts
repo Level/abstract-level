@@ -2,11 +2,15 @@ import { IManifest } from 'level-supports'
 import * as Transcoder from 'level-transcoder'
 import { EventEmitter } from 'events'
 import { AbstractChainedBatch } from '..'
-import { AbstractIterator, IteratorOptions } from './abstract-iterator'
-import { NodeCallback, AdditionalOptions, RangeOptions } from './interfaces'
+import { AbstractIterator, AbstractIteratorOptions } from './abstract-iterator'
+import { NodeCallback, RangeOptions } from './interfaces'
 
 /**
  * Abstract prototype for a lexicographically sorted key-value database.
+ *
+ * @template TFormat The type used internally by the database to store data.
+ * @template KDefault The default type of keys if not overridden on operations.
+ * @template VDefault The default type of values if not overridden on operations.
  */
 declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   extends EventEmitter {
@@ -19,7 +23,7 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    */
   constructor (
     manifest: Partial<IManifest>,
-    options?: DatabaseOptions<KDefault, VDefault> | undefined
+    options?: AbstractDatabaseOptions<KDefault, VDefault> | undefined
   )
 
   /**
@@ -42,9 +46,9 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Open the database.
    */
   open (): Promise<void>
-  open (options: OpenOptions): Promise<void>
+  open (options: AbstractOpenOptions): Promise<void>
   open (callback: NodeCallback<void>): void
-  open (options: OpenOptions, callback: NodeCallback<void>): void
+  open (options: AbstractOpenOptions, callback: NodeCallback<void>): void
 
   /**
    * Close the database.
@@ -60,12 +64,12 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
 
   get<K = KDefault, V = VDefault> (
     key: K,
-    options: GetOptions<K, V>
+    options: AbstractGetOptions<K, V>
   ): Promise<V>
 
   get<K = KDefault, V = VDefault> (
     key: K,
-    options: GetOptions<K, V>,
+    options: AbstractGetOptions<K, V>,
     callback: NodeCallback<V>
   ): void
 
@@ -77,12 +81,12 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
 
   getMany<K = KDefault, V = VDefault> (
     keys: K[],
-    options: GetManyOptions<K, V>
+    options: AbstractGetManyOptions<K, V>
   ): Promise<V[]>
 
   getMany<K = KDefault, V = VDefault> (
     keys: K[],
-    options: GetManyOptions<K, V>,
+    options: AbstractGetManyOptions<K, V>,
     callback: NodeCallback<V[]>
   ): void
 
@@ -95,13 +99,13 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   put<K = KDefault, V = VDefault> (
     key: K,
     value: V,
-    options: PutOptions<K, V>
+    options: AbstractPutOptions<K, V>
   ): Promise<void>
 
   put<K = KDefault, V = VDefault> (
     key: K,
     value: V,
-    options: PutOptions<K, V>,
+    options: AbstractPutOptions<K, V>,
     callback: NodeCallback<void>
   ): void
 
@@ -113,12 +117,12 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
 
   del<K = KDefault> (
     key: K,
-    options: DelOptions<K>
+    options: AbstractDelOptions<K>
   ): Promise<void>
 
   del<K = KDefault> (
     key: K,
-    options: DelOptions<K>,
+    options: AbstractDelOptions<K>,
     callback: NodeCallback<void>
   ): void
 
@@ -126,22 +130,22 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Perform multiple _put_ and/or _del_ operations in bulk.
    */
   batch (
-    operations: Array<BatchOperation<KDefault, VDefault>>
+    operations: Array<AbstractBatchOperation<KDefault, VDefault>>
   ): Promise<void>
 
   batch (
-    operations: Array<BatchOperation<KDefault, VDefault>>,
+    operations: Array<AbstractBatchOperation<KDefault, VDefault>>,
     callback: NodeCallback<void>
   ): void
 
   batch<K = KDefault, V = VDefault> (
-    operations: Array<BatchOperation<K, V>>,
-    options: BatchOptions<K, V>
+    operations: Array<AbstractBatchOperation<K, V>>,
+    options: AbstractBatchOptions<K, V>
   ): Promise<void>
 
   batch<K = KDefault, V = VDefault> (
-    operations: Array<BatchOperation<K, V>>,
-    options: BatchOptions<K, V>,
+    operations: Array<AbstractBatchOperation<K, V>>,
+    options: AbstractBatchOptions<K, V>,
     callback: NodeCallback<void>
   ): void
 
@@ -152,7 +156,7 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    */
   iterator (): AbstractIterator<typeof this, KDefault, VDefault>
   iterator<K = KDefault, V = VDefault> (
-    options: IteratorOptions<K, V>
+    options: AbstractIteratorOptions<K, V>
   ): AbstractIterator<typeof this, K, V>
 
   /**
@@ -160,8 +164,8 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    */
   clear (): Promise<void>
   clear (callback: NodeCallback<void>): void
-  clear<K = KDefault> (options: ClearOptions<K>): Promise<void>
-  clear<K = KDefault> (options: ClearOptions<K>, callback: NodeCallback<void>): void
+  clear<K = KDefault> (options: AbstractClearOptions<K>): Promise<void>
+  clear<K = KDefault> (options: AbstractClearOptions<K>, callback: NodeCallback<void>): void
 
   /**
    * Returns the given {@link encoding} argument as a normalized encoding object
@@ -222,8 +226,8 @@ export { AbstractLevel }
 /**
  * Options for the database constructor.
  */
-export interface DatabaseOptions<K, V>
-  extends Omit<OpenOptions, 'passive'>, AdditionalOptions {
+export interface AbstractDatabaseOptions<K, V>
+  extends Omit<AbstractOpenOptions, 'passive'> {
   /**
    * Encoding to use for keys.
    */
@@ -238,20 +242,26 @@ export interface DatabaseOptions<K, V>
 /**
  * Options for the {@link AbstractLevel.open} method.
  */
-export interface OpenOptions extends AdditionalOptions {
+export interface AbstractOpenOptions {
   /**
    * If `true`, create an empty database if one doesn't already exist. If `false`
    * and the database doesn't exist, opening will fail.
+   *
+   * @defaultValue `true`
    */
   createIfMissing?: boolean | undefined
 
   /**
    * If `true` and the database already exists, opening will fail.
+   *
+   * @defaultValue `false`
    */
   errorIfExists?: boolean | undefined
 
   /**
    * Wait for, but do not initiate, opening of the database.
+   *
+   * @defaultValue `false`
    */
   passive?: boolean | undefined
 }
@@ -259,7 +269,7 @@ export interface OpenOptions extends AdditionalOptions {
 /**
  * Options for the {@link AbstractLevel.get} method.
  */
-export interface GetOptions<K, V> extends AdditionalOptions {
+export interface AbstractGetOptions<K, V> {
   /**
    * Custom key encoding for this operation, used to encode the `key`.
    */
@@ -274,7 +284,7 @@ export interface GetOptions<K, V> extends AdditionalOptions {
 /**
  * Options for the {@link AbstractLevel.getMany} method.
  */
-export interface GetManyOptions<K, V> extends AdditionalOptions {
+export interface AbstractGetManyOptions<K, V> {
   /**
    * Custom key encoding for this operation, used to encode the `keys`.
    */
@@ -289,7 +299,7 @@ export interface GetManyOptions<K, V> extends AdditionalOptions {
 /**
  * Options for the {@link AbstractLevel.put} method.
  */
-export interface PutOptions<K, V> extends AdditionalOptions {
+export interface AbstractPutOptions<K, V> {
   /**
    * Custom key encoding for this operation, used to encode the `key`.
    */
@@ -304,7 +314,7 @@ export interface PutOptions<K, V> extends AdditionalOptions {
 /**
  * Options for the {@link AbstractLevel.del} method.
  */
-export interface DelOptions<K> extends AdditionalOptions {
+export interface AbstractDelOptions<K> {
   /**
    * Custom key encoding for this operation, used to encode the `key`.
    */
@@ -314,7 +324,7 @@ export interface DelOptions<K> extends AdditionalOptions {
 /**
  * Options for the {@link AbstractLevel.batch} method.
  */
-export interface BatchOptions<K, V> extends AdditionalOptions {
+export interface AbstractBatchOptions<K, V> {
   /**
    * Custom key encoding for this batch, used to encode keys.
    */
@@ -330,12 +340,13 @@ export interface BatchOptions<K, V> extends AdditionalOptions {
  * A _put_ or _del_ operation to be committed with the {@link AbstractLevel.batch}
  * method.
  */
-export type BatchOperation<K, V> = BatchPutOperation<K, V> | BatchDelOperation<K>
+export type AbstractBatchOperation<K, V> =
+  AbstractBatchPutOperation<K, V> | AbstractBatchDelOperation<K>
 
 /**
  * A _put_ operation to be committed with the {@link AbstractLevel.batch} method.
  */
-export interface BatchPutOperation<K, V> {
+export interface AbstractBatchPutOperation<K, V> {
   type: 'put'
   key: K
   value: V
@@ -354,7 +365,7 @@ export interface BatchPutOperation<K, V> {
 /**
  * A _del_ operation to be committed with the {@link AbstractLevel.batch} method.
  */
-export interface BatchDelOperation<K> {
+export interface AbstractBatchDelOperation<K> {
   type: 'del'
   key: K
 
@@ -367,7 +378,7 @@ export interface BatchDelOperation<K> {
 /**
  * Options for the {@link AbstractLevel.clear} method.
  */
-export interface ClearOptions<K> extends RangeOptions<K>, AdditionalOptions {
+export interface AbstractClearOptions<K> extends RangeOptions<K> {
   /**
    * Custom key encoding for this operation, used to encode range options.
    */
