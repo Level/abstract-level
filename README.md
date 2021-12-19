@@ -29,7 +29,7 @@
   - [`db.batch()`](#dbbatch)
   - [`db.iterator([options])`](#dbiteratoroptions)
   - [`db.clear([options][, callback])`](#dbclearoptions-callback)
-  - [`encoding = db.keyEncoding([encoding]`](#encoding--dbkeyencodingencoding)
+  - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
   - [`db.defer(fn)`](#dbdeferfn)
   - [`chainedBatch`](#chainedbatch)
@@ -201,7 +201,7 @@ The optional `options` object may contain:
 - `errorIfExists` (boolean, default: `false`): If `true` and the database already exists, opening will fail.
 - `passive` (boolean, default: `false`): Wait for, but do not initiate, opening of the database.
 
-It's generally not necessary to call this method because it's automatically called by the constructor. It may however be useful to capture an error from failure to open, that would otherwise not surface until another method like `db.get()` is called. It's also possible to reopen the database after it has been closed with [`close()`](#dbclosecallback). Once `open()` has then been called, any read & write operations will again be queued internally until opening has finished.
+It's generally not necessary to call `open()` because it's automatically called by the constructor. It may however be useful to capture an error from failure to open, that would otherwise not surface until another method like `db.get()` is called. It's also possible to reopen the database after it has been closed with [`close()`](#dbclosecallback). Once `open()` has then been called, any read & write operations will again be queued internally until opening has finished.
 
 The `open()` and `close()` methods are idempotent. If the database is already open, the `callback` will be called in a next tick. If opening is already in progress, the `callback` will be called when that has finished. If closing is in progress, the database will be reopened once closing has finished. Likewise, if `close()` is called after `open()`, the database will be closed once opening has finished and the prior `open()` call will receive an error.
 
@@ -236,6 +236,8 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 The `callback` function will be called with an error if the operation failed. If the key was not found, the error will have code [`LEVEL_NOT_FOUND`](#errors). If successful the first argument will be `null` and the second argument will be the value. If no callback is provided, a promise is returned.
 
+If the database indicates support of snapshots via `db.supports.snapshots` then `db.get()` _should_ read from a snapshot of the database, created at the time `db.get()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
+
 ### `db.getMany(keys[, options][, callback])`
 
 Get multiple values from the database by an array of `keys`. The optional `options` object may contain:
@@ -244,6 +246,8 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
 
 The `callback` function will be called with an error if the operation failed. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`. If no callback is provided, a promise is returned.
+
+If the database indicates support of snapshots via `db.supports.snapshots` then `db.getMany()` _should_ read from a snapshot of the database, created at the time `db.getMany()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
 
 ### `db.put(key, value[, options][, callback])`
 
@@ -266,34 +270,45 @@ The `callback` function will be called with no arguments if the operation was su
 
 Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument must be an array containing a list of operations to be executed sequentially, although as a whole they are performed as an atomic operation.
 
-Each operation must be an object with the following properties: `type`, `key`, `value`, where the `type` is either `'put'` or `'del'`. It may optionally have `keyEncoding` and `valueEncoding` properties. In the case of type `'del'` the `value` and `valueEncoding` properties are optional and ignored.
+Each operation must be an object with at least a `type` property set to either `'put'` or `'del'`. If the `type` is `'put'`, the operation must have `key` and `value` properties. It may optionally have `keyEncoding` and / or `valueEncoding` properties to encode keys or values with a custom encoding for just that operation. If the `type` is `'del'`, the operation must have a `key` property and may optionally have a `keyEncoding` property.
 
 The optional `options` object may contain:
 
-- `keyEncoding`: custom key encoding for this batch.
-- `valueEncoding`: custom value encoding for this batch.
+- `keyEncoding`: custom key encoding for this batch, used to encode keys.
+- `valueEncoding`: custom value encoding for this batch, used to encode values.
 
-Encoding options on individual operation objects take precedence. The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
+Encoding properties on individual operations take precedence. In the following example, the first value will be encoded with the `'utf8'` encoding and the second with `'json'`.
+
+```js
+await db.batch([
+  { type: 'put', key: 'a', value: 'foo' },
+  { type: 'put', key: 'b', value: 123, valueEncoding: 'json' }
+], { valueEncoding: 'utf8' })
+```
+
+The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
 ### `db.batch()`
 
-Create a [`chainedBatch`](#chainedbatch) object, when called with no arguments. A chained batch can be used to build and eventually commit an atomic batch of operations. Depending on how it's used, it is possible to obtain greater performance with this form of `batch()`. On several implementations however, it is just sugar.
+Create a [`chainedBatch`](#chainedbatch) object, when `batch()` is called with zero arguments. A chained batch can be used to build and eventually commit an atomic batch of operations. Depending on how it's used, it is possible to obtain greater performance with this form of `batch()`. On several implementations however, it is just sugar.
 
 ### `db.iterator([options])`
 
-Create an [`iterator`](#iterator). Accepts the following range options:
+Create an [`iterator`](#iterator). The optional `options` object may contain the following _range options_ to control the range of entries to be iterated:
 
 - `gt` (greater than), `gte` (greater than or equal) define the lower bound of the range to be iterated. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries iterated will be the same.
 - `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be iterated. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries iterated will be the same.
 - `reverse` (boolean, default: `false`): iterate entries in reverse order. Beware that a reverse seek can be slower than a forward seek.
-- `limit` (number, default: `-1`): limit the number of entries collected by this iterator. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be returned instead of the lowest keys.
+- `limit` (number, default: `-1`): limit the number of entries iterated. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be returned instead of the lowest keys.
 
-In addition to range options, `iterator()` takes the following options:
+If no range options are provided, the iterator will visit all entries of the database, starting at the lowest key and ending at the highest key. In addition to range options, the `options` object may contain:
 
 - `keys` (boolean, default: `true`): whether to return the key of each entry. If set to `false`, the iterator will yield keys with a value of `undefined`.
 - `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, the iterator will yield values with a value of `undefined`.
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
+
+If only keys or values are needed, setting the `values` or `keys` option to `false` may increase performance because that data won't have to be fetched, copied or decoded.
 
 Lastly, an implementation is free to add its own options.
 
@@ -305,13 +320,13 @@ Delete all entries or a range. Not guaranteed to be atomic. Accepts the followin
 
 - `gt` (greater than), `gte` (greater than or equal) define the lower bound of the range to be deleted. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
 - `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be deleted. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
-- `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to remove the last N records.
+- `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
 - `limit` (number, default: `-1`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
 
 If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
-### `encoding = db.keyEncoding([encoding]`
+### `encoding = db.keyEncoding([encoding])`
 
 Returns the given `encoding` argument as a normalized encoding object that follows the [`level-transcoder`](https://github.com/Level/transcoder) encoding interface. See [Encodings](#encodings) for an introduction. The `encoding` argument may be:
 
@@ -389,7 +404,7 @@ A reference to the database that created this chained batch.
 
 ### `iterator`
 
-An iterator allows visiting all entries of a database or a range of it. It operates on a snapshot of the database, created at the time `db.iterator()` was called. This means reads on the iterator are unaffected by simultaneous writes. Most but not all implementations can offer this guarantee, which is indicated by `db.supports.snapshots`.
+An iterator allows one to lazily read a range of entries stored in the database. It reads from a snapshot of the database, created at the time `db.iterator()` was called. This means the iterator will not see the data of simultaneous write operations. Most but not all implementations can offer this guarantee, as indicated by `db.supports.snapshots`.
 
 Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing, breaking or returning from a `for await...of` loop automatically calls `iterator.close()`.
 
@@ -399,7 +414,7 @@ An iterator reaches its natural end in the following situations:
 - The end of the range has been reached
 - The last `iterator.seek()` was out of range.
 
-An iterator keeps track of when a `next()` is in progress and when an `close()` has been called so it doesn't allow concurrent `next()` calls, it does allow `close()` while a `next()` is in progress and it doesn't allow `next()` after `close()` has been called.
+An iterator keeps track of when a `next()` call is in progress and when `close()` has been called. It doesn't allow concurrent `next()` calls, it does allow `close()` while a `next()` is in progress and it doesn't allow `next()` after `close()` has been called.
 
 #### `for await...of iterator`
 
@@ -439,7 +454,7 @@ If range options like `gt` were passed to `db.iterator()` and `target` does not 
 
 #### `iterator.close([callback])`
 
-Free up underlying resources. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned.
+Free up underlying resources. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the iterator is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
 
 #### `iterator.db`
 
