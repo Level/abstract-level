@@ -1,5 +1,5 @@
 import * as Transcoder from 'level-transcoder'
-import { NodeCallback, AdditionalOptions } from './interfaces'
+import { NodeCallback } from './interfaces'
 
 export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
   constructor (db: TDatabase)
@@ -23,7 +23,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
   put<K = KDefault, V = VDefault> (
     key: K,
     value: V,
-    options: ChainedBatchPutOptions<K, V>
+    options: AbstractChainedBatchPutOptions<K, V>
   ): this
 
   /**
@@ -31,7 +31,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    * called.
    */
   del (key: KDefault): this
-  del<K = KDefault> (key: K, options: ChainedBatchDelOptions<K>): this
+  del<K = KDefault> (key: K, options: AbstractChainedBatchDelOptions<K>): this
 
   /**
    * Clear all queued operations on this batch.
@@ -44,9 +44,9 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    * commits.
    */
   write (): Promise<void>
-  write (options: ChainedBatchWriteOptions): Promise<void>
+  write (options: {}): Promise<void>
   write (callback: NodeCallback<void>): void
-  write (options: ChainedBatchWriteOptions, callback: NodeCallback<void>): void
+  write (options: {}, callback: NodeCallback<void>): void
 
   /**
    * Free up underlying resources. This should be done even if the chained batch has
@@ -61,7 +61,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
 /**
  * Options for the {@link AbstractChainedBatch.put} method.
  */
-export interface ChainedBatchPutOptions<K, V> extends AdditionalOptions {
+export interface AbstractChainedBatchPutOptions<K, V> {
   /**
    * Custom key encoding for this _put_ operation, used to encode the `key`.
    */
@@ -76,16 +76,9 @@ export interface ChainedBatchPutOptions<K, V> extends AdditionalOptions {
 /**
  * Options for the {@link AbstractChainedBatch.del} method.
  */
-export interface ChainedBatchDelOptions<K> extends AdditionalOptions {
+export interface AbstractChainedBatchDelOptions<K> {
   /**
    * Custom key encoding for this _del_ operation, used to encode the `key`.
    */
   keyEncoding?: string | Transcoder.PartialEncoder<K> | undefined
-}
-
-/**
- * Options for the {@link AbstractChainedBatch.write} method.
- */
-export interface ChainedBatchWriteOptions extends AdditionalOptions {
-  // There are no options by default.
 }

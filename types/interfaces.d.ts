@@ -4,10 +4,6 @@
 export type NodeCallback<T> =
   (err: Error | undefined | null, result?: T | undefined) => void
 
-export interface AdditionalOptions {
-  [index: string]: any
-}
-
 export interface RangeOptions<K> {
   gt?: K
   gte?: K

@@ -1,7 +1,7 @@
 import * as Transcoder from 'level-transcoder'
-import { RangeOptions, AdditionalOptions, NodeCallback } from './interfaces'
+import { RangeOptions, NodeCallback } from './interfaces'
 
-export interface IteratorOptions<K, V> extends RangeOptions<K>, AdditionalOptions {
+export interface AbstractIteratorOptions<K, V> extends RangeOptions<K> {
   /**
    * Whether to return the key of each entry. Defaults to `true`. If set to `false`,
    * the iterator will yield keys with a value of `undefined`.
@@ -27,7 +27,7 @@ export interface IteratorOptions<K, V> extends RangeOptions<K>, AdditionalOption
 }
 
 export class AbstractIterator<TDatabase, K, V> {
-  constructor (db: TDatabase, options: IteratorOptions<K, V>)
+  constructor (db: TDatabase, options: AbstractIteratorOptions<K, V>)
 
   /**
    * A reference to the database that created this iterator.
@@ -36,7 +36,8 @@ export class AbstractIterator<TDatabase, K, V> {
 
   /**
    * Advance the iterator to the next key and yield the entry at that key. When
-   * possible, prefer to use [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of)
+   * possible, prefer to use
+   * [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of)
    * instead.
    */
   next (): Promise<[K, V]>
@@ -46,13 +47,14 @@ export class AbstractIterator<TDatabase, K, V> {
    * Seek the iterator to a given key or the closest key. Subsequent calls to {@link next}
    * (including implicit calls in a `for await...of` loop) will yield entries with
    * keys equal to or larger than {@link target}, or equal to or smaller than {@link target}
-   * if the {@link IteratorOptions.reverse} option was true.
+   * if the {@link AbstractIteratorOptions.reverse} option was true.
    */
   seek (target: K): void
-  seek<TTarget = K> (target: TTarget, options: SeekOptions<TTarget>): void
+  seek<TTarget = K> (target: TTarget, options: AbstractSeekOptions<TTarget>): void
 
   /**
-   * Free up underlying resources. Not necessary to call if [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of)
+   * Free up underlying resources. Not necessary to call if
+   * [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of)
    * is used.
    */
   close (): Promise<void>
@@ -64,11 +66,11 @@ export class AbstractIterator<TDatabase, K, V> {
 /**
  * Options for the {@link AbstractIterator.seek} method.
  */
-export interface SeekOptions<K> {
+export interface AbstractSeekOptions<K> {
   /**
    * Custom key encoding, used to encode the `target`. By default the
-   * {@link IteratorOptions.keyEncoding} option of the iterator is used, or (if that
-   * wasn't set) the keyEncoding of the database.
+   * {@link AbstractIteratorOptions.keyEncoding} option of the iterator is used,
+   * or (if that wasn't set) the keyEncoding of the database.
    */
   keyEncoding?: string | Transcoder.PartialEncoder<K> | undefined
 }
