@@ -129,15 +129,15 @@ AbstractIterator.prototype.seek = function (target, options) {
       code: 'LEVEL_ITERATOR_BUSY'
     })
   } else {
-    const keyEncoding = this.db.keyEncoding(
-      options.keyEncoding || this[kKeyEncoding]
-    )
+    const keyEncoding = this.db.keyEncoding(options.keyEncoding || this[kKeyEncoding])
+    const keyFormat = keyEncoding.format
 
-    if (options.keyEncoding !== keyEncoding.format) {
-      options = { ...options, keyEncoding: keyEncoding.format }
+    if (options.keyEncoding !== keyFormat) {
+      options = { ...options, keyEncoding: keyFormat }
     }
 
-    this._seek(keyEncoding.encode(target), options)
+    const mapped = this.db.prefixKey(keyEncoding.encode(target), keyFormat)
+    this._seek(mapped, options)
   }
 }
 

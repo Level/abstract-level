@@ -1,7 +1,8 @@
 import { IManifest } from 'level-supports'
 import * as Transcoder from 'level-transcoder'
 import { EventEmitter } from 'events'
-import { AbstractChainedBatch } from '..'
+import { AbstractChainedBatch } from './abstract-chained-batch'
+import { AbstractSublevel, AbstractSublevelOptions } from './abstract-sublevel'
 import { AbstractIterator, AbstractIteratorOptions } from './abstract-iterator'
 import { NodeCallback, RangeOptions } from './interfaces'
 
@@ -130,21 +131,21 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Perform multiple _put_ and/or _del_ operations in bulk.
    */
   batch (
-    operations: Array<AbstractBatchOperation<KDefault, VDefault>>
+    operations: Array<AbstractBatchOperation<typeof this, KDefault, VDefault>>
   ): Promise<void>
 
   batch (
-    operations: Array<AbstractBatchOperation<KDefault, VDefault>>,
+    operations: Array<AbstractBatchOperation<typeof this, KDefault, VDefault>>,
     callback: NodeCallback<void>
   ): void
 
   batch<K = KDefault, V = VDefault> (
-    operations: Array<AbstractBatchOperation<K, V>>,
+    operations: Array<AbstractBatchOperation<typeof this, K, V>>,
     options: AbstractBatchOptions<K, V>
   ): Promise<void>
 
   batch<K = KDefault, V = VDefault> (
-    operations: Array<AbstractBatchOperation<K, V>>,
+    operations: Array<AbstractBatchOperation<typeof this, K, V>>,
     options: AbstractBatchOptions<K, V>,
     callback: NodeCallback<void>
   ): void
@@ -166,6 +167,29 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   clear (callback: NodeCallback<void>): void
   clear<K = KDefault> (options: AbstractClearOptions<K>): Promise<void>
   clear<K = KDefault> (options: AbstractClearOptions<K>, callback: NodeCallback<void>): void
+
+  /**
+   * Create a sublevel.
+   * @param name Name of the sublevel, used to prefix keys.
+   */
+  sublevel (name: string): AbstractSublevel<typeof this, TFormat, string, string>
+  sublevel<K = string, V = string> (
+    name: string,
+    options: AbstractSublevelOptions<K, V>
+  ): AbstractSublevel<typeof this, TFormat, K, V>
+
+  /**
+   * Add sublevel prefix to the given {@link key}, which must be already-encoded. If this
+   * database is not a sublevel, the given {@link key} is returned as-is.
+   *
+   * @param key Key to add prefix to.
+   * @param keyFormat Format of {@link key}. One of `'utf8'`, `'buffer'`, `'view'`.
+   * If `'utf8'` then {@link key} must be a string and the return value will be a string.
+   * If `'buffer'` then Buffer, if `'view'` then Uint8Array.
+   */
+  prefixKey (key: string, keyFormat: 'utf8'): string
+  prefixKey (key: Buffer, keyFormat: 'buffer'): Buffer
+  prefixKey (key: Uint8Array, keyFormat: 'view'): Uint8Array
 
   /**
    * Returns the given {@link encoding} argument as a normalized encoding object
@@ -230,11 +254,13 @@ export interface AbstractDatabaseOptions<K, V>
   extends Omit<AbstractOpenOptions, 'passive'> {
   /**
    * Encoding to use for keys.
+   * @defaultValue `'utf8'`
    */
   keyEncoding?: string | Transcoder.PartialEncoding<K> | undefined
 
   /**
    * Encoding to use for values.
+   * @defaultValue `'utf8'`
    */
   valueEncoding?: string | Transcoder.PartialEncoding<V> | undefined
 }
@@ -340,13 +366,13 @@ export interface AbstractBatchOptions<K, V> {
  * A _put_ or _del_ operation to be committed with the {@link AbstractLevel.batch}
  * method.
  */
-export type AbstractBatchOperation<K, V> =
-  AbstractBatchPutOperation<K, V> | AbstractBatchDelOperation<K>
+export type AbstractBatchOperation<TDatabase, K, V> =
+  AbstractBatchPutOperation<TDatabase, K, V> | AbstractBatchDelOperation<TDatabase, K>
 
 /**
  * A _put_ operation to be committed with the {@link AbstractLevel.batch} method.
  */
-export interface AbstractBatchPutOperation<K, V> {
+export interface AbstractBatchPutOperation<TDatabase, K, V> {
   type: 'put'
   key: K
   value: V
@@ -360,12 +386,27 @@ export interface AbstractBatchPutOperation<K, V> {
    * Custom key encoding for this _put_ operation, used to encode the {@link value}.
    */
   valueEncoding?: string | Transcoder.PartialEncoding<V> | undefined
+
+  /**
+   * Act as though the _put_ operation is performed on the given sublevel, to similar
+   * effect as:
+   *
+   * ```js
+   * await sublevel.batch([{ type: 'put', key, value }])
+   * ```
+   *
+   * This allows atomically committing data to multiple sublevels. The {@link key} will
+   * be prefixed with the `prefix` of the sublevel, and the {@link key} and {@link value}
+   * will be encoded by the sublevel (using the default encodings of the sublevel unless
+   * {@link keyEncoding} and / or {@link valueEncoding} are provided).
+   */
+  sublevel?: AbstractSublevel<TDatabase, any, any, any> | undefined
 }
 
 /**
  * A _del_ operation to be committed with the {@link AbstractLevel.batch} method.
  */
-export interface AbstractBatchDelOperation<K> {
+export interface AbstractBatchDelOperation<TDatabase, K> {
   type: 'del'
   key: K
 
@@ -373,6 +414,21 @@ export interface AbstractBatchDelOperation<K> {
    * Custom key encoding for this _del_ operation, used to encode the {@link key}.
    */
   keyEncoding?: string | Transcoder.PartialEncoding<K> | undefined
+
+  /**
+   * Act as though the _del_ operation is performed on the given sublevel, to similar
+   * effect as:
+   *
+   * ```js
+   * await sublevel.batch([{ type: 'del', key }])
+   * ```
+   *
+   * This allows atomically committing data to multiple sublevels. The {@link key} will
+   * be prefixed with the `prefix` of the sublevel, and the {@link key} will be encoded
+   * by the sublevel (using the default key encoding of the sublevel unless
+   * {@link keyEncoding} is provided).
+   */
+  sublevel?: AbstractSublevel<TDatabase, any, any, any> | undefined
 }
 
 /**

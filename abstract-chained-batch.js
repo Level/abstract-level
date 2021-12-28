@@ -43,21 +43,24 @@ AbstractChainedBatch.prototype.put = function (key, value, options) {
   const err = this.db._checkKey(key) || this.db._checkValue(value)
   if (err) throw err
 
-  const keyEncoding = this.db.keyEncoding(options && options.keyEncoding)
-  const valueEncoding = this.db.valueEncoding(options && options.valueEncoding)
+  const db = options && options.sublevel != null ? options.sublevel : this.db
   const original = options
+  const keyEncoding = db.keyEncoding(options && options.keyEncoding)
+  const valueEncoding = db.valueEncoding(options && options.valueEncoding)
+  const keyFormat = keyEncoding.format
 
   // Forward encoding options
-  if (!options || options.keyEncoding !== keyEncoding.format ||
-    options.valueEncoding !== valueEncoding.format) {
-    options = {
-      ...options,
-      keyEncoding: keyEncoding.format,
-      valueEncoding: valueEncoding.format
-    }
+  options = { ...options, keyEncoding: keyFormat, valueEncoding: valueEncoding.format }
+
+  // Prevent double prefixing
+  if (db !== this.db) {
+    options.sublevel = null
   }
 
-  this._put(keyEncoding.encode(key), valueEncoding.encode(value), options)
+  const mappedKey = db.prefixKey(keyEncoding.encode(key), keyFormat)
+  const mappedValue = valueEncoding.encode(value)
+
+  this._put(mappedKey, mappedValue, options)
   this[kOperations].push({ ...original, type: 'put', key, value })
 
   return this
@@ -75,15 +78,20 @@ AbstractChainedBatch.prototype.del = function (key, options) {
   const err = this.db._checkKey(key)
   if (err) throw err
 
+  const db = options && options.sublevel != null ? options.sublevel : this.db
   const original = options
-  const keyEncoding = this.db.keyEncoding(options && options.keyEncoding)
+  const keyEncoding = db.keyEncoding(options && options.keyEncoding)
+  const keyFormat = keyEncoding.format
 
   // Forward encoding options
-  if (!options || options.keyEncoding !== keyEncoding.format) {
-    options = { ...options, keyEncoding: keyEncoding.format }
+  options = { ...options, keyEncoding: keyFormat }
+
+  // Prevent double prefixing
+  if (db !== this.db) {
+    options.sublevel = null
   }
 
-  this._del(keyEncoding.encode(key), options)
+  this._del(db.prefixKey(keyEncoding.encode(key), keyFormat), options)
   this[kOperations].push({ ...original, type: 'del', key })
 
   return this
