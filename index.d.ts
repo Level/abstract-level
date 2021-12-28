@@ -26,6 +26,11 @@ export {
 } from './types/abstract-chained-batch'
 
 export {
+  AbstractSublevel,
+  AbstractSublevelOptions
+} from './types/abstract-sublevel'
+
+export {
   NodeCallback
 } from './types/interfaces'
 

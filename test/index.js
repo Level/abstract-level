@@ -1,6 +1,7 @@
 'use strict'
 
 const common = require('./common')
+const kSublevels = Symbol('sublevels')
 
 function suite (options) {
   const testCommon = common(options)
@@ -51,6 +52,20 @@ function suite (options) {
 
   require('./clear-test').all(test, testCommon)
   require('./clear-range-test').all(test, testCommon)
+  require('./sublevel-test').all(test, testCommon)
+
+  // Run the same suite on a sublevel
+  if (!testCommon.internals[kSublevels]) {
+    const factory = testCommon.factory
+
+    suite({
+      ...testCommon,
+      internals: { [kSublevels]: true },
+      factory (opts) {
+        return factory().sublevel('test', opts)
+      }
+    })
+  }
 }
 
 suite.common = common

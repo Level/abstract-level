@@ -1,6 +1,6 @@
 # ![abstract-level](./header.svg)
 
-**Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) that removes the need for [`levelup`](https://github.com/Level/levelup) and [`encoding-down`](https://github.com/Level/encoding-down). If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md).
 
 > :pushpin: Which module should I use? What happened to `levelup`? Head over to the [FAQ](https://github.com/Level/community#faq).
 
@@ -29,8 +29,10 @@
   - [`db.batch()`](#dbbatch)
   - [`db.iterator([options])`](#dbiteratoroptions)
   - [`db.clear([options][, callback])`](#dbclearoptions-callback)
+  - [`sublevel = db.sublevel(name[, options])`](#sublevel--dbsublevelname-options)
   - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
+  - [`db.prefixKey(key, keyFormat)`](#dbprefixkeykey-keyformat)
   - [`db.defer(fn)`](#dbdeferfn)
   - [`chainedBatch`](#chainedbatch)
     - [`chainedBatch.put(key, value[, options])`](#chainedbatchputkey-value-options)
@@ -46,6 +48,9 @@
     - [`iterator.seek(target[, options])`](#iteratorseektarget-options)
     - [`iterator.close([callback])`](#iteratorclosecallback)
     - [`iterator.db`](#iteratordb)
+  - [`sublevel`](#sublevel)
+    - [`sublevel.prefix`](#sublevelprefix)
+    - [`sublevel.db`](#subleveldb)
   - [Encodings](#encodings)
   - [Events](#events)
   - [Errors](#errors)
@@ -61,6 +66,7 @@
     - [`LEVEL_INVALID_KEY`](#level_invalid_key)
     - [`LEVEL_INVALID_VALUE`](#level_invalid_value)
     - [`LEVEL_CORRUPTION`](#level_corruption)
+    - [`LEVEL_INVALID_PREFIX`](#level_invalid_prefix)
     - [`LEVEL_NOT_SUPPORTED`](#level_not_supported)
     - [`LEVEL_LEGACY`](#level_legacy)
   - [Shared Access](#shared-access)
@@ -77,6 +83,7 @@
   - [`db._chainedBatch()`](#db_chainedbatch)
   - [`db._iterator(options)`](#db_iteratoroptions)
   - [`db._clear(options, callback)`](#db_clearoptions-callback)
+  - [`sublevel = db._sublevel(name, options)`](#sublevel--db_sublevelname-options)
   - [`iterator = AbstractIterator(db, options)`](#iterator--abstractiteratordb-options)
     - [`iterator._next(callback)`](#iterator_nextcallback)
     - [`iterator._seek(target, options)`](#iterator_seektarget-options)
@@ -155,6 +162,10 @@ await db.get<string, string>('a', { valueEncoding: 'utf8' })
 
 // Though in some cases TypeScript can infer them
 await db.get('a', { valueEncoding: db.valueEncoding('utf8') })
+
+// It works the same for sublevels
+const abc = db.sublevel('abc')
+const xyz = db.sublevel<string, any>('xyz', { valueEncoding: 'json' })
 ```
 
 </details>
@@ -272,6 +283,27 @@ Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argumen
 
 Each operation must be an object with at least a `type` property set to either `'put'` or `'del'`. If the `type` is `'put'`, the operation must have `key` and `value` properties. It may optionally have `keyEncoding` and / or `valueEncoding` properties to encode keys or values with a custom encoding for just that operation. If the `type` is `'del'`, the operation must have a `key` property and may optionally have a `keyEncoding` property.
 
+An operation of either type may also have a `sublevel` property, to prefix the key of the operation with the prefix of that sublevel. This allows atomically committing data to multiple sublevels. Keys and values will be encoded by the sublevel, to the same effect as a `sublevel.batch(..)` call. In the following example, the first `value` will be encoded with `'json'` rather than the default encoding of `db`:
+
+```js
+const people = db.sublevel('people', { valueEncoding: 'json' })
+const nameIndex = db.sublevel('names')
+
+await db.batch([{
+  type: 'put',
+  sublevel: people,
+  key: '123',
+  value: {
+    name: 'Alice'
+  }
+}, {
+  type: 'put',
+  sublevel: nameIndex,
+  key: 'Alice',
+  value: '123'
+}])
+```
+
 The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this batch, used to encode keys.
@@ -326,6 +358,54 @@ Delete all entries or a range. Not guaranteed to be atomic. Accepts the followin
 
 If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
+### `sublevel = db.sublevel(name[, options])`
+
+Create a [sublevel](#sublevel) that has the same interface as `db` (except for additional, implementation-specific methods) and prefixes the keys of operations before passing them on to `db`. The `name` argument is required and must be a string.
+
+```js
+const example = db.sublevel('example')
+
+await example.put('hello', 'world')
+await db.put('a', '1')
+
+// Prints ['hello', 'world']
+for await (const [key, value] of example.iterator()) {
+  console.log([key, value])
+}
+```
+
+Sublevels effectively separate a database into sections. Think SQL tables, but evented, ranged and realtime! Each sublevel is an `AbstractLevel` instance with its own keyspace, [events](https://github.com/Level/abstract-level#events) and [encodings](https://github.com/Level/abstract-level#encodings). For example, it's possible to have one sublevel with `'buffer'` keys and another with `'utf8'` keys. The same goes for values. Like so:
+
+```js
+db.sublevel('one', { valueEncoding: 'json' })
+db.sublevel('two', { keyEncoding: 'buffer' })
+```
+
+An own keyspace means that `sublevel.iterator()` only includes entries of that sublevel, `sublevel.clear()` will only delete entries of that sublevel, and so forth. Range options get prefixed too.
+
+Fully qualified keys (as seen from the parent database) take the form of `prefix + key` where `prefix` is `separator + name + separator`. If `name` is empty, the effective prefix is two separators. Sublevels can be nested: if `db` is itself a sublevel then the effective prefix is a combined prefix, e.g. `'!one!!two!'`. Note that a parent database will see its own keys as well as keys of any nested sublevels:
+
+```js
+// Prints ['!example!hello', 'world'] and ['a', '1']
+for await (const [key, value] of db.iterator()) {
+  console.log([key, value])
+}
+```
+
+> :pushpin: The key structure is equal to that of [`subleveldown`](https://github.com/Level/subleveldown). This means that an `abstract-level` sublevel can read sublevels previously created with (and populated by) `subleveldown`.
+
+Internally, sublevels operate on keys that are either a string, Buffer or Uint8Array, depending on parent database and choice of encoding. Which is to say: binary keys are fully supported. The `name` must however always be a string and can only contain ASCII characters. When bundling JavaScript with Webpack, Browserify or other, you can choose not to use the `'buffer'` encoding and (through configuration of the bundler) exclude the [`buffer`](https://github.com/feross/buffer) shim in order to reduce bundle size.
+
+The optional `options` object may contain:
+
+- `separator` (string, default: `'!'`): Character for separating sublevel names from user keys and each other. Must sort before characters used in `name`. An error will be thrown if that's not the case.
+- `keyEncoding` (string or object, default `'utf8'`): encoding to use for keys
+- `valueEncoding` (string or object, default `'utf8'`): encoding to use for values.
+
+The `keyEncoding` and `valueEncoding` options are forwarded to the `AbstractLevel` constructor and work the same, as if a new, separate database was created. They default to `'utf8'` regardless of the encodings configured on `db`. Other options are forwarded too but `abstract-level` has no relevant options at the time of writing. For example, setting the `createIfMissing` option will have no effect. Why is that?
+
+Like regular databases, sublevels open themselves but they do not affect the state of the parent database. This means a sublevel can be individually closed and (re)opened. If the sublevel is created while the parent database is opening, it will wait for that to finish. If the parent database is closed, then opening the sublevel will fail and subsequent operations on the sublevel will yield errors with code [`LEVEL_DATABASE_NOT_OPEN`](#errors).
+
 ### `encoding = db.keyEncoding([encoding])`
 
 Returns the given `encoding` argument as a normalized encoding object that follows the [`level-transcoder`](https://github.com/Level/transcoder) encoding interface. See [Encodings](#encodings) for an introduction. The `encoding` argument may be:
@@ -344,6 +424,17 @@ Assume that e.g. `db.keyEncoding().encode(key)` is safe to call at any time incl
 ### `encoding = db.valueEncoding([encoding])`
 
 Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the database (if the `encoding` argument is omitted, `null` or `undefined`).
+
+### `db.prefixKey(key, keyFormat)`
+
+Add sublevel prefix to the given `key`, which must be already-encoded. If this database is not a sublevel, the given `key` is returned as-is. The `keyFormat` must be one of `'utf8'`, `'buffer'`, `'view'`. If `'utf8'` then `key` must be a string and the return value will be a string. If `'buffer'` then Buffer, if `'view'` then Uint8Array.
+
+```js
+const sublevel = db.sublevel('example')
+
+console.log(db.prefixKey('a', 'utf8')) // 'a'
+console.log(sublevel.prefixKey('a', 'utf8')) // '!example!a'
+```
 
 ### `db.defer(fn)`
 
@@ -369,12 +460,14 @@ Queue a `put` operation on this batch, not committed until `write()` is called. 
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
+- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The `key` will be prefixed with the `prefix` of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
 
 #### `chainedBatch.del(key[, options])`
 
 Queue a `del` operation on this batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) error if `key` is invalid. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The `key` will be prefixed with the `prefix` of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
 
 #### `chainedBatch.clear()`
 
@@ -459,6 +552,34 @@ Free up underlying resources. The `callback` function will be called with no arg
 #### `iterator.db`
 
 A reference to the database that created this iterator.
+
+### `sublevel`
+
+A sublevel is an instance of the `AbstractSublevel` class, which extends `AbstractLevel` and thus has the same API as documented above. Sublevels have a few additional properties.
+
+#### `sublevel.prefix`
+
+Prefix of the sublevel. A read-only string property.
+
+```js
+const example = db.sublevel('example')
+const nested = example.sublevel('nested')
+
+console.log(example.prefix) // '!example!'
+console.log(nested.prefix) // '!example!!nested!'
+```
+
+#### `sublevel.db`
+
+Parent database. A read-only property.
+
+```js
+const example = db.sublevel('example')
+const nested = example.sublevel('nested')
+
+console.log(example.db === db) // true
+console.log(nested.db === db) // true
+```
 
 ### Encodings
 
@@ -615,6 +736,10 @@ When a value is `null`, `undefined` or (if an implementation deems it so) otherw
 #### `LEVEL_CORRUPTION`
 
 Data could not be read (from an underlying store) due to a corruption.
+
+#### `LEVEL_INVALID_PREFIX`
+
+When a sublevel prefix contains characters outside of the supported byte range.
 
 #### `LEVEL_NOT_SUPPORTED`
 
@@ -867,6 +992,35 @@ Delete all entries or a range. Does not have to be atomic. It is recommended (an
 Implementations that wrap another database can typically forward the `_clear()` call to that database, having transformed range options if necessary.
 
 The `options` object will always have the following properties: `reverse`, `limit` and `keyEncoding`. If the user passed range options to `db.clear()`, those will be encoded and set in `options`.
+
+### `sublevel = db._sublevel(name, options)`
+
+Create a [sublevel](#sublevel). The `options` object will always have the following properties: `separator`. The default `_sublevel()` returns a new instance of the [`AbstractSublevel`](./lib/abstract-sublevel.js) class. Overriding is optional. The `AbstractSublevel` can be extended in order to add additional methods to sublevels:
+
+```js
+const { AbstractLevel, AbstractSublevel } = require('abstract-level')
+
+class ExampleLevel extends AbstractLevel {
+  _sublevel (name, options) {
+    return new ExampleSublevel(this, name, options)
+  }
+}
+
+// For brevity this does not handle deferred open
+class ExampleSublevel extends AbstractSublevel {
+  example (key, options) {
+    // Encode and prefix the key
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const keyFormat = keyEncoding.format
+
+    key = this.prefixKey(keyEncoding.encode(key), keyFormat)
+
+    // The parent database can be accessed like so. Make sure
+    // to forward encoding options and use the full key.
+    this.db.del(key, { keyEncoding: keyFormat }, ...)
+  }
+}
+```
 
 ### `iterator = AbstractIterator(db, options)`
 

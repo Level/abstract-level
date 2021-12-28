@@ -24,6 +24,7 @@ function testCommon (options) {
   return protect(options, {
     test: test,
     factory: factory,
+    internals: options.internals || {},
 
     // Expose manifest through testCommon to more easily skip tests based on
     // supported features. Use a getter to only create a db once. Implicitly
@@ -43,6 +44,7 @@ function testCommon (options) {
 
 module.exports = testCommon
 
+// To help migrating from abstract-leveldown.
 // Throw if test suite options are used instead of db.supports
 function protect (options, testCommon) {
   const legacyOptions = [

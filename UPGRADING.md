@@ -23,12 +23,13 @@ This document describes breaking changes and how to upgrade. For a complete list
   - [5. Errors now use codes](#5-errors-now-use-codes)
   - [6. Semi-private properties have been removed](#6-semi-private-properties-have-been-removed)
   - [7. Changes to test suite](#7-changes-to-test-suite)
+  - [8. Sublevels are builtin](#8-sublevels-are-builtin)
 
 </details>
 
 ## Upcoming
 
-**Introducing `abstract-level`: a fork of `abstract-leveldown` that removes the need for `levelup` and `encoding-down`. This means that an `abstract-level` database is a complete solution that doesn't need to be wrapped. It has the same API as `level(up)` including encodings, promises and events. In addition, implementations can now choose to use Uint8Array for keys and values instead of Buffer. Consumers of an implementation can use both.**
+**Introducing `abstract-level`: a fork of `abstract-leveldown` that removes the need for `levelup`, `encoding-down` and `subleveldown`. This means that an `abstract-level` database is a complete solution that doesn't need to be wrapped. It has the same API as `level(up)` including encodings, promises and events. In addition, implementations can now choose to use Uint8Array for keys and values instead of Buffer. Consumers of an implementation can use both. Sublevels are builtin.**
 
 We've put together several upgrade guides for different modules. See the [FAQ](https://github.com/Level/community#faq) to find the best upgrade guide for you. This upgrade guide describes how to replace `abstract-leveldown` with `abstract-level`.
 
@@ -199,6 +200,61 @@ The abstract test suite of `abstract-level` has some breaking changes compared t
 Many tests were imported from `levelup`, `encoding-down`, `deferred-leveldown`, `memdown`, `level-js` and `leveldown`. They test the changes described above and improve coverage of existing behavior.
 
 Lastly, it's recommended to revisit any custom tests of an implementation. In particular if those tests relied upon the previously loose state checking of `abstract-leveldown`. For example, making a `db.put()` call before `db.open()`. Such a test now has a different meaning. The previous meaning can typically be restored by wrapping tests with `db.once('open', ...)` or `await db.open()` logic.
+
+### 8. Sublevels are builtin
+
+_This section is only relevant if you use [`subleveldown`](https://github.com/Level/subleveldown) (which can not wrap an `abstract-level` database)._
+
+Sublevels are now builtin. If you previously did:
+
+```js
+const sub = require('subleveldown')
+const example1 = sub(db, 'example1')
+const example2 = sub(db, 'example2', { valueEncoding: 'json' })
+```
+
+You must now do:
+
+```js
+const example1 = db.sublevel('example1')
+const example2 = db.sublevel('example2', { valueEncoding: 'json' })
+```
+
+The key structure is equal to that of `subleveldown`. This means that an `abstract-level` sublevel can read sublevels previously created with (and populated by) `subleveldown`. There are some new features:
+
+- `db.batch(..)` takes a `sublevel` option on operations, to atomically commit data to multiple sublevels
+- Sublevels support Uint8Array in addition to Buffer
+- `AbstractLevel#_sublevel()` can be overridden to add additional methods to sublevels.
+
+To reduce function overloads, the prefix argument (`example1` above) is now required and it's called `name` here. If you previously did one of the following, resulting in an empty name:
+
+```js
+subleveldown(db)
+subleveldown(db, { separator: '@' })
+```
+
+You must now use an explicit empty name:
+
+```js
+db.sublevel('')
+db.sublevel('', { separator: '@' })
+```
+
+The string shorthand for `{ separator }` has also been removed. If you previously did:
+
+```js
+subleveldown(db, 'example', '@')
+```
+
+You must now do:
+
+```js
+db.sublevel('example', { separator: '@' })
+```
+
+Third, the `open` option has been removed. If you need an asynchronous open hook, feel free to open an issue to discuss restoring this API. Should it support promises? Should `abstract-level` support it on any database and not just sublevels?
+
+Lastly, the error message `Parent database is not open` (courtesy of `subleveldown` which had to check open state to prevent segmentation faults from underlying databases) changed to error code [`LEVEL_DATABASE_NOT_OPEN`](https://github.com/Level/abstract-level#errors) (courtesy of `abstract-level` which does those checks on any database).
 
 ---
 

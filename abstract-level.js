@@ -285,18 +285,15 @@ AbstractLevel.prototype.get = function (key, options, callback) {
 
   const keyEncoding = this.keyEncoding(options.keyEncoding)
   const valueEncoding = this.valueEncoding(options.valueEncoding)
+  const keyFormat = keyEncoding.format
+  const valueFormat = valueEncoding.format
 
   // Forward encoding options to the underlying store
-  if (options.keyEncoding !== keyEncoding.format ||
-    options.valueEncoding !== valueEncoding.format) {
-    options = {
-      ...options,
-      keyEncoding: keyEncoding.format,
-      valueEncoding: valueEncoding.format
-    }
+  if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+    options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
   }
 
-  this._get(keyEncoding.encode(key), options, (err, value) => {
+  this._get(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err, value) => {
     if (err) {
       // Normalize not found error for backwards compatibility with abstract-leveldown and level(up)
       if (err.code === 'LEVEL_NOT_FOUND' || err.notFound || /NotFound/i.test(err)) {
@@ -353,18 +350,15 @@ AbstractLevel.prototype.getMany = function (keys, options, callback) {
 
   const keyEncoding = this.keyEncoding(options.keyEncoding)
   const valueEncoding = this.valueEncoding(options.valueEncoding)
+  const keyFormat = keyEncoding.format
+  const valueFormat = valueEncoding.format
 
   // Forward encoding options
-  if (options.keyEncoding !== keyEncoding.format ||
-    options.valueEncoding !== valueEncoding.format) {
-    options = {
-      ...options,
-      keyEncoding: keyEncoding.format,
-      valueEncoding: valueEncoding.format
-    }
+  if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+    options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
   }
 
-  const encoded = new Array(keys.length)
+  const mappedKeys = new Array(keys.length)
 
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i]
@@ -375,10 +369,10 @@ AbstractLevel.prototype.getMany = function (keys, options, callback) {
       return callback[kPromise]
     }
 
-    encoded[i] = keyEncoding.encode(key)
+    mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat)
   }
 
-  this._getMany(encoded, options, (err, values) => {
+  this._getMany(mappedKeys, options, (err, values) => {
     if (err) return callback(err)
 
     try {
@@ -427,18 +421,18 @@ AbstractLevel.prototype.put = function (key, value, options, callback) {
 
   const keyEncoding = this.keyEncoding(options.keyEncoding)
   const valueEncoding = this.valueEncoding(options.valueEncoding)
+  const keyFormat = keyEncoding.format
+  const valueFormat = valueEncoding.format
 
   // Forward encoding options
-  if (options.keyEncoding !== keyEncoding.format ||
-    options.valueEncoding !== valueEncoding.format) {
-    options = {
-      ...options,
-      keyEncoding: keyEncoding.format,
-      valueEncoding: valueEncoding.format
-    }
+  if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+    options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
   }
 
-  this._put(keyEncoding.encode(key), valueEncoding.encode(value), options, (err) => {
+  const mappedKey = this.prefixKey(keyEncoding.encode(key), keyFormat)
+  const mappedValue = valueEncoding.encode(value)
+
+  this._put(mappedKey, mappedValue, options, (err) => {
     if (err) return callback(err)
     this.emit('put', key, value)
     callback()
@@ -473,13 +467,14 @@ AbstractLevel.prototype.del = function (key, options, callback) {
   }
 
   const keyEncoding = this.keyEncoding(options.keyEncoding)
+  const keyFormat = keyEncoding.format
 
   // Forward encoding options
-  if (options.keyEncoding !== keyEncoding.format) {
-    options = { ...options, keyEncoding: keyEncoding.format }
+  if (options.keyEncoding !== keyFormat) {
+    options = { ...options, keyEncoding: keyFormat }
   }
 
-  this._del(keyEncoding.encode(key), options, (err) => {
+  this._del(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err) => {
     if (err) return callback(err)
     this.emit('del', key)
     callback()
@@ -507,7 +502,7 @@ AbstractLevel.prototype.batch = function (operations, options, callback) {
   else callback = getCallback(options, callback)
 
   callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].entry)
+  options = getOptions(options, this[kDefaultOptions].empty)
 
   if (this[kStatus] === 'opening') {
     this.defer(() => this.batch(operations, options, callback))
@@ -528,8 +523,8 @@ AbstractLevel.prototype.batch = function (operations, options, callback) {
     return callback[kPromise]
   }
 
-  const encoded = new Array(operations.length)
-  const { keyEncoding: ke, valueEncoding: ve, ...rest } = options
+  const mapped = new Array(operations.length)
+  const { keyEncoding: ke, valueEncoding: ve, ...forward } = options
 
   for (let i = 0; i < operations.length; i++) {
     if (typeof operations[i] !== 'object' || operations[i] === null) {
@@ -551,10 +546,12 @@ AbstractLevel.prototype.batch = function (operations, options, callback) {
       return callback[kPromise]
     }
 
-    const keyEncoding = this.keyEncoding(op.keyEncoding || ke)
+    const db = op.sublevel != null ? op.sublevel : this
+    const keyEncoding = db.keyEncoding(op.keyEncoding || ke)
+    const keyFormat = keyEncoding.format
 
-    op.key = keyEncoding.encode(op.key)
-    op.keyEncoding = keyEncoding.format
+    op.key = db.prefixKey(keyEncoding.encode(op.key), keyFormat)
+    op.keyEncoding = keyFormat
 
     if (op.type === 'put') {
       const valueErr = this._checkValue(op.value)
@@ -564,16 +561,21 @@ AbstractLevel.prototype.batch = function (operations, options, callback) {
         return callback[kPromise]
       }
 
-      const valueEncoding = this.valueEncoding(op.valueEncoding || ve)
+      const valueEncoding = db.valueEncoding(op.valueEncoding || ve)
 
       op.value = valueEncoding.encode(op.value)
       op.valueEncoding = valueEncoding.format
     }
 
-    encoded[i] = op
+    // Prevent double prefixing
+    if (db !== this) {
+      op.sublevel = null
+    }
+
+    mapped[i] = op
   }
 
-  this._batch(encoded, rest, (err) => {
+  this._batch(mapped, forward, (err) => {
     if (err) return callback(err)
     this.emit('batch', operations)
     callback()
@@ -584,6 +586,18 @@ AbstractLevel.prototype.batch = function (operations, options, callback) {
 
 AbstractLevel.prototype._batch = function (operations, options, callback) {
   this.nextTick(callback)
+}
+
+AbstractLevel.prototype.sublevel = function (name, options) {
+  return this._sublevel(name, AbstractSublevel.defaults(options))
+}
+
+AbstractLevel.prototype._sublevel = function (name, options) {
+  return new AbstractSublevel(this, name, options)
+}
+
+AbstractLevel.prototype.prefixKey = function (key, keyFormat) {
+  return key
 }
 
 AbstractLevel.prototype.clear = function (options, callback) {
@@ -673,7 +687,7 @@ AbstractLevel.prototype[kUndefer] = function () {
   }
 }
 
-// TODO: docs
+// TODO: docs and types
 AbstractLevel.prototype.attachResource = function (resource) {
   if (typeof resource !== 'object' || resource === null ||
     typeof resource.close !== 'function') {
@@ -683,7 +697,7 @@ AbstractLevel.prototype.attachResource = function (resource) {
   this[kResources].add(resource)
 }
 
-// TODO: docs
+// TODO: docs and types
 AbstractLevel.prototype.detachResource = function (resource) {
   this[kResources].delete(resource)
 }
@@ -712,7 +726,10 @@ AbstractLevel.prototype._checkValue = function (value) {
 // TODO: after we drop node 10, also use queueMicrotask in node
 AbstractLevel.prototype.nextTick = require('./lib/next-tick')
 
+const { AbstractSublevel } = require('./lib/abstract-sublevel')({ AbstractLevel })
+
 exports.AbstractLevel = AbstractLevel
+exports.AbstractSublevel = AbstractSublevel
 
 const maybeError = function (db, callback) {
   if (db[kStatus] !== 'open') {

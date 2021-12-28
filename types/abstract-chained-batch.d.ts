@@ -1,4 +1,5 @@
 import * as Transcoder from 'level-transcoder'
+import { AbstractSublevel } from './abstract-sublevel'
 import { NodeCallback } from './interfaces'
 
 export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
@@ -23,7 +24,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
   put<K = KDefault, V = VDefault> (
     key: K,
     value: V,
-    options: AbstractChainedBatchPutOptions<K, V>
+    options: AbstractChainedBatchPutOptions<TDatabase, K, V>
   ): this
 
   /**
@@ -31,7 +32,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    * called.
    */
   del (key: KDefault): this
-  del<K = KDefault> (key: K, options: AbstractChainedBatchDelOptions<K>): this
+  del<K = KDefault> (key: K, options: AbstractChainedBatchDelOptions<TDatabase, K>): this
 
   /**
    * Clear all queued operations on this batch.
@@ -61,7 +62,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
 /**
  * Options for the {@link AbstractChainedBatch.put} method.
  */
-export interface AbstractChainedBatchPutOptions<K, V> {
+export interface AbstractChainedBatchPutOptions<TDatabase, K, V> {
   /**
    * Custom key encoding for this _put_ operation, used to encode the `key`.
    */
@@ -71,14 +72,44 @@ export interface AbstractChainedBatchPutOptions<K, V> {
    * Custom value encoding for this _put_ operation, used to encode the `value`.
    */
   valueEncoding?: string | Transcoder.PartialEncoder<V> | undefined
+
+  /**
+   * Act as though the _put_ operation is performed on the given sublevel, to similar
+   * effect as:
+   *
+   * ```js
+   * await sublevel.batch().put(key, value).write()
+   * ```
+   *
+   * This allows atomically committing data to multiple sublevels. The `key` will be
+   * prefixed with the `prefix` of the sublevel, and the `key` and `value` will be
+   * encoded by the sublevel (using the default encodings of the sublevel unless
+   * {@link keyEncoding} and / or {@link valueEncoding} are provided).
+   */
+  sublevel?: AbstractSublevel<TDatabase, any, any, any> | undefined
 }
 
 /**
  * Options for the {@link AbstractChainedBatch.del} method.
  */
-export interface AbstractChainedBatchDelOptions<K> {
+export interface AbstractChainedBatchDelOptions<TDatabase, K> {
   /**
    * Custom key encoding for this _del_ operation, used to encode the `key`.
    */
   keyEncoding?: string | Transcoder.PartialEncoder<K> | undefined
+
+  /**
+   * Act as though the _del_ operation is performed on the given sublevel, to similar
+   * effect as:
+   *
+   * ```js
+   * await sublevel.batch().del(key).write()
+   * ```
+   *
+   * This allows atomically committing data to multiple sublevels. The `key` will be
+   * prefixed with the `prefix` of the sublevel, and the `key` will be encoded by the
+   * sublevel (using the default key encoding of the sublevel unless {@link keyEncoding}
+   * is provided).
+   */
+  sublevel?: AbstractSublevel<TDatabase, any, any, any> | undefined
 }
