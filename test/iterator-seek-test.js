@@ -174,6 +174,27 @@ exports.seek = function (test, testCommon) {
     })
   })
 
+  for (const reverse of [false, true]) {
+    for (const deferred of [false, true]) {
+      testCommon.supports.snapshots && test(`iterator#seek() respects snapshot (reverse: ${reverse}, deferred: ${deferred})`, async function (t) {
+        const db = testCommon.factory()
+        if (!deferred) await db.open()
+
+        const it = db.iterator({ reverse })
+
+        // Add entry after having created the iterator (and its snapshot)
+        await db.put('a', 'a')
+
+        // Seeking should not create a new snapshot, which'd include the new entry
+        it.seek('a')
+        t.same(await it.next(), undefined)
+
+        await it.close()
+        await db.close()
+      })
+    }
+  }
+
   test('iterator#seek() respects range', function (t) {
     const db = testCommon.factory()
 
