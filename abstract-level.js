@@ -75,14 +75,14 @@ function AbstractLevel (manifest, options) {
   }
 
   this[kDefaultOptions] = {
-    empty: {},
-    entry: {
+    empty: Object.freeze({}),
+    entry: Object.freeze({
       keyEncoding: this[kKeyEncoding].commonName,
       valueEncoding: this[kValueEncoding].commonName
-    },
-    key: {
+    }),
+    key: Object.freeze({
       keyEncoding: this[kKeyEncoding].commonName
-    }
+    })
   }
 
   // Let subclass finish its constructor
