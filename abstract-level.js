@@ -26,340 +26,250 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
-function AbstractLevel (manifest, options) {
-  if (typeof manifest !== 'object' || manifest === null) {
-    throw new TypeError("The first argument 'manifest' must be an object")
-  }
+class AbstractLevel extends EventEmitter {
+  constructor (manifest, options) {
+    super()
 
-  options = getOptions(options)
-  EventEmitter.call(this)
-
-  const { keyEncoding, valueEncoding, passive, ...forward } = options
-
-  this[kResources] = new Set()
-  this[kOperations] = []
-  this[kDeferOpen] = true
-  this[kOptions] = forward
-  this[kStatus] = 'opening'
-
-  this.supports = supports(manifest, {
-    status: true,
-    promises: true,
-    clear: true,
-    getMany: true,
-    deferredOpen: true,
-    snapshots: manifest.snapshots !== false,
-    permanence: manifest.permanence !== false,
-    encodings: manifest.encodings || {},
-    events: Object.assign({}, manifest.events, {
-      opening: true,
-      open: true,
-      closing: true,
-      closed: true,
-      put: true,
-      del: true,
-      batch: true,
-      clear: true
-    })
-  })
-
-  this[kTranscoder] = new Transcoder(formats(this))
-  this[kKeyEncoding] = this[kTranscoder].encoding(keyEncoding || 'utf8')
-  this[kValueEncoding] = this[kTranscoder].encoding(valueEncoding || 'utf8')
-
-  // Add custom and transcoder encodings to manifest
-  for (const encoding of this[kTranscoder].encodings()) {
-    if (!this.supports.encodings[encoding.commonName]) {
-      this.supports.encodings[encoding.commonName] = true
+    if (typeof manifest !== 'object' || manifest === null) {
+      throw new TypeError("The first argument 'manifest' must be an object")
     }
-  }
 
-  this[kDefaultOptions] = {
-    empty: Object.freeze({}),
-    entry: Object.freeze({
-      keyEncoding: this[kKeyEncoding].commonName,
-      valueEncoding: this[kValueEncoding].commonName
-    }),
-    key: Object.freeze({
-      keyEncoding: this[kKeyEncoding].commonName
+    options = getOptions(options)
+    const { keyEncoding, valueEncoding, passive, ...forward } = options
+
+    this[kResources] = new Set()
+    this[kOperations] = []
+    this[kDeferOpen] = true
+    this[kOptions] = forward
+    this[kStatus] = 'opening'
+
+    this.supports = supports(manifest, {
+      status: true,
+      promises: true,
+      clear: true,
+      getMany: true,
+      deferredOpen: true,
+      snapshots: manifest.snapshots !== false,
+      permanence: manifest.permanence !== false,
+      encodings: manifest.encodings || {},
+      events: Object.assign({}, manifest.events, {
+        opening: true,
+        open: true,
+        closing: true,
+        closed: true,
+        put: true,
+        del: true,
+        batch: true,
+        clear: true
+      })
+    })
+
+    this[kTranscoder] = new Transcoder(formats(this))
+    this[kKeyEncoding] = this[kTranscoder].encoding(keyEncoding || 'utf8')
+    this[kValueEncoding] = this[kTranscoder].encoding(valueEncoding || 'utf8')
+
+    // Add custom and transcoder encodings to manifest
+    for (const encoding of this[kTranscoder].encodings()) {
+      if (!this.supports.encodings[encoding.commonName]) {
+        this.supports.encodings[encoding.commonName] = true
+      }
+    }
+
+    this[kDefaultOptions] = {
+      empty: Object.freeze({}),
+      entry: Object.freeze({
+        keyEncoding: this[kKeyEncoding].commonName,
+        valueEncoding: this[kValueEncoding].commonName
+      }),
+      key: Object.freeze({
+        keyEncoding: this[kKeyEncoding].commonName
+      })
+    }
+
+    // Let subclass finish its constructor
+    this.nextTick(() => {
+      if (this[kDeferOpen]) {
+        this.open({ passive: false }, noop)
+      }
     })
   }
 
-  // Let subclass finish its constructor
-  this.nextTick(() => {
-    if (this[kDeferOpen]) {
-      this.open({ passive: false }, noop)
-    }
-  })
-}
-
-Object.setPrototypeOf(AbstractLevel.prototype, EventEmitter.prototype)
-
-Object.defineProperty(AbstractLevel.prototype, 'status', {
-  enumerable: true,
-  get () {
+  get status () {
     return this[kStatus]
   }
-})
 
-AbstractLevel.prototype.keyEncoding = function (encoding) {
-  return this[kTranscoder].encoding(encoding != null ? encoding : this[kKeyEncoding])
-}
-
-AbstractLevel.prototype.valueEncoding = function (encoding) {
-  return this[kTranscoder].encoding(encoding != null ? encoding : this[kValueEncoding])
-}
-
-AbstractLevel.prototype.open = function (options, callback) {
-  callback = getCallback(options, callback)
-  callback = fromCallback(callback, kPromise)
-
-  options = { ...this[kOptions], ...getOptions(options) }
-
-  options.createIfMissing = options.createIfMissing !== false
-  options.errorIfExists = !!options.errorIfExists
-
-  const maybeOpened = (err) => {
-    if (this[kStatus] === 'closing' || this[kStatus] === 'opening') {
-      // Wait until pending state changes are done
-      this.once(kLanded, err ? () => maybeOpened(err) : maybeOpened)
-    } else if (this[kStatus] !== 'open') {
-      callback(new ModuleError('Database is not open', {
-        code: 'LEVEL_DATABASE_NOT_OPEN',
-        cause: err
-      }))
-    } else {
-      callback()
-    }
+  keyEncoding (encoding) {
+    return this[kTranscoder].encoding(encoding != null ? encoding : this[kKeyEncoding])
   }
 
-  if (options.passive) {
-    if (this[kStatus] === 'opening') {
-      this.once(kLanded, maybeOpened)
-    } else {
-      this.nextTick(maybeOpened)
-    }
-  } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
-    this[kDeferOpen] = false
-    this[kStatus] = 'opening'
-    this.emit('opening')
+  valueEncoding (encoding) {
+    return this[kTranscoder].encoding(encoding != null ? encoding : this[kValueEncoding])
+  }
 
-    this._open(options, (err) => {
-      if (err) {
-        this[kStatus] = 'closed'
+  open (options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
 
-        // Resources must be safe to close in any db state
-        this[kCloseResources](() => {
-          this.emit(kLanded)
-          maybeOpened(err)
-        })
+    options = { ...this[kOptions], ...getOptions(options) }
 
-        this[kUndefer]()
-        return
+    options.createIfMissing = options.createIfMissing !== false
+    options.errorIfExists = !!options.errorIfExists
+
+    const maybeOpened = (err) => {
+      if (this[kStatus] === 'closing' || this[kStatus] === 'opening') {
+        // Wait until pending state changes are done
+        this.once(kLanded, err ? () => maybeOpened(err) : maybeOpened)
+      } else if (this[kStatus] !== 'open') {
+        callback(new ModuleError('Database is not open', {
+          code: 'LEVEL_DATABASE_NOT_OPEN',
+          cause: err
+        }))
+      } else {
+        callback()
       }
-
-      this[kStatus] = 'open'
-      this[kUndefer]()
-      this.emit(kLanded)
-
-      // Only emit public event if pending state changes are done
-      if (this[kStatus] === 'open') this.emit('open')
-
-      maybeOpened()
-    })
-  } else if (this[kStatus] === 'open') {
-    this.nextTick(maybeOpened)
-  } else {
-    this.once(kLanded, () => this.open(options, callback))
-  }
-
-  return callback[kPromise]
-}
-
-AbstractLevel.prototype._open = function (options, callback) {
-  this.nextTick(callback)
-}
-
-AbstractLevel.prototype.close = function (callback) {
-  callback = fromCallback(callback, kPromise)
-
-  const maybeClosed = (err) => {
-    if (this[kStatus] === 'opening' || this[kStatus] === 'closing') {
-      // Wait until pending state changes are done
-      this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
-    } else if (this[kStatus] !== 'closed') {
-      callback(new ModuleError('Database is not closed', {
-        code: 'LEVEL_DATABASE_NOT_CLOSED',
-        cause: err
-      }))
-    } else {
-      callback()
-    }
-  }
-
-  if (this[kStatus] === 'open') {
-    this[kStatus] = 'closing'
-    this.emit('closing')
-
-    const cancel = (err) => {
-      this[kStatus] = 'open'
-      this[kUndefer]()
-      this.emit(kLanded)
-      maybeClosed(err)
     }
 
-    this[kCloseResources](() => {
-      this._close((err) => {
-        if (err) return cancel(err)
+    if (options.passive) {
+      if (this[kStatus] === 'opening') {
+        this.once(kLanded, maybeOpened)
+      } else {
+        this.nextTick(maybeOpened)
+      }
+    } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
+      this[kDeferOpen] = false
+      this[kStatus] = 'opening'
+      this.emit('opening')
 
-        this[kStatus] = 'closed'
+      this._open(options, (err) => {
+        if (err) {
+          this[kStatus] = 'closed'
+
+          // Resources must be safe to close in any db state
+          this[kCloseResources](() => {
+            this.emit(kLanded)
+            maybeOpened(err)
+          })
+
+          this[kUndefer]()
+          return
+        }
+
+        this[kStatus] = 'open'
         this[kUndefer]()
         this.emit(kLanded)
 
         // Only emit public event if pending state changes are done
-        if (this[kStatus] === 'closed') this.emit('closed')
+        if (this[kStatus] === 'open') this.emit('open')
 
-        maybeClosed()
+        maybeOpened()
       })
-    })
-  } else if (this[kStatus] === 'closed') {
-    this.nextTick(maybeClosed)
-  } else {
-    this.once(kLanded, () => this.close(callback))
-  }
-
-  return callback[kPromise]
-}
-
-AbstractLevel.prototype[kCloseResources] = function (callback) {
-  if (this[kResources].size === 0) {
-    return this.nextTick(callback)
-  }
-
-  let pending = this[kResources].size
-  let sync = true
-
-  const next = () => {
-    if (--pending === 0) {
-      // We don't have tests for generic resources, so dezalgo
-      if (sync) this.nextTick(callback)
-      else callback()
+    } else if (this[kStatus] === 'open') {
+      this.nextTick(maybeOpened)
+    } else {
+      this.once(kLanded, () => this.open(options, callback))
     }
-  }
 
-  // In parallel so that all resources know they are closed
-  for (const resource of this[kResources]) {
-    resource.close(next)
-  }
-
-  sync = false
-  this[kResources].clear()
-}
-
-AbstractLevel.prototype._close = function (callback) {
-  this.nextTick(callback)
-}
-
-AbstractLevel.prototype.get = function (key, options, callback) {
-  callback = getCallback(options, callback)
-  callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].entry)
-
-  if (this[kStatus] === 'opening') {
-    this.defer(() => this.get(key, options, callback))
     return callback[kPromise]
   }
 
-  if (maybeError(this, callback)) {
-    return callback[kPromise]
+  _open (options, callback) {
+    this.nextTick(callback)
   }
 
-  const err = this._checkKey(key)
+  close (callback) {
+    callback = fromCallback(callback, kPromise)
 
-  if (err) {
-    this.nextTick(callback, err)
-    return callback[kPromise]
-  }
+    const maybeClosed = (err) => {
+      if (this[kStatus] === 'opening' || this[kStatus] === 'closing') {
+        // Wait until pending state changes are done
+        this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
+      } else if (this[kStatus] !== 'closed') {
+        callback(new ModuleError('Database is not closed', {
+          code: 'LEVEL_DATABASE_NOT_CLOSED',
+          cause: err
+        }))
+      } else {
+        callback()
+      }
+    }
 
-  const keyEncoding = this.keyEncoding(options.keyEncoding)
-  const valueEncoding = this.valueEncoding(options.valueEncoding)
-  const keyFormat = keyEncoding.format
-  const valueFormat = valueEncoding.format
+    if (this[kStatus] === 'open') {
+      this[kStatus] = 'closing'
+      this.emit('closing')
 
-  // Forward encoding options to the underlying store
-  if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-    options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
-  }
-
-  this._get(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err, value) => {
-    if (err) {
-      // Normalize not found error for backwards compatibility with abstract-leveldown and level(up)
-      if (err.code === 'LEVEL_NOT_FOUND' || err.notFound || /NotFound/i.test(err)) {
-        if (!err.code) err.code = 'LEVEL_NOT_FOUND' // Preferred way going forward
-        if (!err.notFound) err.notFound = true // Same as level-errors
-        if (!err.status) err.status = 404 // Same as level-errors
+      const cancel = (err) => {
+        this[kStatus] = 'open'
+        this[kUndefer]()
+        this.emit(kLanded)
+        maybeClosed(err)
       }
 
-      return callback(err)
+      this[kCloseResources](() => {
+        this._close((err) => {
+          if (err) return cancel(err)
+
+          this[kStatus] = 'closed'
+          this[kUndefer]()
+          this.emit(kLanded)
+
+          // Only emit public event if pending state changes are done
+          if (this[kStatus] === 'closed') this.emit('closed')
+
+          maybeClosed()
+        })
+      })
+    } else if (this[kStatus] === 'closed') {
+      this.nextTick(maybeClosed)
+    } else {
+      this.once(kLanded, () => this.close(callback))
     }
 
-    try {
-      value = valueEncoding.decode(value)
-    } catch (err) {
-      return callback(new ModuleError('Could not decode value', {
-        code: 'LEVEL_DECODE_ERROR',
-        cause: err
-      }))
+    return callback[kPromise]
+  }
+
+  [kCloseResources] (callback) {
+    if (this[kResources].size === 0) {
+      return this.nextTick(callback)
     }
 
-    callback(null, value)
-  })
+    let pending = this[kResources].size
+    let sync = true
 
-  return callback[kPromise]
-}
+    const next = () => {
+      if (--pending === 0) {
+        // We don't have tests for generic resources, so dezalgo
+        if (sync) this.nextTick(callback)
+        else callback()
+      }
+    }
 
-AbstractLevel.prototype._get = function (key, options, callback) {
-  this.nextTick(callback, new Error('NotFound'))
-}
+    // In parallel so that all resources know they are closed
+    for (const resource of this[kResources]) {
+      resource.close(next)
+    }
 
-AbstractLevel.prototype.getMany = function (keys, options, callback) {
-  callback = getCallback(options, callback)
-  callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].entry)
-
-  if (this[kStatus] === 'opening') {
-    this.defer(() => this.getMany(keys, options, callback))
-    return callback[kPromise]
+    sync = false
+    this[kResources].clear()
   }
 
-  if (maybeError(this, callback)) {
-    return callback[kPromise]
+  _close (callback) {
+    this.nextTick(callback)
   }
 
-  if (!Array.isArray(keys)) {
-    this.nextTick(callback, new TypeError("The first argument 'keys' must be an array"))
-    return callback[kPromise]
-  }
+  get (key, options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, this[kDefaultOptions].entry)
 
-  if (keys.length === 0) {
-    this.nextTick(callback, null, [])
-    return callback[kPromise]
-  }
+    if (this[kStatus] === 'opening') {
+      this.defer(() => this.get(key, options, callback))
+      return callback[kPromise]
+    }
 
-  const keyEncoding = this.keyEncoding(options.keyEncoding)
-  const valueEncoding = this.valueEncoding(options.valueEncoding)
-  const keyFormat = keyEncoding.format
-  const valueFormat = valueEncoding.format
+    if (maybeError(this, callback)) {
+      return callback[kPromise]
+    }
 
-  // Forward encoding options
-  if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-    options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
-  }
-
-  const mappedKeys = new Array(keys.length)
-
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i]
     const err = this._checkKey(key)
 
     if (err) {
@@ -367,356 +277,443 @@ AbstractLevel.prototype.getMany = function (keys, options, callback) {
       return callback[kPromise]
     }
 
-    mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat)
-  }
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options.valueEncoding)
+    const keyFormat = keyEncoding.format
+    const valueFormat = valueEncoding.format
 
-  this._getMany(mappedKeys, options, (err, values) => {
-    if (err) return callback(err)
+    // Forward encoding options to the underlying store
+    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+    }
 
-    try {
-      for (let i = 0; i < values.length; i++) {
-        if (values[i] !== undefined) {
-          values[i] = valueEncoding.decode(values[i])
+    this._get(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err, value) => {
+      if (err) {
+        // Normalize not found error for backwards compatibility with abstract-leveldown and level(up)
+        if (err.code === 'LEVEL_NOT_FOUND' || err.notFound || /NotFound/i.test(err)) {
+          if (!err.code) err.code = 'LEVEL_NOT_FOUND' // Preferred way going forward
+          if (!err.notFound) err.notFound = true // Same as level-errors
+          if (!err.status) err.status = 404 // Same as level-errors
         }
+
+        return callback(err)
       }
-    } catch (err) {
-      return callback(new ModuleError(`Could not decode one or more of ${values.length} value(s)`, {
-        code: 'LEVEL_DECODE_ERROR',
-        cause: err
-      }))
-    }
 
-    callback(null, values)
-  })
+      try {
+        value = valueEncoding.decode(value)
+      } catch (err) {
+        return callback(new ModuleError('Could not decode value', {
+          code: 'LEVEL_DECODE_ERROR',
+          cause: err
+        }))
+      }
 
-  return callback[kPromise]
-}
+      callback(null, value)
+    })
 
-AbstractLevel.prototype._getMany = function (keys, options, callback) {
-  this.nextTick(callback, null, new Array(keys.length).fill(undefined))
-}
-
-AbstractLevel.prototype.put = function (key, value, options, callback) {
-  callback = getCallback(options, callback)
-  callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].entry)
-
-  if (this[kStatus] === 'opening') {
-    this.defer(() => this.put(key, value, options, callback))
     return callback[kPromise]
   }
 
-  if (maybeError(this, callback)) {
-    return callback[kPromise]
+  _get (key, options, callback) {
+    this.nextTick(callback, new Error('NotFound'))
   }
 
-  const err = this._checkKey(key) || this._checkValue(value)
+  getMany (keys, options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, this[kDefaultOptions].entry)
 
-  if (err) {
-    this.nextTick(callback, err)
-    return callback[kPromise]
-  }
-
-  const keyEncoding = this.keyEncoding(options.keyEncoding)
-  const valueEncoding = this.valueEncoding(options.valueEncoding)
-  const keyFormat = keyEncoding.format
-  const valueFormat = valueEncoding.format
-
-  // Forward encoding options
-  if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-    options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
-  }
-
-  const mappedKey = this.prefixKey(keyEncoding.encode(key), keyFormat)
-  const mappedValue = valueEncoding.encode(value)
-
-  this._put(mappedKey, mappedValue, options, (err) => {
-    if (err) return callback(err)
-    this.emit('put', key, value)
-    callback()
-  })
-
-  return callback[kPromise]
-}
-
-AbstractLevel.prototype._put = function (key, value, options, callback) {
-  this.nextTick(callback)
-}
-
-AbstractLevel.prototype.del = function (key, options, callback) {
-  callback = getCallback(options, callback)
-  callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].key)
-
-  if (this[kStatus] === 'opening') {
-    this.defer(() => this.del(key, options, callback))
-    return callback[kPromise]
-  }
-
-  if (maybeError(this, callback)) {
-    return callback[kPromise]
-  }
-
-  const err = this._checkKey(key)
-
-  if (err) {
-    this.nextTick(callback, err)
-    return callback[kPromise]
-  }
-
-  const keyEncoding = this.keyEncoding(options.keyEncoding)
-  const keyFormat = keyEncoding.format
-
-  // Forward encoding options
-  if (options.keyEncoding !== keyFormat) {
-    options = { ...options, keyEncoding: keyFormat }
-  }
-
-  this._del(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err) => {
-    if (err) return callback(err)
-    this.emit('del', key)
-    callback()
-  })
-
-  return callback[kPromise]
-}
-
-AbstractLevel.prototype._del = function (key, options, callback) {
-  this.nextTick(callback)
-}
-
-AbstractLevel.prototype.batch = function (operations, options, callback) {
-  if (!arguments.length) {
-    if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
-    if (this[kStatus] !== 'open') {
-      throw new ModuleError('Database is not open', {
-        code: 'LEVEL_DATABASE_NOT_OPEN'
-      })
-    }
-    return this._chainedBatch()
-  }
-
-  if (typeof operations === 'function') callback = operations
-  else callback = getCallback(options, callback)
-
-  callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].empty)
-
-  if (this[kStatus] === 'opening') {
-    this.defer(() => this.batch(operations, options, callback))
-    return callback[kPromise]
-  }
-
-  if (maybeError(this, callback)) {
-    return callback[kPromise]
-  }
-
-  if (!Array.isArray(operations)) {
-    this.nextTick(callback, new TypeError("The first argument 'operations' must be an array"))
-    return callback[kPromise]
-  }
-
-  if (operations.length === 0) {
-    this.nextTick(callback)
-    return callback[kPromise]
-  }
-
-  const mapped = new Array(operations.length)
-  const { keyEncoding: ke, valueEncoding: ve, ...forward } = options
-
-  for (let i = 0; i < operations.length; i++) {
-    if (typeof operations[i] !== 'object' || operations[i] === null) {
-      this.nextTick(callback, new TypeError('A batch operation must be an object'))
+    if (this[kStatus] === 'opening') {
+      this.defer(() => this.getMany(keys, options, callback))
       return callback[kPromise]
     }
 
-    const op = Object.assign({}, operations[i])
-
-    if (op.type !== 'put' && op.type !== 'del') {
-      this.nextTick(callback, new TypeError("A batch operation must have a type property that is 'put' or 'del'"))
+    if (maybeError(this, callback)) {
       return callback[kPromise]
     }
 
-    const err = this._checkKey(op.key)
+    if (!Array.isArray(keys)) {
+      this.nextTick(callback, new TypeError("The first argument 'keys' must be an array"))
+      return callback[kPromise]
+    }
+
+    if (keys.length === 0) {
+      this.nextTick(callback, null, [])
+      return callback[kPromise]
+    }
+
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options.valueEncoding)
+    const keyFormat = keyEncoding.format
+    const valueFormat = valueEncoding.format
+
+    // Forward encoding options
+    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+    }
+
+    const mappedKeys = new Array(keys.length)
+
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      const err = this._checkKey(key)
+
+      if (err) {
+        this.nextTick(callback, err)
+        return callback[kPromise]
+      }
+
+      mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat)
+    }
+
+    this._getMany(mappedKeys, options, (err, values) => {
+      if (err) return callback(err)
+
+      try {
+        for (let i = 0; i < values.length; i++) {
+          if (values[i] !== undefined) {
+            values[i] = valueEncoding.decode(values[i])
+          }
+        }
+      } catch (err) {
+        return callback(new ModuleError(`Could not decode one or more of ${values.length} value(s)`, {
+          code: 'LEVEL_DECODE_ERROR',
+          cause: err
+        }))
+      }
+
+      callback(null, values)
+    })
+
+    return callback[kPromise]
+  }
+
+  _getMany (keys, options, callback) {
+    this.nextTick(callback, null, new Array(keys.length).fill(undefined))
+  }
+
+  put (key, value, options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, this[kDefaultOptions].entry)
+
+    if (this[kStatus] === 'opening') {
+      this.defer(() => this.put(key, value, options, callback))
+      return callback[kPromise]
+    }
+
+    if (maybeError(this, callback)) {
+      return callback[kPromise]
+    }
+
+    const err = this._checkKey(key) || this._checkValue(value)
 
     if (err) {
       this.nextTick(callback, err)
       return callback[kPromise]
     }
 
-    const db = op.sublevel != null ? op.sublevel : this
-    const keyEncoding = db.keyEncoding(op.keyEncoding || ke)
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options.valueEncoding)
+    const keyFormat = keyEncoding.format
+    const valueFormat = valueEncoding.format
+
+    // Forward encoding options
+    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+    }
+
+    const mappedKey = this.prefixKey(keyEncoding.encode(key), keyFormat)
+    const mappedValue = valueEncoding.encode(value)
+
+    this._put(mappedKey, mappedValue, options, (err) => {
+      if (err) return callback(err)
+      this.emit('put', key, value)
+      callback()
+    })
+
+    return callback[kPromise]
+  }
+
+  _put (key, value, options, callback) {
+    this.nextTick(callback)
+  }
+
+  del (key, options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, this[kDefaultOptions].key)
+
+    if (this[kStatus] === 'opening') {
+      this.defer(() => this.del(key, options, callback))
+      return callback[kPromise]
+    }
+
+    if (maybeError(this, callback)) {
+      return callback[kPromise]
+    }
+
+    const err = this._checkKey(key)
+
+    if (err) {
+      this.nextTick(callback, err)
+      return callback[kPromise]
+    }
+
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
 
-    op.key = db.prefixKey(keyEncoding.encode(op.key), keyFormat)
-    op.keyEncoding = keyFormat
+    // Forward encoding options
+    if (options.keyEncoding !== keyFormat) {
+      options = { ...options, keyEncoding: keyFormat }
+    }
 
-    if (op.type === 'put') {
-      const valueErr = this._checkValue(op.value)
+    this._del(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err) => {
+      if (err) return callback(err)
+      this.emit('del', key)
+      callback()
+    })
 
-      if (valueErr) {
-        this.nextTick(callback, valueErr)
+    return callback[kPromise]
+  }
+
+  _del (key, options, callback) {
+    this.nextTick(callback)
+  }
+
+  batch (operations, options, callback) {
+    if (!arguments.length) {
+      if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
+      if (this[kStatus] !== 'open') {
+        throw new ModuleError('Database is not open', {
+          code: 'LEVEL_DATABASE_NOT_OPEN'
+        })
+      }
+      return this._chainedBatch()
+    }
+
+    if (typeof operations === 'function') callback = operations
+    else callback = getCallback(options, callback)
+
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, this[kDefaultOptions].empty)
+
+    if (this[kStatus] === 'opening') {
+      this.defer(() => this.batch(operations, options, callback))
+      return callback[kPromise]
+    }
+
+    if (maybeError(this, callback)) {
+      return callback[kPromise]
+    }
+
+    if (!Array.isArray(operations)) {
+      this.nextTick(callback, new TypeError("The first argument 'operations' must be an array"))
+      return callback[kPromise]
+    }
+
+    if (operations.length === 0) {
+      this.nextTick(callback)
+      return callback[kPromise]
+    }
+
+    const mapped = new Array(operations.length)
+    const { keyEncoding: ke, valueEncoding: ve, ...forward } = options
+
+    for (let i = 0; i < operations.length; i++) {
+      if (typeof operations[i] !== 'object' || operations[i] === null) {
+        this.nextTick(callback, new TypeError('A batch operation must be an object'))
         return callback[kPromise]
       }
 
-      const valueEncoding = db.valueEncoding(op.valueEncoding || ve)
+      const op = Object.assign({}, operations[i])
 
-      op.value = valueEncoding.encode(op.value)
-      op.valueEncoding = valueEncoding.format
+      if (op.type !== 'put' && op.type !== 'del') {
+        this.nextTick(callback, new TypeError("A batch operation must have a type property that is 'put' or 'del'"))
+        return callback[kPromise]
+      }
+
+      const err = this._checkKey(op.key)
+
+      if (err) {
+        this.nextTick(callback, err)
+        return callback[kPromise]
+      }
+
+      const db = op.sublevel != null ? op.sublevel : this
+      const keyEncoding = db.keyEncoding(op.keyEncoding || ke)
+      const keyFormat = keyEncoding.format
+
+      op.key = db.prefixKey(keyEncoding.encode(op.key), keyFormat)
+      op.keyEncoding = keyFormat
+
+      if (op.type === 'put') {
+        const valueErr = this._checkValue(op.value)
+
+        if (valueErr) {
+          this.nextTick(callback, valueErr)
+          return callback[kPromise]
+        }
+
+        const valueEncoding = db.valueEncoding(op.valueEncoding || ve)
+
+        op.value = valueEncoding.encode(op.value)
+        op.valueEncoding = valueEncoding.format
+      }
+
+      // Prevent double prefixing
+      if (db !== this) {
+        op.sublevel = null
+      }
+
+      mapped[i] = op
     }
 
-    // Prevent double prefixing
-    if (db !== this) {
-      op.sublevel = null
-    }
+    this._batch(mapped, forward, (err) => {
+      if (err) return callback(err)
+      this.emit('batch', operations)
+      callback()
+    })
 
-    mapped[i] = op
-  }
-
-  this._batch(mapped, forward, (err) => {
-    if (err) return callback(err)
-    this.emit('batch', operations)
-    callback()
-  })
-
-  return callback[kPromise]
-}
-
-AbstractLevel.prototype._batch = function (operations, options, callback) {
-  this.nextTick(callback)
-}
-
-AbstractLevel.prototype.sublevel = function (name, options) {
-  return this._sublevel(name, AbstractSublevel.defaults(options))
-}
-
-AbstractLevel.prototype._sublevel = function (name, options) {
-  return new AbstractSublevel(this, name, options)
-}
-
-AbstractLevel.prototype.prefixKey = function (key, keyFormat) {
-  return key
-}
-
-AbstractLevel.prototype.clear = function (options, callback) {
-  callback = getCallback(options, callback)
-  callback = fromCallback(callback, kPromise)
-  options = getOptions(options, this[kDefaultOptions].empty)
-
-  if (this[kStatus] === 'opening') {
-    this.defer(() => this.clear(options, callback))
     return callback[kPromise]
   }
 
-  if (maybeError(this, callback)) {
+  _batch (operations, options, callback) {
+    this.nextTick(callback)
+  }
+
+  sublevel (name, options) {
+    return this._sublevel(name, AbstractSublevel.defaults(options))
+  }
+
+  _sublevel (name, options) {
+    return new AbstractSublevel(this, name, options)
+  }
+
+  prefixKey (key, keyFormat) {
+    return key
+  }
+
+  clear (options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, this[kDefaultOptions].empty)
+
+    if (this[kStatus] === 'opening') {
+      this.defer(() => this.clear(options, callback))
+      return callback[kPromise]
+    }
+
+    if (maybeError(this, callback)) {
+      return callback[kPromise]
+    }
+
+    const original = options
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+
+    options = rangeOptions(options, keyEncoding)
+    options.keyEncoding = keyEncoding.format
+
+    this._clear(options, (err) => {
+      if (err) return callback(err)
+      this.emit('clear', original)
+      callback()
+    })
+
     return callback[kPromise]
   }
 
-  const original = options
-  const keyEncoding = this.keyEncoding(options.keyEncoding)
-
-  options = rangeOptions(options, keyEncoding)
-  options.keyEncoding = keyEncoding.format
-
-  this._clear(options, (err) => {
-    if (err) return callback(err)
-    this.emit('clear', original)
-    callback()
-  })
-
-  return callback[kPromise]
-}
-
-AbstractLevel.prototype._clear = function (options, callback) {
-  this.nextTick(callback)
-}
-
-AbstractLevel.prototype.iterator = function (options) {
-  const keyEncoding = this.keyEncoding(options && options.keyEncoding)
-  const valueEncoding = this.valueEncoding(options && options.valueEncoding)
-
-  options = rangeOptions(options, keyEncoding)
-  options.keys = options.keys !== false
-  options.values = options.values !== false
-
-  // We need the original encoding options in AbstractIterator in order to decode data
-  Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
-  Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
-
-  // Forward encoding options to the underlying store
-  options.keyEncoding = keyEncoding.format
-  options.valueEncoding = valueEncoding.format
-
-  if (this[kStatus] === 'opening') {
-    return new DeferredIterator(this, options)
+  _clear (options, callback) {
+    this.nextTick(callback)
   }
 
-  if (this[kStatus] !== 'open') {
-    throw new ModuleError('Database is not open', {
-      code: 'LEVEL_DATABASE_NOT_OPEN'
-    })
+  iterator (options) {
+    const keyEncoding = this.keyEncoding(options && options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+
+    options = rangeOptions(options, keyEncoding)
+    options.keys = options.keys !== false
+    options.values = options.values !== false
+
+    // We need the original encoding options in AbstractIterator in order to decode data
+    Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
+    Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+
+    // Forward encoding options to the underlying store
+    options.keyEncoding = keyEncoding.format
+    options.valueEncoding = valueEncoding.format
+
+    if (this[kStatus] === 'opening') {
+      return new DeferredIterator(this, options)
+    }
+
+    if (this[kStatus] !== 'open') {
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
+
+    return this._iterator(options)
   }
 
-  return this._iterator(options)
-}
-
-AbstractLevel.prototype._iterator = function (options) {
-  return new AbstractIterator(this, options)
-}
-
-AbstractLevel.prototype.defer = function (fn) {
-  if (typeof fn !== 'function') {
-    throw new TypeError('The first argument must be a function')
+  _iterator (options) {
+    return new AbstractIterator(this, options)
   }
 
-  this[kOperations].push(fn)
-}
+  defer (fn) {
+    if (typeof fn !== 'function') {
+      throw new TypeError('The first argument must be a function')
+    }
 
-AbstractLevel.prototype[kUndefer] = function () {
-  if (this[kOperations].length === 0) {
-    return
+    this[kOperations].push(fn)
   }
 
-  const operations = this[kOperations]
-  this[kOperations] = []
+  [kUndefer] () {
+    if (this[kOperations].length === 0) {
+      return
+    }
 
-  for (const op of operations) {
-    op()
-  }
-}
+    const operations = this[kOperations]
+    this[kOperations] = []
 
-// TODO: docs and types
-AbstractLevel.prototype.attachResource = function (resource) {
-  if (typeof resource !== 'object' || resource === null ||
-    typeof resource.close !== 'function') {
-    throw new TypeError('The first argument must be a resource object')
+    for (const op of operations) {
+      op()
+    }
   }
 
-  this[kResources].add(resource)
-}
+  // TODO: docs and types
+  attachResource (resource) {
+    if (typeof resource !== 'object' || resource === null ||
+      typeof resource.close !== 'function') {
+      throw new TypeError('The first argument must be a resource object')
+    }
 
-// TODO: docs and types
-AbstractLevel.prototype.detachResource = function (resource) {
-  this[kResources].delete(resource)
-}
-
-AbstractLevel.prototype._chainedBatch = function () {
-  return new DefaultChainedBatch(this)
-}
-
-AbstractLevel.prototype._checkKey = function (key) {
-  if (key === null || key === undefined) {
-    return new ModuleError('Key cannot be null or undefined', {
-      code: 'LEVEL_INVALID_KEY'
-    })
+    this[kResources].add(resource)
   }
-}
 
-AbstractLevel.prototype._checkValue = function (value) {
-  if (value === null || value === undefined) {
-    return new ModuleError('Value cannot be null or undefined', {
-      code: 'LEVEL_INVALID_VALUE'
-    })
+  // TODO: docs and types
+  detachResource (resource) {
+    this[kResources].delete(resource)
+  }
+
+  _chainedBatch () {
+    return new DefaultChainedBatch(this)
+  }
+
+  _checkKey (key) {
+    if (key === null || key === undefined) {
+      return new ModuleError('Key cannot be null or undefined', {
+        code: 'LEVEL_INVALID_KEY'
+      })
+    }
+  }
+
+  _checkValue (value) {
+    if (value === null || value === undefined) {
+      return new ModuleError('Value cannot be null or undefined', {
+        code: 'LEVEL_INVALID_VALUE'
+      })
+    }
   }
 }
 

@@ -73,11 +73,7 @@ require('./clear-test').args(test, testCommon)
 require('./clear-test').events(test, testCommon)
 
 function implement (ctor, methods) {
-  function Test () {
-    ctor.apply(this, arguments)
-  }
-
-  Object.setPrototypeOf(Test.prototype, ctor.prototype)
+  class Test extends ctor {}
 
   for (const k in methods) {
     Test.prototype[k] = methods[k]
@@ -662,7 +658,8 @@ test('test AbstractChainedBatch expects a db', function (t) {
   const Test = implement(AbstractChainedBatch)
 
   try {
-    Test()
+    // eslint-disable-next-line no-new
+    new Test()
   } catch (err) {
     t.is(err.message, 'The first argument must be an abstract-level database, received undefined')
   }
