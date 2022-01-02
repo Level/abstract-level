@@ -32,7 +32,7 @@
   - [`sublevel = db.sublevel(name[, options])`](#sublevel--dbsublevelname-options)
   - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
-  - [`db.prefixKey(key, keyFormat)`](#dbprefixkeykey-keyformat)
+  - [`key = db.prefixKey(key, keyFormat)`](#key--dbprefixkeykey-keyformat)
   - [`db.defer(fn)`](#dbdeferfn)
   - [`chainedBatch`](#chainedbatch)
     - [`chainedBatch.put(key, value[, options])`](#chainedbatchputkey-value-options)
@@ -94,7 +94,6 @@
     - [`chainedBatch._clear()`](#chainedbatch_clear)
     - [`chainedBatch._write(options, callback)`](#chainedbatch_writeoptions-callback)
     - [`chainedBatch._close(callback)`](#chainedbatch_closecallback)
-- [Differences from old `level(up)`](#differences-from-old-levelup)
 - [Test Suite](#test-suite)
   - [Excluding tests](#excluding-tests)
   - [Reusing `testCommon`](#reusing-testcommon)
@@ -204,7 +203,7 @@ A read-only string property that is one of:
 
 ### `db.open([options][, callback])`
 
-Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably `memdown` and `level-js`).
+Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the database constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably [`memory-level`](https://github.com/Level/memory-level) and [`browser-level`](https://github.com/Level/browser-level), previously `memdown` and `level-js`) and will indicate so via `db.supports.createIfMissing` and `db.supports.errorIfExists`.
 
 The optional `options` object may contain:
 
@@ -212,7 +211,7 @@ The optional `options` object may contain:
 - `errorIfExists` (boolean, default: `false`): If `true` and the database already exists, opening will fail.
 - `passive` (boolean, default: `false`): Wait for, but do not initiate, opening of the database.
 
-It's generally not necessary to call `open()` because it's automatically called by the constructor. It may however be useful to capture an error from failure to open, that would otherwise not surface until another method like `db.get()` is called. It's also possible to reopen the database after it has been closed with [`close()`](#dbclosecallback). Once `open()` has then been called, any read & write operations will again be queued internally until opening has finished.
+It's generally not necessary to call `open()` because it's automatically called by the database constructor. It may however be useful to capture an error from failure to open, that would otherwise not surface until another method like `db.get()` is called. It's also possible to reopen the database after it has been closed with [`close()`](#dbclosecallback). Once `open()` has then been called, any read & write operations will again be queued internally until opening has finished.
 
 The `open()` and `close()` methods are idempotent. If the database is already open, the `callback` will be called in a next tick. If opening is already in progress, the `callback` will be called when that has finished. If closing is in progress, the database will be reopened once closing has finished. Likewise, if `close()` is called after `open()`, the database will be closed once opening has finished and the prior `open()` call will receive an error.
 
@@ -231,10 +230,6 @@ A [manifest](https://github.com/Level/supports) describing the features supporte
 ```js
 if (!db.supports.permanence) {
   throw new Error('Persistent storage is required')
-}
-
-if (db.supports.encodings.buffer) {
-  await db.put(Buffer.from('key'), 'value')
 }
 ```
 
@@ -394,7 +389,7 @@ for await (const [key, value] of db.iterator()) {
 
 > :pushpin: The key structure is equal to that of [`subleveldown`](https://github.com/Level/subleveldown). This means that an `abstract-level` sublevel can read sublevels previously created with (and populated by) `subleveldown`.
 
-Internally, sublevels operate on keys that are either a string, Buffer or Uint8Array, depending on parent database and choice of encoding. Which is to say: binary keys are fully supported. The `name` must however always be a string and can only contain ASCII characters. When bundling JavaScript with Webpack, Browserify or other, you can choose not to use the `'buffer'` encoding and (through configuration of the bundler) exclude the [`buffer`](https://github.com/feross/buffer) shim in order to reduce bundle size.
+Internally, sublevels operate on keys that are either a string, Buffer or Uint8Array, depending on parent database and choice of encoding. Which is to say: binary keys are fully supported. The `name` must however always be a string and can only contain ASCII characters.
 
 The optional `options` object may contain:
 
@@ -425,7 +420,7 @@ Assume that e.g. `db.keyEncoding().encode(key)` is safe to call at any time incl
 
 Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the database (if the `encoding` argument is omitted, `null` or `undefined`).
 
-### `db.prefixKey(key, keyFormat)`
+### `key = db.prefixKey(key, keyFormat)`
 
 Add sublevel prefix to the given `key`, which must be already-encoded. If this database is not a sublevel, the given `key` is returned as-is. The `keyFormat` must be one of `'utf8'`, `'buffer'`, `'view'`. If `'utf8'` then `key` must be a string and the return value will be a string. If `'buffer'` then Buffer, if `'view'` then Uint8Array.
 
@@ -485,7 +480,7 @@ After `write()` or `close()` has been called, no further operations are allowed.
 
 #### `chainedBatch.close([callback])`
 
-Free up underlying resources. This should be done even if the chained batch has zero queued operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned.
+Free up underlying resources. This should be done even if the chained batch has zero queued operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
 
 #### `chainedBatch.length`
 
@@ -585,7 +580,7 @@ console.log(nested.db === db) // true
 
 Any method that takes a `key` argument, `value` argument or range options like `gte`, hereby jointly referred to as `data`, runs that `data` through an _encoding_. This means to encode input `data` and decode output `data`.
 
-Several encodings are builtin courtesy of [`level-transcoder`](https://github.com/Level/transcoder) and can be selected by a short name like `'utf8'` or `'json'`. The default encoding is `'utf8'` which ensures you'll always get back a string. Encodings can be specified for keys and values independently with `keyEncoding` and `valueEncoding` options, either in the database constructor or per method to apply an encoding selectively. For example:
+[Several encodings](https://github.com/Level/transcoder#built-in-encodings) are builtin courtesy of [`level-transcoder`](https://github.com/Level/transcoder) and can be selected by a short name like `'utf8'` or `'json'`. The default encoding is `'utf8'` which ensures you'll always get back a string. Encodings can be specified for keys and values independently with `keyEncoding` and `valueEncoding` options, either in the database constructor or per method to apply an encoding selectively. For example:
 
 ```js
 const db = level('./db', {
@@ -628,13 +623,13 @@ const db = level('./db', { valueEncoding: 'view' })
 const buffer = await db.get('example', { valueEncoding: 'buffer' })
 ```
 
-In browser environments it may be preferable to only use `'view'` in order to reduce JavaScript bundle size, as use of Buffer requires a shim (injected by Webpack, Browserify or other tooling).
+In browser environments it may be preferable to only use `'view'`. When bundling JavaScript with Webpack, Browserify or other, you can choose not to use the `'buffer'` encoding and (through configuration of the bundler) exclude the [`buffer`](https://github.com/feross/buffer) shim in order to reduce bundle size.
 
 Regardless of the choice of encoding, a `key` or `value` may not be `null` or `undefined` due to preexisting significance in iterators and streams. No such restriction exists on range options because `null` and `undefined` are significant types in encodings like [`charwise`](https://github.com/dominictarr/charwise) as well as some underlying stores like IndexedDB. Consumers of an `abstract-level` implementation must assume that range options like `{ gt: undefined }` are _not_ the same as `{}`. The [abstract test suite](#test-suite) does not test these types. Whether they are supported or how they sort may differ per implementation. An implementation can choose to:
 
 - Encode these types to make them meaningful
 - Have no defined behavior (moving the concern to a higher level)
-- Delegate to an underlying store (moving the concern to a lower level).
+- Delegate to an underlying database (moving the concern to a lower level).
 
 Lastly, one way or another, every implementation _must_ support `data` of type String and _should_ support `data` of type Buffer or Uint8Array.
 
@@ -665,7 +660,9 @@ Any keys, values and range options in these events are the original arguments pa
 
 ### Errors
 
-Errors thrown or yielded from the methods above will have a `code` property that is an uppercase string. Error codes will not change between major versions, but error messages will. Messages may also differ between implementations; they are free and encouraged to tune messages. A database may also throw [`TypeError`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypeError) errors (or other core error constructors in JavaScript) without a `code`. Used for invalid arguments and other programming mistakes, so for these no guarantee is given on the stability of their properties.
+Errors thrown or yielded from the methods above will have a `code` property that is an uppercase string. Error codes will not change between major versions, but error messages will. Messages may also differ between implementations; they are free and encouraged to tune messages.
+
+A database may also throw [`TypeError`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypeError) errors (or other core error constructors in JavaScript) without a `code` and without any guarantee on the stability of error properties - because these errors indicate invalid arguments and other programming mistakes that should not be catched much less have associated logic.
 
 Error codes will be one of the following.
 
@@ -767,7 +764,7 @@ When a method, option or other property was used that has been removed from the 
 
 Unless documented otherwise, implementations of `abstract-level` do _not_ support accessing a database from multiple processes running in parallel. That includes Node.js clusters and Electron renderer processes.
 
-See [`Level/awesome`](https://github.com/Level/awesome#shared-access) for modules like [`multileveldown`](https://github.com/Level/multileveldown) and [`level-party`](https://github.com/Level/party) that allow a database to be shared across processes and/or machines.
+See [`Level/awesome`](https://github.com/Level/awesome#shared-access) for modules like [`multileveldown`](https://github.com/Level/multileveldown) and [`level-party`](https://github.com/Level/party) that allow a database to be shared across processes and/or machines. Note: at the time of writing these modules are not yet ported to `abstract-level` and thus incompatible.
 
 ## Private API For Implementors
 
@@ -853,7 +850,7 @@ const value = await db.get('foo')
 console.log(value) // { a: 123 }
 ```
 
-See [`memdown`](https://github.com/Level/memdown/) if you are looking for a complete in-memory implementation.
+See [`memory-level`](https://github.com/Level/memory-level) if you are looking for a complete in-memory implementation. The example above notably lacks iterator support and would not pass the [abstract test suite](#test-suite).
 
 ### `db = AbstractLevel(manifest[, options])`
 
@@ -889,13 +886,13 @@ The `AbstractLevel` constructor will add other supported encodings to the public
 { buffer: true, view: true, utf8: true, json: true, ... }
 ```
 
-Implementations can also declare support of multiple encodings. Keys and values will then be encoded and decoded via the most optimal path. In `leveldown` for example it's (or will be):
+Implementations can also declare support of multiple encodings. Keys and values will then be encoded and decoded via the most optimal path. For example, in [`classic-level`](https://github.com/Level/classic-level) (previously `leveldown`) it's:
 
 ```js
 super({ encodings: { buffer: true, utf8: true } }, options, callback)
 ```
 
-This has the benefit that user input needs less conversion steps: if the input is a string then `leveldown` can pass that to its underlying store as-is. Vice versa for output.
+This has the benefit that user input needs less conversion steps: if the input is a string then `classic-level` can pass that to its LevelDB binding as-is. Vice versa for output.
 
 ### `db._open(options, callback)`
 
@@ -907,7 +904,7 @@ The default `_open()` is a sensible noop and invokes `callback` on a next tick.
 
 Close the database. When this is called, `db.status` will be `'closing'`. If closing failed, call the `callback` function with an error, which resets the `status` to `'open'`. Otherwise call `callback` without any arguments, which sets `status` to `'closed'`. Make an effort to avoid failing, or if it does happen that it is subsequently safe to keep using the database. If the database was never opened or failed to open then `_close()` will not be called.
 
-The default `_close()` is a sensible noop and invokes `callback` on a next tick.
+The default `_close()` is a sensible noop and invokes `callback` on a next tick. In native implementations (native addons written in C++ or other) it's recommended to delay closing if any operations are in flight. See [`classic-level`](https://github.com/Level/classic-level) (previously `leveldown`) for an example of this behavior. The JavaScript side in `abstract-level` will prevent _new_ operations before the database is reopened (as explained in constructor documentation above) while the C++ side should prevent closing the database before _existing_ operations have completed.
 
 ### `db._get(key, options, callback)`
 
@@ -1067,12 +1064,6 @@ The default `_write` method uses `db._batch`. If the `_write` method is overridd
 Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
 
 The default `_close()` invokes `callback` on a next tick. Overriding is optional.
-
-## Differences from old `level(up)`
-
-- The constructor does not take a callback argument. Instead call `db.open()` if you wish to wait for opening (which is not necessary to use the database) or to capture an error.
-- Streams are available via [`level-read-stream`](https://github.com/Level/read-stream).
-- Use of `level-errors` has been replaced with [error codes](#errors).
 
 ## Test Suite
 
