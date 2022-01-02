@@ -47,8 +47,6 @@ function AbstractLevel (manifest, options) {
     promises: true,
     clear: true,
     getMany: true,
-    idempotentOpen: true,
-    passiveOpen: true,
     deferredOpen: true,
     snapshots: manifest.snapshots !== false,
     permanence: manifest.permanence !== false,

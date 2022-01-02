@@ -48,35 +48,40 @@ module.exports = testCommon
 // Throw if test suite options are used instead of db.supports
 function protect (options, testCommon) {
   const legacyOptions = [
-    'bufferKeys',
-    'createIfMissing',
-    'errorIfExists',
-    'snapshots',
-    'seek',
-    'serialize',
-    'encodings',
-    'deferredOpen',
-    'streams',
-    'clear',
-    'getMany'
+    ['createIfMissing', true],
+    ['errorIfExists', true],
+    ['snapshots', true],
+    ['seek', true],
+    ['encodings', true],
+    ['deferredOpen', true],
+    ['streams', true],
+    ['clear', true],
+    ['getMany', true],
+    ['bufferKeys', false],
+    ['serialize', false],
+    ['idempotentOpen', false],
+    ['passiveOpen', false],
+    ['openCallback', false]
   ]
 
   Object.defineProperty(testCommon, kProtected, {
     value: true
   })
 
-  for (const k of legacyOptions) {
+  for (const [k, exists] of legacyOptions) {
+    const msg = exists ? 'has moved to db.supports' : 'has been removed'
+
     // Options may be a testCommon instance
     if (!options[kProtected] && k in options) {
-      throw new Error(`The test suite option '${k}' has moved to db.supports`)
+      throw new Error(`The test suite option '${k}' ${msg}`)
     }
 
     Object.defineProperty(testCommon, k, {
       get () {
-        throw new Error(`The test suite option '${k}' has moved to db.supports`)
+        throw new Error(`The test suite option '${k}' ${msg}`)
       },
       set () {
-        throw new Error(`The test suite option '${k}' has moved to db.supports`)
+        throw new Error(`The test suite option '${k}' ${msg}`)
       }
     })
   }
