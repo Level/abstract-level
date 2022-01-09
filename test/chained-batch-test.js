@@ -1,7 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-
 let db
 
 exports.setUp = function (test, testCommon) {
@@ -177,19 +175,15 @@ exports.batch = function (test, testCommon) {
       batch.write(function (err) {
         t.error(err, 'no write() error')
 
-        concat(
-          db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' }), function (err, data) {
-            t.error(err)
-            t.equal(data.length, 3, 'correct number of entries')
-            const expected = [
-              { key: 'foo', value: 'bar' },
-              { key: 'one', value: 'I' },
-              { key: 'two', value: 'II' }
-            ]
-            t.deepEqual(data, expected)
-            t.end()
-          }
-        )
+        db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' }).all(function (err, entries) {
+          t.error(err)
+          t.same(entries, [
+            ['foo', 'bar'],
+            ['one', 'I'],
+            ['two', 'II']
+          ])
+          t.end()
+        })
       })
     })
   })
@@ -205,17 +199,15 @@ exports.batch = function (test, testCommon) {
         .put('2', 'two')
         .put('3', 'three')
         .write().then(function () {
-          concat(
-            db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' }), function (err, data) {
-              t.error(err)
-              t.same(data, [
-                { key: '1', value: 'one' },
-                { key: '2', value: 'two' },
-                { key: '3', value: 'three' }
-              ])
-              db.close(t.end.bind(t))
-            }
-          )
+          db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' }).all(function (err, entries) {
+            t.error(err)
+            t.same(entries, [
+              ['1', 'one'],
+              ['2', 'two'],
+              ['3', 'three']
+            ])
+            db.close(t.end.bind(t))
+          })
         }).catch(t.fail.bind(t))
     })
   })
@@ -243,9 +235,9 @@ exports.batch = function (test, testCommon) {
       .del('c', { keyEncoding: 'json', arbitraryOption: true })
       .write()
 
-    t.same(await concat(db.iterator()), [
-      { key: 'a', value: '"a"' },
-      { key: 'b', value: 'b' }
+    t.same(await db.iterator().all(), [
+      ['a', '"a"'],
+      ['b', 'b']
     ])
 
     return db.close()

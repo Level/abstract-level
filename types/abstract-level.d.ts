@@ -3,7 +3,16 @@ import * as Transcoder from 'level-transcoder'
 import { EventEmitter } from 'events'
 import { AbstractChainedBatch } from './abstract-chained-batch'
 import { AbstractSublevel, AbstractSublevelOptions } from './abstract-sublevel'
-import { AbstractIterator, AbstractIteratorOptions } from './abstract-iterator'
+
+import {
+  AbstractIterator,
+  AbstractIteratorOptions,
+  AbstractKeyIterator,
+  AbstractKeyIteratorOptions,
+  AbstractValueIterator,
+  AbstractValueIteratorOptions
+} from './abstract-iterator'
+
 import { NodeCallback, RangeOptions } from './interfaces'
 
 /**
@@ -153,12 +162,46 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   batch (): AbstractChainedBatch<typeof this, KDefault, VDefault>
 
   /**
-   * Create an iterator.
+   * Create an iterator. For example:
+   *
+   * ```js
+   * for await (const [key, value] of db.iterator({ gte: 'a' })) {
+   *   console.log([key, value])
+   * }
+   * ```
    */
   iterator (): AbstractIterator<typeof this, KDefault, VDefault>
   iterator<K = KDefault, V = VDefault> (
     options: AbstractIteratorOptions<K, V>
   ): AbstractIterator<typeof this, K, V>
+
+  /**
+   * Create a key iterator. For example:
+   *
+   * ```js
+   * for await (const key of db.keys({ gte: 'a' })) {
+   *   console.log(key)
+   * }
+   * ```
+   */
+  keys (): AbstractKeyIterator<typeof this, KDefault>
+  keys<K = KDefault> (
+    options: AbstractKeyIteratorOptions<K>
+  ): AbstractKeyIterator<typeof this, K>
+
+  /**
+   * Create a value iterator. For example:
+   *
+   * ```js
+   * for await (const value of db.values({ gte: 'a' })) {
+   *   console.log(value)
+   * }
+   * ```
+   */
+  values (): AbstractValueIterator<typeof this, KDefault, VDefault>
+  values<K = KDefault, V = VDefault> (
+    options: AbstractValueIteratorOptions<K, V>
+  ): AbstractValueIterator<typeof this, K, V>
 
   /**
    * Delete all entries or a range.

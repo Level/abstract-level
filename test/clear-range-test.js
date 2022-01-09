@@ -1,7 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-
 const data = (function () {
   const d = []
   let i = 0
@@ -50,10 +48,10 @@ exports.range = function (test, testCommon) {
   function verify (t, db, expected) {
     const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
 
-    concat(it, function (err, result) {
-      t.ifError(err, 'no concat error')
-      t.is(result.length, expected.length, 'correct number of entries')
-      t.same(result, expected)
+    it.all(function (err, entries) {
+      t.ifError(err, 'no all() error')
+      t.is(entries.length, expected.length, 'correct number of entries')
+      t.same(entries, expected.map(kv => [kv.key, kv.value]))
 
       db.close(t.end.bind(t))
     })
@@ -162,6 +160,22 @@ exports.range = function (test, testCommon) {
   rangeTest('gte=30 and lte=70', {
     gte: '30',
     lte: '70'
+  }, exclude(data, 30, 70))
+
+  // The gte and lte options should take precedence over gt and lt respectively.
+  rangeTest('test iterator with gte=30 and lte=70 and gt=40 and lt=60', {
+    gte: '30',
+    lte: '70',
+    gt: '40',
+    lt: '60'
+  }, exclude(data, 30, 70))
+
+  // Also test the other way around: if gt and lt were to select a bigger range.
+  rangeTest('test iterator with gte=30 and lte=70 and gt=20 and lt=80', {
+    gte: '30',
+    lte: '70',
+    gt: '20',
+    lt: '80'
   }, exclude(data, 30, 70))
 
   rangeTest('gt=29 and lt=71', {

@@ -1,7 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-
 let db
 let keySequence = 0
 
@@ -131,9 +129,7 @@ exports.all = function (test, testCommon) {
     await db.open()
     await db.batch(numbers.map(key => ({ type: 'put', key, value: 'value' })))
 
-    const entries = await concat(db.iterator({ keyEncoding: 'utf8' }))
-    const keys = entries.map(e => e.key)
-
+    const keys = await db.keys({ keyEncoding: 'utf8' }).all()
     t.same(keys, numbers.map(String), 'sorts lexicographically')
 
     return db.close()

@@ -1,5 +1,6 @@
 'use strict'
 
+const { Buffer } = require('buffer')
 const identity = (v) => v
 
 exports.all = function (test, testCommon) {
@@ -8,279 +9,244 @@ exports.all = function (test, testCommon) {
 }
 
 exports.sequence = function (test, testCommon) {
-  function make (name, testFn) {
-    test(name, function (t) {
-      const db = testCommon.factory()
-      const done = function (err) {
-        t.error(err, 'no error from done()')
-
-        db.close(function (err) {
-          t.error(err, 'no error from close()')
-          t.end()
-        })
-      }
-
-      db.open(function (err) {
-        t.error(err, 'no error from open()')
-        testFn(db, t, done)
-      })
-    })
-  }
-
-  make('iterator#seek() throws if next() has not completed', function (db, t, done) {
-    const ite = db.iterator()
-    let error
-    let async = false
-
-    ite.next(function (err, key, value) {
-      t.error(err, 'no error from next()')
-      t.ok(async, 'next is asynchronous')
-      ite.close(done)
-    })
-
-    async = true
-
-    try {
-      ite.seek('two')
-    } catch (err) {
-      error = err.code
-    }
-
-    t.is(error, 'LEVEL_ITERATOR_BUSY', 'got error')
-  })
-
-  make('iterator#seek() does not throw after close()', function (db, t, done) {
-    const ite = db.iterator()
-
-    ite.close(function (err) {
-      t.error(err, 'no error from close()')
-
-      try {
-        ite.seek('two')
-      } catch (err) {
-        t.fail(err)
-      }
-
-      done()
-    })
-  })
-}
-
-exports.seek = function (test, testCommon) {
-  function make (name, testFn) {
-    test(name, function (t) {
-      const db = testCommon.factory()
-      const done = function (err) {
-        t.error(err, 'no error from done()')
-
-        db.close(function (err) {
-          t.error(err, 'no error from close()')
-          t.end()
-        })
-      }
-
-      db.open(function (err) {
-        t.error(err, 'no error from open()')
-
-        db.batch([
-          { type: 'put', key: 'one', value: '1' },
-          { type: 'put', key: 'two', value: '2' },
-          { type: 'put', key: 'three', value: '3' }
-        ], function (err) {
-          t.error(err, 'no error from batch()')
-          testFn(db, t, done)
-        })
-      })
-    })
-  }
-
-  make('iterator#seek() to string target', function (db, t, done) {
-    const ite = db.iterator()
-    ite.seek('two')
-    ite.next(function (err, key, value) {
-      t.error(err, 'no error')
-      t.same(key.toString(), 'two', 'key matches')
-      t.same(value.toString(), '2', 'value matches')
-      ite.next(function (err, key, value) {
-        t.error(err, 'no error')
-        t.same(key, undefined, 'end of iterator')
-        t.same(value, undefined, 'end of iterator')
-        ite.close(done)
-      })
-    })
-  })
-
-  if (testCommon.supports.encodings.buffer) {
-    // TODO: make this test meaningful, with bytes outside the utf8 range
-    make('iterator#seek() to buffer target', function (db, t, done) {
-      const ite = db.iterator({ keyEncoding: 'buffer' })
-      ite.seek(Buffer.from('two'))
-      ite.next(function (err, key, value) {
-        t.error(err, 'no error from next()')
-        t.equal(key.toString(), 'two', 'key matches')
-        t.equal(value.toString(), '2', 'value matches')
-        ite.next(function (err, key, value) {
-          t.error(err, 'no error from next()')
-          t.equal(key, undefined, 'end of iterator')
-          t.equal(value, undefined, 'end of iterator')
-          ite.close(done)
-        })
-      })
-    })
-  }
-
-  make('iterator#seek() to target with custom encoding', function (db, t, done) {
-    const ite = db.iterator()
-    const keyEncoding = { encode: () => 'two', decode: identity, format: 'utf8' }
-    ite.seek('xyz', { keyEncoding })
-    ite.next(function (err, key, value) {
-      t.error(err, 'no error')
-      t.same(key.toString(), 'two', 'key matches')
-      t.same(value.toString(), '2', 'value matches')
-      ite.close(done)
-    })
-  })
-
-  make('iterator#seek() on reverse iterator', function (db, t, done) {
-    const ite = db.iterator({ reverse: true, limit: 1 })
-    ite.seek('three!')
-    ite.next(function (err, key, value) {
-      t.error(err, 'no error')
-      t.same(key.toString(), 'three', 'key matches')
-      t.same(value.toString(), '3', 'value matches')
-      ite.close(done)
-    })
-  })
-
-  make('iterator#seek() to out of range target', function (db, t, done) {
-    const ite = db.iterator()
-    ite.seek('zzz')
-    ite.next(function (err, key, value) {
-      t.error(err, 'no error')
-      t.same(key, undefined, 'end of iterator')
-      t.same(value, undefined, 'end of iterator')
-      ite.close(done)
-    })
-  })
-
-  make('iterator#seek() on reverse iterator to out of range target', function (db, t, done) {
-    const ite = db.iterator({ reverse: true })
-    ite.seek('zzz')
-    ite.next(function (err, key, value) {
-      t.error(err, 'no error')
-      t.same(key.toString(), 'two')
-      t.same(value.toString(), '2')
-      ite.close(done)
-    })
-  })
-
-  for (const reverse of [false, true]) {
-    for (const deferred of [false, true]) {
-      testCommon.supports.snapshots && test(`iterator#seek() respects snapshot (reverse: ${reverse}, deferred: ${deferred})`, async function (t) {
+  for (const deferred of [false, true]) {
+    for (const mode of ['iterator', 'keys', 'values']) {
+      test(`${mode}().seek() throws if next() has not completed (deferred: ${deferred})`, async function (t) {
         const db = testCommon.factory()
         if (!deferred) await db.open()
 
-        const it = db.iterator({ reverse })
+        const it = db[mode]()
+        const promise = it.next()
 
-        // Add entry after having created the iterator (and its snapshot)
-        await db.put('a', 'a')
+        t.throws(() => it.seek('two'), (err) => err.code === 'LEVEL_ITERATOR_BUSY')
 
-        // Seeking should not create a new snapshot, which'd include the new entry
-        it.seek('a')
-        t.same(await it.next(), undefined)
+        await promise
+        await db.close()
+      })
 
+      test(`${mode}().seek() does not throw after close() (deferred: ${deferred})`, async function (t) {
+        const db = testCommon.factory()
+        if (!deferred) await db.open()
+
+        const it = db[mode]()
         await it.close()
+
+        t.doesNotThrow(() => it.seek('two'))
+
         await db.close()
       })
     }
   }
+}
 
-  test('iterator#seek() respects range', function (t) {
-    const db = testCommon.factory()
+exports.seek = function (test, testCommon) {
+  const testData = () => [
+    { type: 'put', key: 'one', value: '1' },
+    { type: 'put', key: 'two', value: '2' },
+    { type: 'put', key: 'three', value: '3' }
+  ]
 
-    db.open(function (err) {
-      t.error(err, 'no error from open()')
+  for (const mode of ['iterator', 'keys', 'values']) {
+    const mapEntry = mode === 'iterator' ? e => e : mode === 'keys' ? e => e[0] : e => e[1]
 
-      // Can't use Array.fill() because IE
-      const ops = []
+    test(`${mode}().seek() to string target`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const it = db[mode]()
 
-      for (let i = 0; i < 10; i++) {
-        ops.push({ type: 'put', key: String(i), value: String(i) })
+      it.seek('two')
+
+      t.same(await it.next(), mapEntry(['two', '2']), 'match')
+      t.same(await it.next(), undefined, 'end of iterator')
+
+      return db.close()
+    })
+
+    if (testCommon.supports.encodings.buffer) {
+      // TODO: make this test meaningful, with bytes outside the utf8 range
+      test(`${mode}().seek() to buffer target`, async function (t) {
+        const db = testCommon.factory()
+        await db.batch(testData())
+        const it = db[mode]({ keyEncoding: 'buffer' })
+
+        it.seek(Buffer.from('two'))
+
+        t.same(await it.next(), mapEntry([Buffer.from('two'), '2']), 'match')
+        t.same(await it.next(), undefined, 'end of iterator')
+
+        return db.close()
+      })
+    }
+
+    test(`${mode}().seek() to target with custom encoding`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const it = db[mode]()
+      const keyEncoding = { encode: () => 'two', decode: identity, format: 'utf8' }
+
+      it.seek('xyz', { keyEncoding })
+
+      t.same(await it.next(), mapEntry(['two', '2']), 'match')
+      t.same(await it.next(), undefined, 'end of iterator')
+
+      return db.close()
+    })
+
+    test(`${mode}().seek() on reverse iterator`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const it = db[mode]({ reverse: true, limit: 1 })
+
+      // Should land on key equal to or smaller than 'three!' which is 'three'
+      it.seek('three!')
+
+      t.same(await it.next(), mapEntry(['three', '3']), 'match')
+      t.same(await it.next(), undefined, 'end of iterator')
+
+      return db.close()
+    })
+
+    test(`${mode}().seek() to out of range target`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const it = db[mode]()
+
+      it.seek('zzz')
+      t.same(await it.next(), undefined, 'end of iterator')
+
+      return db.close()
+    })
+
+    test(`${mode}().seek() on reverse iterator to out of range target`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const it = db[mode]({ reverse: true })
+
+      it.seek('zzz')
+
+      t.same(await it.next(), mapEntry(['two', '2']), 'match')
+      t.same(await it.next(), mapEntry(['three', '3']), 'match')
+      t.same(await it.next(), mapEntry(['one', '1']), 'match')
+      t.same(await it.next(), undefined, 'end of iterator')
+
+      return db.close()
+    })
+
+    if (testCommon.supports.snapshots) {
+      for (const reverse of [false, true]) {
+        for (const deferred of [false, true]) {
+          test(`${mode}().seek() respects snapshot (reverse: ${reverse}, deferred: ${deferred})`, async function (t) {
+            const db = testCommon.factory()
+            if (!deferred) await db.open()
+
+            const it = db[mode]({ reverse })
+
+            // Add entry after having created the iterator (and its snapshot)
+            await db.put('a', 'a')
+
+            // Seeking should not create a new snapshot, which'd include the new entry
+            it.seek('a')
+            t.same(await it.next(), undefined)
+
+            return db.close()
+          })
+        }
       }
+    }
 
-      db.batch(ops, function (err) {
-        t.error(err, 'no error from batch()')
+    test(`${mode}().seek() respects range`, function (t) {
+      const db = testCommon.factory()
 
-        let pending = 0
+      db.open(function (err) {
+        t.error(err, 'no error from open()')
 
-        expect({ gt: '5' }, '4', undefined)
-        expect({ gt: '5' }, '5', undefined)
-        expect({ gt: '5' }, '6', '6')
+        // Can't use Array.fill() because IE
+        const ops = []
 
-        expect({ gte: '5' }, '4', undefined)
-        expect({ gte: '5' }, '5', '5')
-        expect({ gte: '5' }, '6', '6')
+        for (let i = 0; i < 10; i++) {
+          ops.push({ type: 'put', key: String(i), value: String(i) })
+        }
 
-        expect({ lt: '5' }, '4', '4')
-        expect({ lt: '5' }, '5', undefined)
-        expect({ lt: '5' }, '6', undefined)
+        db.batch(ops, function (err) {
+          t.error(err, 'no error from batch()')
 
-        expect({ lte: '5' }, '4', '4')
-        expect({ lte: '5' }, '5', '5')
-        expect({ lte: '5' }, '6', undefined)
+          let pending = 0
 
-        expect({ lt: '5', reverse: true }, '4', '4')
-        expect({ lt: '5', reverse: true }, '5', undefined)
-        expect({ lt: '5', reverse: true }, '6', undefined)
+          expect({ gt: '5' }, '4', undefined)
+          expect({ gt: '5' }, '5', undefined)
+          expect({ gt: '5' }, '6', '6')
 
-        expect({ lte: '5', reverse: true }, '4', '4')
-        expect({ lte: '5', reverse: true }, '5', '5')
-        expect({ lte: '5', reverse: true }, '6', undefined)
+          expect({ gte: '5' }, '4', undefined)
+          expect({ gte: '5' }, '5', '5')
+          expect({ gte: '5' }, '6', '6')
 
-        expect({ gt: '5', reverse: true }, '4', undefined)
-        expect({ gt: '5', reverse: true }, '5', undefined)
-        expect({ gt: '5', reverse: true }, '6', '6')
+          // The gte option should take precedence over gt.
+          expect({ gte: '5', gt: '7' }, '4', undefined)
+          expect({ gte: '5', gt: '7' }, '5', '5')
+          expect({ gte: '5', gt: '7' }, '6', '6')
+          expect({ gte: '5', gt: '3' }, '4', undefined)
+          expect({ gte: '5', gt: '3' }, '5', '5')
+          expect({ gte: '5', gt: '3' }, '6', '6')
 
-        expect({ gte: '5', reverse: true }, '4', undefined)
-        expect({ gte: '5', reverse: true }, '5', '5')
-        expect({ gte: '5', reverse: true }, '6', '6')
+          expect({ lt: '5' }, '4', '4')
+          expect({ lt: '5' }, '5', undefined)
+          expect({ lt: '5' }, '6', undefined)
 
-        expect({ gt: '7', lt: '8' }, '7', undefined)
-        expect({ gte: '7', lt: '8' }, '7', '7')
-        expect({ gte: '7', lt: '8' }, '8', undefined)
-        expect({ gt: '7', lte: '8' }, '8', '8')
+          expect({ lte: '5' }, '4', '4')
+          expect({ lte: '5' }, '5', '5')
+          expect({ lte: '5' }, '6', undefined)
 
-        function expect (range, target, expected) {
-          pending++
-          const ite = db.iterator(range)
+          // The lte option should take precedence over lt.
+          expect({ lte: '5', lt: '3' }, '4', '4')
+          expect({ lte: '5', lt: '3' }, '5', '5')
+          expect({ lte: '5', lt: '3' }, '6', undefined)
+          expect({ lte: '5', lt: '7' }, '4', '4')
+          expect({ lte: '5', lt: '7' }, '5', '5')
+          expect({ lte: '5', lt: '7' }, '6', undefined)
 
-          ite.seek(target)
-          ite.next(function (err, key, value) {
-            t.error(err, 'no error from next()')
+          expect({ lt: '5', reverse: true }, '4', '4')
+          expect({ lt: '5', reverse: true }, '5', undefined)
+          expect({ lt: '5', reverse: true }, '6', undefined)
 
-            const json = JSON.stringify(range)
-            const msg = 'seek(' + target + ') on ' + json + ' yields ' + expected
+          expect({ lte: '5', reverse: true }, '4', '4')
+          expect({ lte: '5', reverse: true }, '5', '5')
+          expect({ lte: '5', reverse: true }, '6', undefined)
 
-            if (expected === undefined) {
-              t.equal(value, undefined, msg)
-            } else {
-              t.equal(value.toString(), expected, msg)
-            }
+          expect({ gt: '5', reverse: true }, '4', undefined)
+          expect({ gt: '5', reverse: true }, '5', undefined)
+          expect({ gt: '5', reverse: true }, '6', '6')
 
-            ite.close(function (err) {
-              t.error(err, 'no error from close()')
-              if (!--pending) done()
+          expect({ gte: '5', reverse: true }, '4', undefined)
+          expect({ gte: '5', reverse: true }, '5', '5')
+          expect({ gte: '5', reverse: true }, '6', '6')
+
+          expect({ gt: '7', lt: '8' }, '7', undefined)
+          expect({ gte: '7', lt: '8' }, '7', '7')
+          expect({ gte: '7', lt: '8' }, '8', undefined)
+          expect({ gt: '7', lte: '8' }, '8', '8')
+
+          function expect (range, target, expected) {
+            pending++
+            const ite = db[mode](range)
+
+            ite.seek(target)
+            ite.next(function (err, item) {
+              t.error(err, 'no error from next()')
+
+              const json = JSON.stringify(range)
+              const msg = 'seek(' + target + ') on ' + json + ' yields ' + expected
+
+              // Either a key or value depending on mode
+              t.is(item, expected, msg)
+
+              ite.close(function (err) {
+                t.error(err, 'no error from close()')
+                if (!--pending) db.close(t.end.bind(t))
+              })
             })
-          })
-        }
-
-        function done () {
-          db.close(function (err) {
-            t.error(err, 'no error from close()')
-            t.end()
-          })
-        }
+          }
+        })
       })
     })
-  })
+  }
 }

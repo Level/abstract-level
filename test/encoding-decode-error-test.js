@@ -4,7 +4,6 @@ let db
 let keySequence = 0
 
 const testKey = () => 'test' + (++keySequence)
-const identity = (v) => v
 
 exports.all = function (test, testCommon) {
   test('setup', async function (t) {
@@ -58,78 +57,6 @@ exports.all = function (test, testCommon) {
       })
     })
   })
-
-  for (const deferred of [false, true]) {
-    // NOTE: adapted from encoding-down
-    test(`iterator() catches decoding error from keyEncoding (deferred: ${deferred})`, async function (t) {
-      t.plan(4)
-
-      const keyEncoding = {
-        format: 'utf8',
-        decode: function (key) {
-          t.is(key, 'abc')
-          throw new Error('from encoding')
-        },
-        encode: identity
-      }
-
-      const db = testCommon.factory()
-      await db.put('abc', 'value')
-
-      if (deferred) {
-        await db.close()
-        db.open(t.ifError.bind(t))
-      } else {
-        t.pass('non-deferred')
-      }
-
-      const it = db.iterator({ keyEncoding })
-
-      try {
-        await it.next()
-      } catch (err) {
-        t.is(err.code, 'LEVEL_DECODE_ERROR')
-        t.is(err.cause && err.cause.message, 'from encoding')
-      }
-
-      return db.close()
-    })
-
-    // NOTE: adapted from encoding-down
-    test(`iterator() catches decoding error from valueEncoding (deferred: ${deferred})`, async function (t) {
-      t.plan(4)
-
-      const valueEncoding = {
-        format: 'utf8',
-        decode (value) {
-          t.is(value, 'abc')
-          throw new Error('from encoding')
-        },
-        encode: identity
-      }
-
-      const db = testCommon.factory()
-      await db.put('key', 'abc')
-
-      if (deferred) {
-        await db.close()
-        db.open(t.ifError.bind(t))
-      } else {
-        t.pass('non-deferred')
-      }
-
-      const it = db.iterator({ valueEncoding })
-
-      try {
-        await it.next()
-      } catch (err) {
-        t.is(err.code, 'LEVEL_DECODE_ERROR')
-        t.is(err.cause && err.cause.message, 'from encoding')
-      }
-
-      return db.close()
-    })
-  }
 
   test('teardown', async function (t) {
     return db.close()

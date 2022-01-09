@@ -1,14 +1,14 @@
 'use strict'
 
 const test = require('tape')
-const { mockDown, mockIterator } = require('../util')
+const { mockLevel, mockIterator } = require('../util')
 
 // NOTE: copied from deferred-leveldown
 test('deferred operations are called in order', function (t) {
   t.plan(15)
 
   const calls = []
-  const db = mockDown({
+  const db = mockLevel({
     _put: function (key, value, options, callback) {
       this.nextTick(callback)
       calls.push({ type: 'put', key, value, options })

@@ -2,25 +2,35 @@
 
 const { fromCallback } = require('catering')
 const ModuleError = require('module-error')
-const { getOptions } = require('./lib/common')
+const { getOptions, getCallback } = require('./lib/common')
 
 const kPromise = Symbol('promise')
-const kNextCallback = Symbol('nextCallback')
-const kNexting = Symbol('nexting')
-const kFinishNext = Symbol('finishNext')
+const kCallback = Symbol('callback')
+const kWorking = Symbol('working')
+const kHandleOne = Symbol('handleOne')
+const kHandleMany = Symbol('handleMany')
+const kAutoClose = Symbol('autoClose')
+const kFinishWork = Symbol('finishWork')
+const kReturnMany = Symbol('returnMany')
 const kClosing = Symbol('closing')
-const kFinishClose = Symbol('finishClose')
+const kHandleClose = Symbol('handleClose')
 const kClosed = Symbol('closed')
 const kCloseCallbacks = Symbol('closeCallbacks')
 const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
+const kLegacy = Symbol('legacy')
 const kKeys = Symbol('keys')
 const kValues = Symbol('values')
+const kLimit = Symbol('limit')
+const kCount = Symbol('count')
 
+const emptyOptions = Object.freeze({})
 let warnedEnd = false
 
-class AbstractIterator {
-  constructor (db, options) {
+// This class is an internal utility for common functionality between AbstractIterator,
+// AbstractKeyIterator and AbstractValueIterator. It's not exported.
+class CommonIterator {
+  constructor (db, options, legacy) {
     if (typeof db !== 'object' || db === null) {
       const hint = db === null ? 'null' : typeof db
       throw new TypeError(`The first argument must be an abstract-level database, received ${hint}`)
@@ -32,49 +42,62 @@ class AbstractIterator {
 
     this[kClosed] = false
     this[kCloseCallbacks] = []
-    this[kNexting] = false
+    this[kWorking] = false
     this[kClosing] = false
-    this[kNextCallback] = null
-    this[kFinishNext] = this[kFinishNext].bind(this)
-    this[kFinishClose] = this[kFinishClose].bind(this)
+    this[kAutoClose] = false
+    this[kCallback] = null
+    this[kHandleOne] = this[kHandleOne].bind(this)
+    this[kHandleMany] = this[kHandleMany].bind(this)
+    this[kHandleClose] = this[kHandleClose].bind(this)
     this[kKeyEncoding] = options[kKeyEncoding]
     this[kValueEncoding] = options[kValueEncoding]
-    this[kKeys] = options.keys !== false
-    this[kValues] = options.values !== false
+    this[kLegacy] = legacy
+    this[kLimit] = Number.isInteger(options.limit) && options.limit >= 0 ? options.limit : Infinity
+    this[kCount] = 0
 
     this.db = db
     this.db.attachResource(this)
     this.nextTick = db.nextTick
   }
 
+  get count () {
+    return this[kCount]
+  }
+
+  get limit () {
+    return this[kLimit]
+  }
+
   next (callback) {
     let promise
 
     if (callback === undefined) {
-      promise = new Promise(function (resolve, reject) {
-        callback = function (err, key, value) {
+      promise = new Promise((resolve, reject) => {
+        callback = (err, key, value) => {
           if (err) reject(err)
+          else if (!this[kLegacy]) resolve(key)
           else if (key === undefined && value === undefined) resolve()
           else resolve([key, value])
         }
       })
     } else if (typeof callback !== 'function') {
-      throw new TypeError('The first argument must be a function or undefined')
+      throw new TypeError('Callback must be a function')
     }
 
     if (this[kClosing]) {
       this.nextTick(callback, new ModuleError('Iterator is not open: cannot call next() after close()', {
         code: 'LEVEL_ITERATOR_NOT_OPEN'
       }))
-    } else if (this[kNexting]) {
+    } else if (this[kWorking]) {
       this.nextTick(callback, new ModuleError('Iterator is busy: cannot call next() until previous call has completed', {
         code: 'LEVEL_ITERATOR_BUSY'
       }))
     } else {
-      this[kNexting] = true
-      this[kNextCallback] = callback
+      this[kWorking] = true
+      this[kCallback] = callback
 
-      this._next(this[kFinishNext])
+      if (this[kCount] >= this[kLimit]) this.nextTick(this[kHandleOne], null)
+      else this._next(this[kHandleOne])
     }
 
     return promise
@@ -84,50 +107,141 @@ class AbstractIterator {
     this.nextTick(callback)
   }
 
-  [kFinishNext] (err, key, value) {
-    const cb = this[kNextCallback]
+  nextv (size, options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, emptyOptions)
 
-    this[kNexting] = false
-    this[kNextCallback] = null
-
-    if (this[kClosing]) this._close(this[kFinishClose])
-
-    try {
-      if (this[kKeys] && key != null) {
-        key = this[kKeyEncoding].decode(key)
-      } else {
-        key = undefined
-      }
-    } catch (err) {
-      return cb(new ModuleError('Iterator could not decode key', {
-        code: 'LEVEL_DECODE_ERROR',
-        cause: err
-      }))
+    if (!Number.isInteger(size)) {
+      this.nextTick(callback, new TypeError("The first argument 'size' must be an integer"))
+      return callback[kPromise]
     }
 
-    try {
-      if (this[kValues] && value != null) {
-        value = this[kValueEncoding].decode(value)
-      } else {
-        value = undefined
-      }
-    } catch (err) {
-      return cb(new ModuleError('Iterator could not decode value', {
-        code: 'LEVEL_DECODE_ERROR',
-        cause: err
+    if (this[kClosing]) {
+      this.nextTick(callback, new ModuleError('Iterator is not open: cannot call nextv() after close()', {
+        code: 'LEVEL_ITERATOR_NOT_OPEN'
       }))
+    } else if (this[kWorking]) {
+      this.nextTick(callback, new ModuleError('Iterator is busy: cannot call nextv() until previous call has completed', {
+        code: 'LEVEL_ITERATOR_BUSY'
+      }))
+    } else {
+      if (size < 1) size = 1
+      if (this[kLimit] < Infinity) size = Math.min(size, this[kLimit] - this[kCount])
+
+      this[kWorking] = true
+      this[kCallback] = callback
+
+      if (size <= 0) this.nextTick(this[kHandleMany], null, [])
+      else this._nextv(size, options, this[kHandleMany])
     }
 
-    cb(err, key, value)
+    return callback[kPromise]
+  }
+
+  _nextv (size, options, callback) {
+    const acc = []
+    const onnext = (err, key, value) => {
+      if (err) {
+        return callback(err)
+      } else if (this[kLegacy] ? key === undefined && value === undefined : key === undefined) {
+        return callback(null, acc)
+      }
+
+      acc.push(this[kLegacy] ? [key, value] : key)
+
+      if (acc.length === size) {
+        callback(null, acc)
+      } else {
+        this._next(onnext)
+      }
+    }
+
+    this._next(onnext)
+  }
+
+  all (options, callback) {
+    callback = getCallback(options, callback)
+    callback = fromCallback(callback, kPromise)
+    options = getOptions(options, emptyOptions)
+
+    if (this[kClosing]) {
+      this.nextTick(callback, new ModuleError('Iterator is not open: cannot call all() after close()', {
+        code: 'LEVEL_ITERATOR_NOT_OPEN'
+      }))
+    } else if (this[kWorking]) {
+      this.nextTick(callback, new ModuleError('Iterator is busy: cannot call all() until previous call has completed', {
+        code: 'LEVEL_ITERATOR_BUSY'
+      }))
+    } else {
+      this[kWorking] = true
+      this[kCallback] = callback
+      this[kAutoClose] = true
+
+      if (this[kCount] >= this[kLimit]) this.nextTick(this[kHandleMany], null, [])
+      else this._all(options, this[kHandleMany])
+    }
+
+    return callback[kPromise]
+  }
+
+  _all (options, callback) {
+    // Must count here because we're directly calling _nextv()
+    let count = this[kCount]
+    const acc = []
+
+    const nextv = () => {
+      // Not configurable, because implementations should optimize _all().
+      const size = this[kLimit] < Infinity ? Math.min(1e3, this[kLimit] - count) : 1e3
+
+      if (size <= 0) {
+        this.nextTick(callback, null, acc)
+      } else {
+        this._nextv(size, emptyOptions, onnextv)
+      }
+    }
+
+    const onnextv = (err, items) => {
+      if (err) {
+        callback(err)
+      } else if (items.length === 0) {
+        callback(null, acc)
+      } else {
+        acc.push.apply(acc, items)
+        count += items.length
+        nextv()
+      }
+    }
+
+    nextv()
+  }
+
+  [kFinishWork] () {
+    const cb = this[kCallback]
+
+    this[kWorking] = false
+    this[kCallback] = null
+
+    if (this[kClosing]) this._close(this[kHandleClose])
+
+    return cb
+  }
+
+  [kReturnMany] (cb, err, items) {
+    if (this[kAutoClose]) {
+      this.close(cb.bind(null, err, items))
+    } else {
+      cb(err, items)
+    }
   }
 
   seek (target, options) {
-    options = getOptions(options)
+    options = getOptions(options, emptyOptions)
 
     if (this[kClosing]) {
       // Don't throw here, to be kind to implementations that wrap
       // another db and don't necessarily control when the db is closed
-    } else if (this[kNexting]) {
+    } else if (this[kWorking]) {
       throw new ModuleError('Iterator is busy: cannot call seek() until next() has completed', {
         code: 'LEVEL_ITERATOR_BUSY'
       })
@@ -144,7 +258,11 @@ class AbstractIterator {
     }
   }
 
-  _seek (target, options) {}
+  _seek (target, options) {
+    throw new ModuleError('Iterator does not support seek()', {
+      code: 'LEVEL_NOT_SUPPORTED'
+    })
+  }
 
   close (callback) {
     callback = fromCallback(callback, kPromise)
@@ -157,8 +275,8 @@ class AbstractIterator {
       this[kClosing] = true
       this[kCloseCallbacks].push(callback)
 
-      if (!this[kNexting]) {
-        this._close(this[kFinishClose])
+      if (!this[kWorking]) {
+        this._close(this[kHandleClose])
       }
     }
 
@@ -169,7 +287,7 @@ class AbstractIterator {
     this.nextTick(callback)
   }
 
-  [kFinishClose] () {
+  [kHandleClose] () {
     this[kClosed] = true
     this.db.detachResource(this)
 
@@ -183,14 +301,62 @@ class AbstractIterator {
 
   async * [Symbol.asyncIterator] () {
     try {
-      let kv
+      let item
 
-      while ((kv = (await this.next())) !== undefined) {
-        yield kv
+      while ((item = (await this.next())) !== undefined) {
+        yield item
       }
     } finally {
       if (!this[kClosed]) await this.close()
     }
+  }
+}
+
+// For backwards compatibility this class is not (yet) called AbstractEntryIterator.
+class AbstractIterator extends CommonIterator {
+  constructor (db, options) {
+    super(db, options, true)
+    this[kKeys] = options.keys !== false
+    this[kValues] = options.values !== false
+  }
+
+  [kHandleOne] (err, key, value) {
+    const cb = this[kFinishWork]()
+    if (err) return cb(err)
+
+    try {
+      key = this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+      value = this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
+    } catch (err) {
+      return cb(new IteratorDecodeError('entry', err))
+    }
+
+    if (!(key === undefined && value === undefined)) {
+      this[kCount]++
+    }
+
+    cb(null, key, value)
+  }
+
+  [kHandleMany] (err, entries) {
+    const cb = this[kFinishWork]()
+    if (err) return this[kReturnMany](cb, err)
+
+    try {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i]
+        const key = entry[0]
+        const value = entry[1]
+
+        entry[0] = this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+        entry[1] = this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
+      }
+    } catch (err) {
+      return this[kReturnMany](cb, new IteratorDecodeError('entries', err))
+    }
+
+    this[kCount] += entries.length
+    this[kReturnMany](cb, null, entries)
   }
 
   end (callback) {
@@ -203,6 +369,90 @@ class AbstractIterator {
     }
 
     return this.close(callback)
+  }
+}
+
+class AbstractKeyIterator extends CommonIterator {
+  constructor (db, options) {
+    super(db, options, false)
+  }
+
+  [kHandleOne] (err, key) {
+    const cb = this[kFinishWork]()
+    if (err) return cb(err)
+
+    try {
+      key = key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+    } catch (err) {
+      return cb(new IteratorDecodeError('key', err))
+    }
+
+    if (key !== undefined) this[kCount]++
+    cb(null, key)
+  }
+
+  [kHandleMany] (err, keys) {
+    const cb = this[kFinishWork]()
+    if (err) return this[kReturnMany](cb, err)
+
+    try {
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i]
+        keys[i] = key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+      }
+    } catch (err) {
+      return this[kReturnMany](cb, new IteratorDecodeError('keys', err))
+    }
+
+    this[kCount] += keys.length
+    this[kReturnMany](cb, null, keys)
+  }
+}
+
+class AbstractValueIterator extends CommonIterator {
+  constructor (db, options) {
+    super(db, options, false)
+  }
+
+  [kHandleOne] (err, value) {
+    const cb = this[kFinishWork]()
+    if (err) return cb(err)
+
+    try {
+      value = value !== undefined ? this[kValueEncoding].decode(value) : undefined
+    } catch (err) {
+      return cb(new IteratorDecodeError('value', err))
+    }
+
+    if (value !== undefined) this[kCount]++
+    cb(null, value)
+  }
+
+  [kHandleMany] (err, values) {
+    const cb = this[kFinishWork]()
+    if (err) return this[kReturnMany](cb, err)
+
+    try {
+      for (let i = 0; i < values.length; i++) {
+        const value = values[i]
+        values[i] = value !== undefined ? this[kValueEncoding].decode(value) : undefined
+      }
+    } catch (err) {
+      return this[kReturnMany](cb, new IteratorDecodeError('values', err))
+    }
+
+    this[kCount] += values.length
+    this[kReturnMany](cb, null, values)
+  }
+}
+
+// Internal utility, not typed or exported
+class IteratorDecodeError extends ModuleError {
+  constructor (subject, cause) {
+    super(`Iterator could not decode ${subject}`, {
+      code: 'LEVEL_DECODE_ERROR',
+      cause
+    })
   }
 }
 
@@ -219,3 +469,5 @@ AbstractIterator.keyEncoding = kKeyEncoding
 AbstractIterator.valueEncoding = kValueEncoding
 
 exports.AbstractIterator = AbstractIterator
+exports.AbstractKeyIterator = AbstractKeyIterator
+exports.AbstractValueIterator = AbstractValueIterator

@@ -1,6 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
 const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
 
@@ -56,15 +55,15 @@ exports.clear = function (test, testCommon) {
         db.batch(ops, function (err) {
           t.ifError(err, 'no batch error')
 
-          concat(db.iterator(), function (err, entries) {
-            t.ifError(err, 'no concat error')
+          db.iterator().all(function (err, entries) {
+            t.ifError(err, 'no all() error')
             t.is(entries.length, keys.length, 'has entries')
 
             db.clear(function (err) {
               t.ifError(err, 'no clear error')
 
-              concat(db.iterator(), function (err, entries) {
-                t.ifError(err, 'no concat error')
+              db.iterator().all(function (err, entries) {
+                t.ifError(err, 'no all() error')
                 t.is(entries.length, 0, 'has no entries')
 
                 db.close(function (err) {
@@ -91,15 +90,15 @@ exports.clear = function (test, testCommon) {
         db.batch(ops, function (err) {
           t.ifError(err, 'no batch error')
 
-          concat(db.iterator(), function (err, entries) {
-            t.ifError(err, 'no concat error')
+          db.iterator().all(function (err, entries) {
+            t.ifError(err, 'no all() error')
             t.is(entries.length, keys.length, 'has entries')
 
             db.clear().then(function () {
               t.ifError(err, 'no clear error')
 
-              concat(db.iterator(), function (err, entries) {
-                t.ifError(err, 'no concat error')
+              db.iterator().all(function (err, entries) {
+                t.ifError(err, 'no all() error')
                 t.is(entries.length, 0, 'has no entries')
 
                 db.close(function (err) {
@@ -134,9 +133,7 @@ exports.clear = function (test, testCommon) {
 
         await db.clear({ gte, keyEncoding })
 
-        const entries = await concat(db.iterator())
-        const keys = entries.map((e) => e.key)
-
+        const keys = await db.keys().all()
         t.same(keys, ['"a"'], 'got expected keys')
 
         return db.close()

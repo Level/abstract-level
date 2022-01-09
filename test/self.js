@@ -4,73 +4,18 @@ const test = require('tape')
 const sinon = require('sinon')
 const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
-const { AbstractLevel, AbstractIterator, AbstractChainedBatch } = require('..')
+const { AbstractLevel, AbstractChainedBatch } = require('..')
+const { MinimalLevel } = require('./util')
 const getRangeOptions = require('../lib/range-options')
 
 const testCommon = require('./common')({
   test,
-  factory: function () {
+  factory () {
     return new AbstractLevel({ encodings: { utf8: true } })
   }
 })
 
 const rangeOptions = ['gt', 'gte', 'lt', 'lte']
-
-// Test the suite itself as well as the default implementation,
-// excluding noop operations that can't pass the test suite.
-
-require('./factory-test')(test, testCommon)
-require('./manifest-test')(test, testCommon)
-require('./open-test').all(test, testCommon)
-
-require('./del-test').setUp(test, testCommon)
-require('./del-test').args(test, testCommon)
-require('./del-test').events(test, testCommon)
-require('./del-test').tearDown(test, testCommon)
-
-require('./get-test').setUp(test, testCommon)
-require('./get-test').args(test, testCommon)
-require('./get-test').tearDown(test, testCommon)
-
-require('./get-many-test').setUp(test, testCommon)
-require('./get-many-test').args(test, testCommon)
-require('./get-many-test').tearDown(test, testCommon)
-
-require('./put-test').setUp(test, testCommon)
-require('./put-test').args(test, testCommon)
-require('./put-test').events(test, testCommon)
-require('./put-test').tearDown(test, testCommon)
-
-require('./put-get-del-test').setUp(test, testCommon)
-require('./put-get-del-test').tearDown(test, testCommon)
-
-require('./batch-test').setUp(test, testCommon)
-require('./batch-test').args(test, testCommon)
-require('./batch-test').events(test, testCommon)
-require('./batch-test').tearDown(test, testCommon)
-
-require('./chained-batch-test').setUp(test, testCommon)
-require('./chained-batch-test').args(test, testCommon)
-require('./chained-batch-test').events(test, testCommon)
-require('./chained-batch-test').tearDown(test, testCommon)
-
-require('./close-test').all(test, testCommon)
-
-require('./iterator-test').setUp(test, testCommon)
-require('./iterator-test').args(test, testCommon)
-require('./iterator-test').sequence(test, testCommon)
-require('./iterator-test').tearDown(test, testCommon)
-
-require('./iterator-range-test').setUp(test, testCommon)
-require('./iterator-range-test').tearDown(test, testCommon)
-
-require('./async-iterator-test').setup(test, testCommon)
-require('./async-iterator-test').teardown(test, testCommon)
-
-require('./iterator-seek-test').sequence(test, testCommon)
-
-require('./clear-test').args(test, testCommon)
-require('./clear-test').events(test, testCommon)
 
 function implement (ctor, methods) {
   class Test extends ctor {}
@@ -804,157 +749,8 @@ test('test AbstractChainedBatch#clear() extensibility', function (t) {
   })
 })
 
-test('test iterator() extensibility', function (t) {
-  t.plan(4)
-
-  const TestIterator = implement(AbstractIterator)
-  const spy = sinon.spy(function (options) { return new TestIterator(this, options) })
-  const expectedOptions = {
-    options: 1,
-    reverse: false,
-    keys: true,
-    values: true,
-    limit: -1,
-    keyEncoding: 'utf8',
-    valueEncoding: 'utf8'
-  }
-  const Test = implement(AbstractLevel, { _iterator: spy })
-  const test = new Test({ encodings: { utf8: true } })
-
-  test.once('open', function () {
-    test.iterator({ options: 1 })
-
-    t.equal(spy.callCount, 1, 'got _iterator() call')
-    t.equal(spy.getCall(0).thisValue, test, '`this` on _iterator() was correct')
-    t.equal(spy.getCall(0).args.length, 1, 'got one arguments')
-    t.deepEqual(spy.getCall(0).args[0], expectedOptions, 'got expected options argument')
-  })
-})
-
-test('test AbstractIterator extensibility', function (t) {
-  const Test = implement(AbstractIterator)
-  const db = testCommon.factory()
-  const test = new Test(db, {})
-  t.ok(test.db === db, 'instance has db reference')
-  t.end()
-})
-
-test('test AbstractIterator throws on invalid db argument', function (t) {
-  t.plan(4 * 2)
-
-  for (const args of [[], [null], [undefined], 'foo']) {
-    const hint = args[0] === null ? 'null' : typeof args[0]
-
-    try {
-      // eslint-disable-next-line no-new
-      new AbstractIterator(...args)
-    } catch (err) {
-      t.is(err.name, 'TypeError')
-      t.is(err.message, 'The first argument must be an abstract-level database, received ' + hint)
-    }
-  }
-})
-
-test('test AbstractIterator throws on invalid options argument', function (t) {
-  t.plan(4 * 2)
-
-  for (const args of [[], [null], [undefined], 'foo']) {
-    try {
-      // eslint-disable-next-line no-new
-      new AbstractIterator({}, ...args)
-    } catch (err) {
-      t.is(err.name, 'TypeError')
-      t.is(err.message, 'The second argument must be an options object')
-    }
-  }
-})
-
-test('test AbstractIterator#next() extensibility', function (t) {
-  t.plan(6)
-
-  const spy = sinon.spy()
-  const spycb = sinon.spy()
-  const Test = implement(AbstractIterator, { _next: spy })
-  const db = testCommon.factory()
-
-  db.once('open', function () {
-    const test = new Test(db, {})
-
-    test.next(spycb)
-
-    t.equal(spy.callCount, 1, 'got _next() call')
-    t.equal(spy.getCall(0).thisValue, test, '`this` on _next() was correct')
-    t.equal(spy.getCall(0).args.length, 1, 'got one arguments')
-    t.equal(typeof spy.getCall(0).args[0], 'function', 'got a callback function')
-    t.equal(spycb.callCount, 0, 'spycb not called')
-    spy.getCall(0).args[0]()
-    t.equal(spycb.callCount, 1, 'spycb called, i.e. was our cb argument')
-  })
-})
-
-test('test AbstractIterator#next() throws on invalid callback argument', async function (t) {
-  t.plan(3 * 2)
-
-  const db = testCommon.factory()
-  await db.open()
-
-  for (const invalid of [{}, null, 'foo']) {
-    const it = new AbstractIterator(db, {})
-
-    try {
-      it.next(invalid)
-    } catch (err) {
-      t.is(err.name, 'TypeError')
-      t.is(err.message, 'The first argument must be a function or undefined')
-    }
-  }
-})
-
-test('test AbstractIterator throws when accessing legacy properties', async function (t) {
-  t.plan(3 * 2)
-
-  const db = testCommon.factory()
-  await db.open()
-  const it = new AbstractIterator(db, {})
-
-  for (const k of ['_ended property', '_nexting property', '_end method']) {
-    try {
-      // eslint-disable-next-line no-unused-expressions
-      it[k.split(' ')[0]]
-    } catch (err) {
-      t.is(err.code, 'LEVEL_LEGACY')
-    }
-
-    try {
-      it[k.split(' ')[0]] = 123
-    } catch (err) {
-      t.is(err.code, 'LEVEL_LEGACY')
-    }
-  }
-})
-
-test('test AbstractIterator#close() extensibility', function (t) {
-  t.plan(4)
-
-  const spy = sinon.spy()
-  const expectedCb = function () {}
-  const Test = implement(AbstractIterator, { _close: spy })
-  const db = testCommon.factory()
-
-  db.once('open', function () {
-    const test = new Test(db, {})
-
-    test.close(expectedCb)
-
-    t.equal(spy.callCount, 1, 'got _close() call')
-    t.equal(spy.getCall(0).thisValue, test, '`this` on _close() was correct')
-    t.equal(spy.getCall(0).args.length, 1, 'got one arguments')
-    t.is(typeof spy.getCall(0).args[0], 'function', 'got cb argument')
-  })
-})
-
 test('test clear() extensibility', function (t) {
-  t.plan(7 * 5)
+  t.plan((7 * 5) - 4)
 
   const spy = sinon.spy()
   const Test = implement(AbstractLevel, { _clear: spy })
@@ -966,18 +762,21 @@ test('test clear() extensibility', function (t) {
     call([null, callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
     call([undefined, callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
     call([{ custom: 1 }, callback], { custom: 1, keyEncoding: 'utf8', reverse: false, limit: -1 })
-    call([{ reverse: true, limit: 0 }, callback], { keyEncoding: 'utf8', reverse: true, limit: 0 })
+    call([{ reverse: true, limit: 0 }, callback], { keyEncoding: 'utf8', reverse: true, limit: 0 }, true)
     call([{ reverse: 1 }, callback], { keyEncoding: 'utf8', reverse: true, limit: -1 })
     call([{ reverse: null }, callback], { keyEncoding: 'utf8', reverse: false, limit: -1 })
 
-    function call (args, expectedOptions) {
+    function call (args, expectedOptions, shouldSkipCall) {
       db.clear.apply(db, args)
 
-      t.is(spy.callCount, 1, 'got _clear() call')
-      t.is(spy.getCall(0).thisValue, db, '`this` on _clear() was correct')
-      t.is(spy.getCall(0).args.length, 2, 'got two arguments')
-      t.same(spy.getCall(0).args[0], expectedOptions, 'got expected options argument')
-      t.is(typeof spy.getCall(0).args[1], 'function', 'got callback argument')
+      t.is(spy.callCount, shouldSkipCall ? 0 : 1, 'got _clear() call')
+
+      if (!shouldSkipCall) {
+        t.is(spy.getCall(0).thisValue, db, '`this` on _clear() was correct')
+        t.is(spy.getCall(0).args.length, 2, 'got two arguments')
+        t.same(spy.getCall(0).args[0], expectedOptions, 'got expected options argument')
+        t.is(typeof spy.getCall(0).args[1], 'function', 'got callback argument')
+      }
 
       spy.resetHistory()
     }
@@ -1182,6 +981,7 @@ test('rangeOptions', function (t) {
   })
 
   t.test('ignores invalid limit', function (t) {
+    // Infinity is valid but is normalized to -1 for use in private API
     for (const limit of [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, NaN, -2, 5.5]) {
       t.same(getRangeOptions({ limit }, db.keyEncoding('utf8')).limit, -1)
     }
@@ -1262,9 +1062,19 @@ test('rangeOptions', function (t) {
 
 require('./self/defer-test')
 require('./self/attach-resource-test')
+require('./self/abstract-iterator-test')
+require('./self/iterator-test')
 require('./self/deferred-iterator-test')
 require('./self/deferred-operations-test')
 require('./self/deferred-chained-batch-test')
 require('./self/async-iterator-test')
 require('./self/encoding-test')
 require('./self/sublevel-test')
+
+// Test the abstract test suite using a minimal implementation
+require('./index')({
+  test,
+  factory (options) {
+    return new MinimalLevel(options)
+  }
+})
