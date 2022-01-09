@@ -1,6 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
 const { Buffer } = require('buffer')
 
 exports.all = function (test, testCommon) {
@@ -40,8 +39,8 @@ exports.all = function (test, testCommon) {
       }
 
       async function verify (expected) {
-        const entries = await concat(db.iterator())
-        t.same(entries.map(x => x.key), expected)
+        const keys = await db.keys().all()
+        t.same(keys, expected)
       }
     })
   }
@@ -55,7 +54,7 @@ exports.all = function (test, testCommon) {
         const db = testCommon.factory()
         const sub1 = db.sublevel('a', { keyEncoding })
         const sub2 = db.sublevel('b', { keyEncoding })
-        const length = (db) => concat(db.iterator()).then(x => x.length)
+        const length = (db) => db.keys().all().then(x => x.length)
 
         if (!deferred) await sub1.open()
         if (!deferred) await sub2.open()
@@ -73,13 +72,13 @@ exports.all = function (test, testCommon) {
 
         await Promise.all([batch1.write(), batch2.write()])
 
-        const entries1 = await concat(sub1.iterator())
-        const entries2 = await concat(sub2.iterator())
+        const entries1 = await sub1.iterator().all()
+        const entries2 = await sub2.iterator().all()
 
         t.is(entries1.length, 256, 'sub1 yielded all entries')
         t.is(entries2.length, 256, 'sub2 yielded all entries')
-        t.ok(entries1.every(x => x.value === 'aa'))
-        t.ok(entries2.every(x => x.value === 'bb'))
+        t.ok(entries1.every(x => x[1] === 'aa'))
+        t.ok(entries2.every(x => x[1] === 'bb'))
 
         const many1 = await sub1.getMany(keys)
         const many2 = await sub2.getMany(keys)

@@ -1,7 +1,7 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
 const { Buffer } = require('buffer')
+const identity = (v) => v
 
 let db
 
@@ -13,67 +13,150 @@ exports.setUp = function (test, testCommon) {
 }
 
 exports.args = function (test, testCommon) {
-  test('test iterator has db reference', function (t) {
-    const iterator = db.iterator()
-    // May return iterator of an underlying db, that's okay.
-    t.ok(iterator.db === db || iterator.db === (db.db || db._db || db))
-    iterator.close(t.end.bind(t))
-  })
+  for (const mode of ['iterator', 'keys', 'values']) {
+    test(`${mode}() has db reference`, async function (t) {
+      const it = db[mode]()
+
+      // May return iterator of an underlying db, that's okay.
+      t.ok(it.db === db || it.db === (db.db || db._db || db))
+
+      await it.close()
+    })
+
+    test(`${mode}() has limit and count properties`, async function (t) {
+      const iterators = [db[mode]()]
+      t.is(iterators[0].limit, Infinity, 'defaults to infinite')
+
+      for (const limit of [-1, 0, 1, Infinity]) {
+        const it = db[mode]({ limit })
+        iterators.push(it)
+        t.is(it.limit, limit === -1 ? Infinity : limit, 'has limit property')
+      }
+
+      t.ok(iterators.every(it => it.count === 0), 'has count property')
+      await Promise.all(iterators.map(it => it.close()))
+    })
+
+    test(`${mode}().nextv() yields error if size is invalid`, async function (t) {
+      t.plan(4)
+
+      const it = db[mode]()
+
+      for (const args of [[], [NaN], ['1'], [2.5]]) {
+        try {
+          await it.nextv(...args)
+        } catch (err) {
+          t.is(err.message, "The first argument 'size' must be an integer")
+        }
+      }
+
+      await it.close()
+    })
+  }
 }
 
 exports.sequence = function (test, testCommon) {
-  test('test twice iterator#close() is idempotent', function (t) {
-    const iterator = db.iterator()
-    iterator.close(function () {
-      let async = false
+  for (const mode of ['iterator', 'keys', 'values']) {
+    test(`${mode}().close() is idempotent`, function (t) {
+      const iterator = db[mode]()
 
       iterator.close(function () {
-        t.ok(async, 'callback is asynchronous')
-        t.end()
-      })
+        let async = false
 
-      async = true
-    })
-  })
+        iterator.close(function () {
+          t.ok(async, 'callback is asynchronous')
+          t.end()
+        })
 
-  test('test iterator#next after iterator#close() callback with error', function (t) {
-    const iterator = db.iterator()
-    iterator.close(function (err) {
-      t.error(err)
-
-      let async = false
-
-      iterator.next(function (err2) {
-        t.ok(err2, 'returned error')
-        t.is(err2.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct message')
-        t.ok(async, 'callback is asynchronous')
-        t.end()
-      })
-
-      async = true
-    })
-  })
-
-  test('test twice iterator#next() throws', function (t) {
-    const iterator = db.iterator()
-    iterator.next(function (err) {
-      t.error(err)
-      iterator.close(function (err) {
-        t.error(err)
-        t.end()
+        async = true
       })
     })
 
-    let async = false
+    for (const method of ['next', 'nextv', 'all']) {
+      const requiredArgs = method === 'nextv' ? [1] : []
 
-    iterator.next(function (err) {
-      t.ok(err, 'returned error')
-      t.is(err.code, 'LEVEL_ITERATOR_BUSY')
-      t.ok(async, 'callback is asynchronous')
-    })
+      test(`${mode}().${method}() after close() yields error`, function (t) {
+        const iterator = db[mode]()
+        iterator.close(function (err) {
+          t.error(err)
 
-    async = true
-  })
+          let async = false
+
+          iterator[method](...requiredArgs, function (err2) {
+            t.ok(err2, 'returned error')
+            t.is(err2.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct message')
+            t.ok(async, 'callback is asynchronous')
+            t.end()
+          })
+
+          async = true
+        })
+      })
+
+      for (const otherMethod of ['next', 'nextv', 'all']) {
+        const otherRequiredArgs = otherMethod === 'nextv' ? [1] : []
+
+        test(`${mode}().${method}() while busy with ${otherMethod}() yields error`, function (t) {
+          const iterator = db[mode]()
+          iterator[otherMethod](...otherRequiredArgs, function (err) {
+            t.error(err)
+            iterator.close(function (err) {
+              t.error(err)
+              t.end()
+            })
+          })
+
+          let async = false
+
+          iterator[method](...requiredArgs, function (err) {
+            t.ok(err, 'returned error')
+            t.is(err.code, 'LEVEL_ITERATOR_BUSY')
+            t.ok(async, 'callback is asynchronous')
+          })
+
+          async = true
+        })
+      }
+    }
+  }
+
+  for (const deferred of [false, true]) {
+    for (const mode of ['iterator', 'keys', 'values']) {
+      for (const method of ['next', 'nextv', 'all']) {
+        const requiredArgs = method === 'nextv' ? [10] : []
+
+        // NOTE: adapted from leveldown
+        test(`${mode}().${method}() after db.close() yields error (deferred: ${deferred})`, async function (t) {
+          t.plan(1)
+
+          const db = testCommon.factory()
+          if (!deferred) await db.open()
+
+          await db.put('a', 'a')
+          await db.put('b', 'b')
+
+          const it = db[mode]()
+
+          // The first call should succeed, because it was scheduled before close()
+          let promise = it[method](...requiredArgs).then(() => {
+            // The second call should fail, because it was scheduled after close()
+            return it[method](...requiredArgs).catch(err => {
+              t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+            })
+          })
+
+          if (method !== 'next') {
+            // However, because nextv() and all() fallback to next*(), they're allowed to fail too (for now)
+            promise = promise.catch((err) => {
+              t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+            })
+          }
+
+          await Promise.all([db.close(), promise])
+        })
+      }
+    }
+  }
 }
 
 exports.iterator = function (test, testCommon) {
@@ -137,6 +220,138 @@ exports.iterator = function (test, testCommon) {
     })
   })
 
+  test('db.keys().next()', function (t) {
+    const it = db.keys()
+
+    it.next(function (err, key) {
+      t.ifError(err, 'no next() error')
+      t.is(key, 'foobatch1')
+      it.close(t.end.bind(t))
+    })
+  })
+
+  test('db.values().next()', function (t) {
+    const it = db.values()
+
+    it.next(function (err, value) {
+      t.ifError(err, 'no next() error')
+      t.is(value, 'bar1')
+      it.close(t.end.bind(t))
+    })
+  })
+
+  for (const mode of ['iterator', 'keys', 'values']) {
+    const mapEntry = e => mode === 'iterator' ? e : mode === 'keys' ? e[0] : e[1]
+
+    test(`${mode}().nextv()`, async function (t) {
+      const it = db[mode]()
+
+      t.same(await it.nextv(1), [['foobatch1', 'bar1']].map(mapEntry))
+      t.same(await it.nextv(2, {}), [['foobatch2', 'bar2'], ['foobatch3', 'bar3']].map(mapEntry))
+      t.same(await it.nextv(2), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().nextv() in reverse`, async function (t) {
+      const it = db[mode]({ reverse: true })
+
+      t.same(await it.nextv(1), [['foobatch3', 'bar3']].map(mapEntry))
+      t.same(await it.nextv(2, {}), [['foobatch2', 'bar2'], ['foobatch1', 'bar1']].map(mapEntry))
+      t.same(await it.nextv(2), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().nextv() has soft minimum of 1`, async function (t) {
+      const it = db[mode]()
+
+      t.same(await it.nextv(0), [['foobatch1', 'bar1']].map(mapEntry))
+      t.same(await it.nextv(0), [['foobatch2', 'bar2']].map(mapEntry))
+      t.same(await it.nextv(0, {}), [['foobatch3', 'bar3']].map(mapEntry))
+      t.same(await it.nextv(0), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().nextv() requesting more than available`, async function (t) {
+      const it = db[mode]()
+
+      t.same(await it.nextv(10), [
+        ['foobatch1', 'bar1'],
+        ['foobatch2', 'bar2'],
+        ['foobatch3', 'bar3']
+      ].map(mapEntry))
+      t.same(await it.nextv(10), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().nextv() honors limit`, async function (t) {
+      const it = db[mode]({ limit: 2 })
+
+      t.same(await it.nextv(10), [['foobatch1', 'bar1'], ['foobatch2', 'bar2']].map(mapEntry))
+      t.same(await it.nextv(10), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().nextv() honors limit in reverse`, async function (t) {
+      const it = db[mode]({ limit: 2, reverse: true })
+
+      t.same(await it.nextv(10), [['foobatch3', 'bar3'], ['foobatch2', 'bar2']].map(mapEntry))
+      t.same(await it.nextv(10), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().all()`, async function (t) {
+      t.same(await db[mode]().all(), [
+        ['foobatch1', 'bar1'],
+        ['foobatch2', 'bar2'],
+        ['foobatch3', 'bar3']
+      ].map(mapEntry))
+
+      t.same(await db[mode]().all({}), [
+        ['foobatch1', 'bar1'],
+        ['foobatch2', 'bar2'],
+        ['foobatch3', 'bar3']
+      ].map(mapEntry))
+    })
+
+    test(`${mode}().all() in reverse`, async function (t) {
+      t.same(await db[mode]({ reverse: true }).all(), [
+        ['foobatch3', 'bar3'],
+        ['foobatch2', 'bar2'],
+        ['foobatch1', 'bar1']
+      ].map(mapEntry))
+    })
+
+    test(`${mode}().all() honors limit`, async function (t) {
+      t.same(await db[mode]({ limit: 2 }).all(), [
+        ['foobatch1', 'bar1'],
+        ['foobatch2', 'bar2']
+      ].map(mapEntry))
+
+      const it = db[mode]({ limit: 2 })
+
+      t.same(await it.next(), mapEntry(['foobatch1', 'bar1']))
+      t.same(await it.all(), [['foobatch2', 'bar2']].map(mapEntry))
+    })
+
+    test(`${mode}().all() honors limit in reverse`, async function (t) {
+      t.same(await db[mode]({ limit: 2, reverse: true }).all(), [
+        ['foobatch3', 'bar3'],
+        ['foobatch2', 'bar2']
+      ].map(mapEntry))
+
+      const it = db[mode]({ limit: 2, reverse: true })
+
+      t.same(await it.next(), mapEntry(['foobatch3', 'bar3']))
+      t.same(await it.all(), [['foobatch2', 'bar2']].map(mapEntry))
+    })
+  }
+
   // NOTE: adapted from memdown
   test('iterator() sorts lexicographically', async function (t) {
     const db = testCommon.factory()
@@ -161,24 +376,24 @@ exports.iterator = function (test, testCommon) {
       { type: 'put', key: '\t', value: '\t' }
     ])
 
-    t.same(await concat(db.iterator()), [
-      { key: '', value: 'empty' },
-      { key: '\t', value: '\t' },
-      { key: '12', value: '12' },
-      { key: '2', value: '2' },
-      { key: 'a', value: 'A' },
-      { key: 'a🐄', value: 'A🐄' },
-      { key: 'b', value: 'B' },
-      { key: 'd', value: 'D' },
-      { key: 'e', value: 'E' },
-      { key: 'f', value: 'F' },
-      { key: 'ff', value: 'FF' },
-      { key: '~', value: '~' },
-      { key: '🐄', value: '🐄' }
+    t.same(await db.iterator().all(), [
+      ['', 'empty'],
+      ['\t', '\t'],
+      ['12', '12'],
+      ['2', '2'],
+      ['a', 'A'],
+      ['a🐄', 'A🐄'],
+      ['b', 'B'],
+      ['d', 'D'],
+      ['e', 'E'],
+      ['f', 'F'],
+      ['ff', 'FF'],
+      ['~', '~'],
+      ['🐄', '🐄']
     ])
 
-    t.same(await concat(db.iterator({ lte: '' })), [
-      { key: '', value: 'empty' }
+    t.same(await db.iterator({ lte: '' }).all(), [
+      ['', 'empty']
     ])
 
     return db.close()
@@ -199,11 +414,16 @@ exports.iterator = function (test, testCommon) {
         db.batch(keys.map((key) => ({ type: 'put', key, value: 'x' })), function (err) {
           t.ifError(err, 'no batch() error')
 
-          concat(db.iterator(), function (err, entries) {
-            t.ifError(err, 'no concat() error')
-            t.same(entries.map(e => e.key[0]), [1, 2, 11], 'order is ok')
+          db.keys().all(function (err, keys) {
+            t.ifError(err, 'no all() error')
+            t.same(keys.map(k => k[0]), [1, 2, 11], 'order is ok')
 
-            db.close(t.end.bind(t))
+            db.iterator().all(function (err, entries) {
+              t.ifError(err, 'no all() error')
+              t.same(entries.map(e => e[0][0]), [1, 2, 11], 'order is ok')
+
+              db.close(t.end.bind(t))
+            })
           })
         })
       })
@@ -220,10 +440,10 @@ exports.iterator = function (test, testCommon) {
       await db.put(Uint8Array.from([192]), '192')
 
       const collect = async (range) => {
-        const entries = await concat(db.iterator(range))
-        t.ok(entries.every(e => e.key instanceof Uint8Array)) // True for both encodings
-        t.ok(entries.every(e => e.value === String(e.key[0])))
-        return entries.map(e => e.key[0])
+        const entries = await db.iterator(range).all()
+        t.ok(entries.every(e => e[0] instanceof Uint8Array)) // True for both encodings
+        t.ok(entries.every(e => e[1] === String(e[0][0])))
+        return entries.map(e => e[0][0])
       }
 
       t.same(await collect({ gt: Uint8Array.from([255]) }), [])
@@ -256,28 +476,56 @@ exports.iterator = function (test, testCommon) {
 
       return db.close()
     })
+  }
+}
 
-    // NOTE: adapted from leveldown
-    test('test iterator.close() via db.close()', async function (t) {
-      t.plan(1)
+exports.decode = function (test, testCommon) {
+  for (const deferred of [false, true]) {
+    for (const mode of ['iterator', 'keys', 'values']) {
+      for (const method of ['next', 'nextv', 'all']) {
+        const requiredArgs = method === 'nextv' ? [1] : []
 
-      const db = testCommon.factory()
-      await db.open()
-      await db.put('a', 'a')
-      await db.put('b', 'b')
+        for (const encodingOption of ['keyEncoding', 'valueEncoding']) {
+          if (mode === 'keys' && encodingOption === 'valueEncoding') continue
+          if (mode === 'values' && encodingOption === 'keyEncoding') continue
 
-      const it = db.iterator()
+          // NOTE: adapted from encoding-down
+          test(`${mode}().${method}() catches decoding error from ${encodingOption} (deferred: ${deferred})`, async function (t) {
+            t.plan(4)
 
-      // The first call should succeed, because it was scheduled before close()
-      const promise = it.next().then(() => {
-        // The second call should fail, because it was scheduled after close()
-        return it.next().catch(err => {
-          t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
-        })
-      })
+            const encoding = {
+              format: 'utf8',
+              decode: function (x) {
+                t.is(x, encodingOption === 'keyEncoding' ? 'testKey' : 'testValue')
+                throw new Error('from encoding')
+              },
+              encode: identity
+            }
 
-      await Promise.all([db.close(), promise])
-    })
+            const db = testCommon.factory()
+            await db.put('testKey', 'testValue')
+
+            if (deferred) {
+              await db.close()
+              db.open(t.ifError.bind(t))
+            } else {
+              t.pass('non-deferred')
+            }
+
+            const it = db[mode]({ [encodingOption]: encoding })
+
+            try {
+              await it[method](...requiredArgs)
+            } catch (err) {
+              t.is(err.code, 'LEVEL_DECODE_ERROR')
+              t.is(err.cause && err.cause.message, 'from encoding')
+            }
+
+            return db.close()
+          })
+        }
+      }
+    }
   }
 }
 
@@ -292,5 +540,6 @@ exports.all = function (test, testCommon) {
   exports.args(test, testCommon)
   exports.sequence(test, testCommon)
   exports.iterator(test, testCommon)
+  exports.decode(test, testCommon)
   exports.tearDown(test, testCommon)
 }

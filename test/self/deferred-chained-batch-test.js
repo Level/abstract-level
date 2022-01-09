@@ -1,7 +1,7 @@
 'use strict'
 
 const test = require('tape')
-const { mockDown } = require('../util')
+const { mockLevel } = require('../util')
 const { DefaultChainedBatch } = require('../../lib/default-chained-batch')
 const identity = (v) => v
 
@@ -31,7 +31,7 @@ test('deferred chained batch encodes once', function (t) {
     decode: identity
   }
 
-  const db = mockDown({
+  const db = mockLevel({
     _batch: function (array, options, callback) {
       called = true
       t.is(array[0] && array[0].key, 'FOO')
@@ -59,7 +59,7 @@ test('deferred chained batch encodes once', function (t) {
 test('deferred chained batch is closed upon failed open', function (t) {
   t.plan(6)
 
-  const db = mockDown({
+  const db = mockLevel({
     _open (options, callback) {
       t.pass('opening')
       this.nextTick(callback, new Error('_open error'))

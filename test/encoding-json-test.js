@@ -1,7 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-
 // NOTE: copied from levelup
 exports.all = function (test, testCommon) {
   for (const deferred of [false, true]) {
@@ -80,9 +78,9 @@ exports.all = function (test, testCommon) {
     }
 
     function testIterator (next) {
-      concat(db.iterator(), function (err, result) {
-        t.ifError(err, 'no concat() error')
-        t.same(result, entries)
+      db.iterator().all(function (err, result) {
+        t.ifError(err, 'no all() error')
+        t.same(result, entries.map(kv => [kv.key, kv.value]))
         next()
       })
     }

@@ -2,7 +2,8 @@
 
 const test = require('tape')
 const { Buffer } = require('buffer')
-const { AbstractLevel, AbstractIterator, AbstractSublevel } = require('../..')
+const { AbstractLevel, AbstractSublevel } = require('../..')
+const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('../..')
 const nextTick = AbstractLevel.prototype.nextTick
 
 class NoopLevel extends AbstractLevel {
@@ -388,33 +389,40 @@ test('opening & closing sublevel', function (t) {
     }
   })
 
-  t.test('errors from sublevel iterator bubble up', function (t) {
-    t.plan(2)
+  // Also test default fallback implementations of keys() and values()
+  for (const [mode, def] of [['iterator', false], ['keys', false], ['values', false], ['keys', true], ['values', true]]) {
+    const Ctor = mode === 'iterator' || def ? AbstractIterator : mode === 'keys' ? AbstractKeyIterator : AbstractValueIterator
+    const privateMethod = def ? '_iterator' : '_' + mode
+    const publicMethod = mode
 
-    class MockLevel extends AbstractLevel {
-      _iterator (options) {
-        return new MockIterator(this, options)
+    t.test(`error from sublevel.${mode}() bubbles up (default implementation: ${def})`, function (t) {
+      t.plan(2)
+
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
       }
-    }
 
-    class MockIterator extends AbstractIterator {
-      _next (callback) {
-        this.nextTick(callback, new Error('next() error from underlying store'))
+      class MockIterator extends Ctor {
+        _next (callback) {
+          this.nextTick(callback, new Error('next() error from parent database'))
+        }
       }
-    }
 
-    const db = new MockLevel({ encodings: { buffer: true } })
-    const sub = db.sublevel('test')
-    const it = sub.iterator()
+      const db = new MockLevel({ encodings: { buffer: true } })
+      const sub = db.sublevel('test')
+      const it = sub[publicMethod]()
 
-    it.next(function (err) {
-      t.is(err.message, 'next() error from underlying store')
+      it.next(function (err) {
+        t.is(err.message, 'next() error from parent database')
 
-      it.close(function () {
-        t.pass('closed')
+        it.close(function () {
+          t.pass('closed')
+        })
       })
     })
-  })
+  }
 
   t.end()
 })
@@ -438,33 +446,40 @@ test('sublevel operations are prefixed', function (t) {
     await sub.getMany(['a', 'b'])
   })
 
-  for (const deferred of [false, true]) {
-    t.test(`sublevel iterator.seek() target is prefixed (deferred: ${deferred})`, async function (t) {
-      t.plan(2)
+  // Also test default fallback implementations of keys() and values()
+  for (const [mode, def] of [['iterator', false], ['keys', false], ['values', false], ['keys', true], ['values', true]]) {
+    const Ctor = mode === 'iterator' || def ? AbstractIterator : mode === 'keys' ? AbstractKeyIterator : AbstractValueIterator
+    const privateMethod = def ? '_iterator' : '_' + mode
+    const publicMethod = mode
 
-      class MockIterator extends AbstractIterator {
-        _seek (target, options) {
-          t.is(target, '!sub!123')
-          t.is(options.keyEncoding, 'utf8')
+    for (const deferred of [false, true]) {
+      t.test(`sublevel ${mode}.seek() target is prefixed (default implementation: ${def}, deferred: ${deferred})`, async function (t) {
+        t.plan(2)
+
+        class MockIterator extends Ctor {
+          _seek (target, options) {
+            t.is(target, '!sub!123')
+            t.is(options.keyEncoding, 'utf8')
+          }
         }
-      }
 
-      class MockLevel extends AbstractLevel {
-        _iterator (options) {
-          return new MockIterator(this, options)
+        class MockLevel extends AbstractLevel {
+          [privateMethod] (options) {
+            return new MockIterator(this, options)
+          }
         }
-      }
 
-      const db = new MockLevel({ encodings: { utf8: true } })
-      const sub = db.sublevel('sub', { keyEncoding: 'json' })
+        const db = new MockLevel({ encodings: { utf8: true } })
+        const sub = db.sublevel('sub', { keyEncoding: 'json' })
 
-      if (!deferred) await sub.open()
+        if (!deferred) await sub.open()
 
-      const it = sub.iterator()
-      it.seek(123)
+        const it = sub[publicMethod]()
+        it.seek(123)
 
-      if (deferred) await sub.open()
-    })
+        if (deferred) await sub.open()
+      })
+    }
   }
 
   t.test('sublevel.clear() is prefixed', async function (t) {
@@ -703,68 +718,87 @@ test('sublevel encodings', function (t) {
     })
   })
 
-  t.test('unfixing sublevel Buffer keys', function (t) {
-    t.plan(4)
+  // Also test default fallback implementations of keys() and values()
+  for (const [mode, def] of [['iterator', false], ['keys', false], ['values', false], ['keys', true], ['values', true]]) {
+    const Ctor = mode === 'iterator' || def ? AbstractIterator : mode === 'keys' ? AbstractKeyIterator : AbstractValueIterator
+    const privateMethod = def ? '_iterator' : '_' + mode
+    const publicMethod = mode
 
-    const testKey = Buffer.from('00ff', 'hex')
-    const prefixedKey = Buffer.concat([Buffer.from('!test!'), testKey])
+    t.test(`unfixing sublevel.${mode}() Buffer keys (default implementation: ${def})`, function (t) {
+      t.plan(4)
 
-    class MockIterator extends AbstractIterator {
-      _next (callback) {
-        nextTick(callback, null, prefixedKey, 'bar')
+      const testKey = Buffer.from('00ff', 'hex')
+      const prefixedKey = Buffer.concat([Buffer.from('!test!'), testKey])
+
+      class MockIterator extends Ctor {
+        _next (callback) {
+          if (mode === 'iterator' || def) {
+            this.nextTick(callback, null, prefixedKey, 'bar')
+          } else if (mode === 'keys') {
+            this.nextTick(callback, null, prefixedKey)
+          } else {
+            this.nextTick(callback, null, 'bar')
+          }
+        }
       }
-    }
 
-    class MockLevel extends AbstractLevel {
-      _iterator (options) {
-        t.is(options.keyEncoding, 'buffer')
-        t.is(options.valueEncoding, 'utf8')
-        return new MockIterator(this, options)
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          t.is(options.keyEncoding, 'buffer')
+          t.is(options.valueEncoding, 'utf8')
+          return new MockIterator(this, options)
+        }
       }
-    }
 
-    const db = new MockLevel({ encodings: { buffer: true, view: true, utf8: true } })
-    const sub = db.sublevel('test', { keyEncoding: 'buffer' })
+      const db = new MockLevel({ encodings: { buffer: true, view: true, utf8: true } })
+      const sub = db.sublevel('test', { keyEncoding: 'buffer' })
 
-    sub.iterator().next(function (err, key, value) {
-      t.ifError(err)
-      t.same(key, testKey)
+      sub[publicMethod]().next(function (err, keyOrValue) {
+        t.ifError(err)
+        t.same(keyOrValue, mode === 'values' ? 'bar' : testKey)
+      })
     })
-  })
 
-  t.test('unfixing sublevel Uint8Array keys', function (t) {
-    t.plan(4)
+    t.test(`unfixing sublevel.${mode}() Uint8Array keys (default implementation: ${def})`, function (t) {
+      t.plan(4)
 
-    const testKey = new Uint8Array([0, 255])
-    const textEncoder = new TextEncoder()
-    const prefix = textEncoder.encode('!test!')
-    const prefixedKey = new Uint8Array(prefix.byteLength + testKey.byteLength)
+      const testKey = new Uint8Array([0, 255])
+      const textEncoder = new TextEncoder()
+      const prefix = textEncoder.encode('!test!')
+      const prefixedKey = new Uint8Array(prefix.byteLength + testKey.byteLength)
 
-    prefixedKey.set(prefix, 0)
-    prefixedKey.set(testKey, prefix.byteLength)
+      prefixedKey.set(prefix, 0)
+      prefixedKey.set(testKey, prefix.byteLength)
 
-    class MockIterator extends AbstractIterator {
-      _next (callback) {
-        nextTick(callback, null, prefixedKey, 'bar')
+      class MockIterator extends Ctor {
+        _next (callback) {
+          if (mode === 'iterator' || def) {
+            this.nextTick(callback, null, prefixedKey, 'bar')
+          } else if (mode === 'keys') {
+            this.nextTick(callback, null, prefixedKey)
+          } else {
+            this.nextTick(callback, null, 'bar')
+          }
+        }
       }
-    }
 
-    class MockLevel extends AbstractLevel {
-      _iterator (options) {
-        t.is(options.keyEncoding, 'view')
-        t.is(options.valueEncoding, 'utf8')
-        return new MockIterator(this, options)
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          t.is(options.keyEncoding, 'view')
+          t.is(options.valueEncoding, 'utf8')
+          return new MockIterator(this, options)
+        }
       }
-    }
 
-    const db = new MockLevel({ encodings: { buffer: true, view: true, utf8: true } })
-    const sub = db.sublevel('test', { keyEncoding: 'view' })
+      const db = new MockLevel({ encodings: { buffer: true, view: true, utf8: true } })
+      const sub = db.sublevel('test', { keyEncoding: 'view' })
 
-    sub.iterator().next(function (err, key, value) {
-      t.ifError(err)
-      t.same(key, testKey)
+      sub[publicMethod]().next(function (err, keyOrValue) {
+        t.ifError(err)
+        t.same(keyOrValue, mode === 'values' ? 'bar' : testKey)
+      })
     })
-  })
+  }
 
   t.end()
 })

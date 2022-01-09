@@ -139,7 +139,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from deferred-leveldown
   test('cannot operate on closed db', function (t) {
-    t.plan(4)
+    t.plan(6)
 
     const db = testCommon.factory()
 
@@ -158,13 +158,25 @@ exports.all = function (test, testCommon) {
         } catch (err) {
           t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
         }
+
+        try {
+          db.keys()
+        } catch (err) {
+          t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+        }
+
+        try {
+          db.values()
+        } catch (err) {
+          t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+        }
       })
     })
   })
 
   // NOTE: copied from deferred-leveldown
   test('cannot operate on closing db', function (t) {
-    t.plan(4)
+    t.plan(6)
 
     const db = testCommon.factory()
 
@@ -184,12 +196,24 @@ exports.all = function (test, testCommon) {
       } catch (err) {
         t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
       }
+
+      try {
+        db.keys()
+      } catch (err) {
+        t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      }
+
+      try {
+        db.values()
+      } catch (err) {
+        t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      }
     })
   })
 
   // NOTE: copied from deferred-leveldown
   test('deferred iterator - cannot operate on closed db', function (t) {
-    t.plan(6)
+    t.plan(10)
 
     const db = testCommon.factory()
 
@@ -204,6 +228,22 @@ exports.all = function (test, testCommon) {
         })
 
         it.next().catch(function (err) {
+          t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+        })
+
+        it.nextv(10, function (err, items) {
+          t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+        })
+
+        it.nextv(10).catch(function (err) {
+          t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+        })
+
+        it.all(function (err, items) {
+          t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+        })
+
+        it.all().catch(function (err) {
           t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
         })
 
@@ -231,7 +271,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from deferred-leveldown
   test('deferred iterator - cannot operate on closing db', function (t) {
-    t.plan(6)
+    t.plan(10)
 
     const db = testCommon.factory()
 
@@ -247,6 +287,22 @@ exports.all = function (test, testCommon) {
       })
 
       it.next().catch(function (err) {
+        t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+      })
+
+      it.nextv(10, function (err) {
+        t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+      })
+
+      it.nextv(10).catch(function (err) {
+        t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+      })
+
+      it.all(function (err) {
+        t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+      })
+
+      it.all().catch(function (err) {
         t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
       })
 

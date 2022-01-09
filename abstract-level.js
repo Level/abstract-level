@@ -6,7 +6,8 @@ const { EventEmitter } = require('events')
 const { fromCallback } = require('catering')
 const ModuleError = require('module-error')
 const { AbstractIterator } = require('./abstract-iterator')
-const { DeferredIterator } = require('./lib/deferred-iterator')
+const { DefaultKeyIterator, DefaultValueIterator } = require('./lib/default-kv-iterator')
+const { DeferredIterator, DeferredKeyIterator, DeferredValueIterator } = require('./lib/deferred-iterator')
 const { DefaultChainedBatch } = require('./lib/default-chained-batch')
 const { getCallback, getOptions } = require('./lib/common')
 const rangeOptions = require('./lib/range-options')
@@ -49,8 +50,17 @@ class AbstractLevel extends EventEmitter {
       clear: true,
       getMany: true,
       deferredOpen: true,
+
+      // TODO (next major): add seek
       snapshots: manifest.snapshots !== false,
       permanence: manifest.permanence !== false,
+
+      // TODO: remove from level-supports because it's always supported
+      keyIterator: true,
+      valueIterator: true,
+      iteratorNextv: true,
+      iteratorAll: true,
+
       encodings: manifest.encodings || {},
       events: Object.assign({}, manifest.events, {
         opening: true,
@@ -614,11 +624,15 @@ class AbstractLevel extends EventEmitter {
     options = rangeOptions(options, keyEncoding)
     options.keyEncoding = keyEncoding.format
 
-    this._clear(options, (err) => {
-      if (err) return callback(err)
-      this.emit('clear', original)
-      callback()
-    })
+    if (options.limit === 0) {
+      this.nextTick(callback)
+    } else {
+      this._clear(options, (err) => {
+        if (err) return callback(err)
+        this.emit('clear', original)
+        callback()
+      })
+    }
 
     return callback[kPromise]
   }
@@ -639,15 +653,13 @@ class AbstractLevel extends EventEmitter {
     Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
     Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
 
-    // Forward encoding options to the underlying store
+    // Forward encoding options to private API
     options.keyEncoding = keyEncoding.format
     options.valueEncoding = valueEncoding.format
 
     if (this[kStatus] === 'opening') {
       return new DeferredIterator(this, options)
-    }
-
-    if (this[kStatus] !== 'open') {
+    } else if (this[kStatus] !== 'open') {
       throw new ModuleError('Database is not open', {
         code: 'LEVEL_DATABASE_NOT_OPEN'
       })
@@ -658,6 +670,65 @@ class AbstractLevel extends EventEmitter {
 
   _iterator (options) {
     return new AbstractIterator(this, options)
+  }
+
+  keys (options) {
+    // Also include valueEncoding (though unused) because we may fallback to _iterator()
+    const keyEncoding = this.keyEncoding(options && options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+
+    options = rangeOptions(options, keyEncoding)
+
+    // We need the original encoding options in AbstractKeyIterator in order to decode data
+    Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
+    Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+
+    // Forward encoding options to private API
+    options.keyEncoding = keyEncoding.format
+    options.valueEncoding = valueEncoding.format
+
+    if (this[kStatus] === 'opening') {
+      return new DeferredKeyIterator(this, options)
+    } else if (this[kStatus] !== 'open') {
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
+
+    return this._keys(options)
+  }
+
+  _keys (options) {
+    return new DefaultKeyIterator(this, options)
+  }
+
+  values (options) {
+    const keyEncoding = this.keyEncoding(options && options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+
+    options = rangeOptions(options, keyEncoding)
+
+    // We need the original encoding options in AbstractValueIterator in order to decode data
+    Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
+    Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+
+    // Forward encoding options to private API
+    options.keyEncoding = keyEncoding.format
+    options.valueEncoding = valueEncoding.format
+
+    if (this[kStatus] === 'opening') {
+      return new DeferredValueIterator(this, options)
+    } else if (this[kStatus] !== 'open') {
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
+
+    return this._values(options)
+  }
+
+  _values (options) {
+    return new DefaultValueIterator(this, options)
   }
 
   defer (fn) {

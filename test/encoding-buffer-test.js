@@ -1,7 +1,6 @@
 'use strict'
 
 const { Buffer } = require('buffer')
-const concat = require('level-concat-iterator')
 const textEncoder = new TextEncoder()
 
 exports.all = function (test, testCommon) {
@@ -81,10 +80,10 @@ exports.all = function (test, testCommon) {
     await db.put(1, 2)
 
     const it = db.iterator({ keyEncoding: 'buffer', valueEncoding: 'buffer' })
-    const entries = await concat(it)
+    const entries = await it.all()
 
-    t.same(entries[0].key, Buffer.from('1'), 'key was stringified')
-    t.same(entries[0].value, Buffer.from('2'), 'value was stringified')
+    t.same(entries[0][0], Buffer.from('1'), 'key was stringified')
+    t.same(entries[0][1], Buffer.from('2'), 'value was stringified')
 
     return db.close()
   })
@@ -96,9 +95,9 @@ exports.all = function (test, testCommon) {
     await db.put('🐄', '🐄')
 
     const it = db.iterator({ keyEncoding: 'buffer', valueEncoding: 'buffer' })
-    const entries = await concat(it)
+    const entries = await it.all()
 
-    t.same(entries, [{ key: Buffer.from('🐄'), value: Buffer.from('🐄') }])
+    t.same(entries, [[Buffer.from('🐄'), Buffer.from('🐄')]])
     return db.close()
   })
 
@@ -109,9 +108,9 @@ exports.all = function (test, testCommon) {
     await db.put(Buffer.from('🐄'), Buffer.from('🐄'))
 
     const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
-    const entries = await concat(it)
+    const entries = await it.all()
 
-    t.same(entries, [{ key: '🐄', value: '🐄' }])
+    t.same(entries, [['🐄', '🐄']])
     return db.close()
   })
 
@@ -122,11 +121,11 @@ exports.all = function (test, testCommon) {
     await db.put(cow, cow)
 
     const it = db.iterator()
-    const entries = await concat(it)
-    const key = Buffer.isBuffer(entries[0].key) ? Buffer.from(cow) : cow // Valid, Buffer is a Uint8Array
-    const value = Buffer.isBuffer(entries[0].value) ? Buffer.from(cow) : cow
+    const entries = await it.all()
+    const key = Buffer.isBuffer(entries[0][0]) ? Buffer.from(cow) : cow // Valid, Buffer is a Uint8Array
+    const value = Buffer.isBuffer(entries[0][1]) ? Buffer.from(cow) : cow
 
-    t.same(entries, [{ key, value }])
+    t.same(entries, [[key, value]])
     return db.close()
   })
 
@@ -137,11 +136,11 @@ exports.all = function (test, testCommon) {
     await db.put('🐄', '🐄')
 
     const it = db.iterator({ keyEncoding: 'view', valueEncoding: 'view' })
-    const entries = await concat(it)
-    const key = Buffer.isBuffer(entries[0].key) ? Buffer.from(cow) : cow // Valid, Buffer is a Uint8Array
-    const value = Buffer.isBuffer(entries[0].value) ? Buffer.from(cow) : cow
+    const entries = await it.all()
+    const key = Buffer.isBuffer(entries[0][0]) ? Buffer.from(cow) : cow // Valid, Buffer is a Uint8Array
+    const value = Buffer.isBuffer(entries[0][1]) ? Buffer.from(cow) : cow
 
-    t.same(entries, [{ key, value }])
+    t.same(entries, [[key, value]])
     return db.close()
   })
 
@@ -152,9 +151,9 @@ exports.all = function (test, testCommon) {
     await db.put(cow, cow)
 
     const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
-    const entries = await concat(it)
+    const entries = await it.all()
 
-    t.same(entries, [{ key: '🐄', value: '🐄' }])
+    t.same(entries, [['🐄', '🐄']])
     return db.close()
   })
 

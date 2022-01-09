@@ -20,107 +20,110 @@ exports.setup = function (test, testCommon) {
 }
 
 exports.asyncIterator = function (test, testCommon) {
-  test('for await...of db.iterator()', async function (t) {
-    t.plan(1)
+  for (const mode of ['iterator', 'keys', 'values']) {
+    test(`for await...of ${mode}()`, async function (t) {
+      t.plan(1)
 
-    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
-    const output = []
+      const it = db[mode]({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
+      const output = []
 
-    for await (const [key, value] of it) {
-      output.push({ key, value })
-    }
-
-    t.same(output, input)
-  })
-
-  testCommon.supports.permanence && test('for await...of db.iterator() (deferred)', async function (t) {
-    t.plan(1)
-
-    const db = testCommon.factory()
-    await db.batch(input.map(entry => ({ ...entry, type: 'put' })))
-    await db.close()
-
-    // Don't await
-    db.open()
-
-    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
-    const output = []
-
-    for await (const [key, value] of it) {
-      output.push({ key, value })
-    }
-
-    t.same(output, input)
-    await db.close()
-  })
-
-  testCommon.supports.snapshots && test('for await...of db.iterator() (deferred, with snapshot)', async function (t) {
-    t.plan(2)
-
-    const db = testCommon.factory()
-    const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
-    const promise = db.batch(input.map(entry => ({ ...entry, type: 'put' })))
-    const output = []
-
-    for await (const [key, value] of it) {
-      output.push({ key, value })
-    }
-
-    t.same(output, [], 'used snapshot')
-
-    // Wait for data to be written
-    await promise
-
-    for await (const [key, value] of db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
-      output.push({ key, value })
-    }
-
-    t.same(output, input)
-  })
-
-  test('for await...of db.iterator() (empty)', async function (t) {
-    const db = testCommon.factory()
-    const entries = []
-
-    await db.open()
-
-    for await (const kv of db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
-      entries.push(kv)
-    }
-
-    t.same(entries, [])
-  })
-
-  test('for await...of db.iterator() (empty, deferred)', async function (t) {
-    const db = testCommon.factory()
-    const entries = []
-
-    for await (const kv of db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
-      entries.push(kv)
-    }
-
-    t.same(entries, [])
-  })
-
-  test('for await...of db.iterator() does not permit reuse', async function (t) {
-    t.plan(3)
-
-    const it = db.iterator()
-
-    // eslint-disable-next-line no-unused-vars
-    for await (const [key, value] of it) {
-      t.pass('nexted')
-    }
-
-    try {
-      // eslint-disable-next-line no-unused-vars
-      for await (const [key, value] of it) {
-        t.fail('should not be called')
+      for await (const item of it) {
+        output.push(item)
       }
-    } catch (err) {
-      t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+
+      t.same(output, input.map(({ key, value }) => {
+        return mode === 'iterator' ? [key, value] : mode === 'keys' ? key : value
+      }))
+    })
+
+    testCommon.supports.permanence && test(`for await...of ${mode}() (deferred)`, async function (t) {
+      t.plan(1)
+
+      const db = testCommon.factory()
+      await db.batch(input.map(entry => ({ ...entry, type: 'put' })))
+      await db.close()
+
+      // Don't await
+      db.open()
+
+      const it = db[mode]({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
+      const output = []
+
+      for await (const item of it) {
+        output.push(item)
+      }
+
+      t.same(output, input.map(({ key, value }) => {
+        return mode === 'iterator' ? [key, value] : mode === 'keys' ? key : value
+      }))
+
+      await db.close()
+    })
+
+    testCommon.supports.snapshots && test(`for await...of ${mode}() (deferred, with snapshot)`, async function (t) {
+      t.plan(2)
+
+      const db = testCommon.factory()
+      const it = db[mode]({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
+      const promise = db.batch(input.map(entry => ({ ...entry, type: 'put' })))
+      const output = []
+
+      for await (const item of it) {
+        output.push(item)
+      }
+
+      t.same(output, [], 'used snapshot')
+
+      // Wait for data to be written
+      await promise
+
+      for await (const item of db[mode]({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
+        output.push(item)
+      }
+
+      t.same(output, input.map(({ key, value }) => {
+        return mode === 'iterator' ? [key, value] : mode === 'keys' ? key : value
+      }))
+
+      await db.close()
+    })
+
+    for (const deferred of [false, true]) {
+      test(`for await...of ${mode}() (empty, deferred: ${deferred})`, async function (t) {
+        const db = testCommon.factory()
+        const entries = []
+
+        if (!deferred) await db.open()
+
+        for await (const item of db[mode]({ keyEncoding: 'utf8', valueEncoding: 'utf8' })) {
+          entries.push(item)
+        }
+
+        t.same(entries, [])
+        await db.close()
+      })
     }
-  })
+
+    test(`for await...of ${mode}() does not permit reuse`, async function (t) {
+      t.plan(3)
+
+      const it = db[mode]()
+
+      // eslint-disable-next-line no-unused-vars
+      for await (const item of it) {
+        t.pass('nexted')
+      }
+
+      try {
+        // eslint-disable-next-line no-unused-vars
+        for await (const item of it) {
+          t.fail('should not be called')
+        }
+      } catch (err) {
+        t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+      }
+    })
+  }
 }
 
 exports.teardown = function (test, testCommon) {

@@ -16,7 +16,11 @@ export {
 export {
   AbstractIterator,
   AbstractIteratorOptions,
-  AbstractSeekOptions
+  AbstractSeekOptions,
+  AbstractKeyIterator,
+  AbstractKeyIteratorOptions,
+  AbstractValueIterator,
+  AbstractValueIteratorOptions
 } from './types/abstract-iterator'
 
 export {

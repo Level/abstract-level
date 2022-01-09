@@ -1,6 +1,6 @@
 # ![abstract-level](./header.svg)
 
-**Abstract prototype for a lexicographically sorted key-value database, with a [public API](#public-api-for-consumers) for consumers and a [private API](#private-api-for-implementors) for concrete implementations.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract prototype for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
 
 > :pushpin: Which module should I use? What happened to `levelup`? Head over to the [FAQ](https://github.com/Level/community#faq).
 
@@ -16,7 +16,7 @@
 - [Usage](#usage)
 - [Supported Platforms](#supported-platforms)
 - [Public API For Consumers](#public-api-for-consumers)
-  - [`db = constructor(...[, options])`](#db--constructor-options)
+  - [`db = new Constructor(...[, options])`](#db--new-constructor-options)
   - [`db.status`](#dbstatus)
   - [`db.open([options][, callback])`](#dbopenoptions-callback)
   - [`db.close([callback])`](#dbclosecallback)
@@ -27,7 +27,9 @@
   - [`db.del(key[, options][, callback])`](#dbdelkey-options-callback)
   - [`db.batch(operations[, options][, callback])`](#dbbatchoperations-options-callback)
   - [`db.batch()`](#dbbatch)
-  - [`db.iterator([options])`](#dbiteratoroptions)
+  - [`iterator = db.iterator([options])`](#iterator--dbiteratoroptions)
+  - [`keyIterator = db.keys([options])`](#keyiterator--dbkeysoptions)
+  - [`valueIterator = db.values([options])`](#valueiterator--dbvaluesoptions)
   - [`db.clear([options][, callback])`](#dbclearoptions-callback)
   - [`sublevel = db.sublevel(name[, options])`](#sublevel--dbsublevelname-options)
   - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
@@ -45,9 +47,13 @@
   - [`iterator`](#iterator)
     - [`for await...of iterator`](#for-awaitof-iterator)
     - [`iterator.next([callback])`](#iteratornextcallback)
+    - [`iterator.nextv(size[, options][, callback])`](#iteratornextvsize-options-callback)
+    - [`iterator.all([options][, callback])`](#iteratoralloptions-callback)
     - [`iterator.seek(target[, options])`](#iteratorseektarget-options)
     - [`iterator.close([callback])`](#iteratorclosecallback)
     - [`iterator.db`](#iteratordb)
+  - [`keyIterator`](#keyiterator)
+  - [`valueIterator`](#valueiterator)
   - [`sublevel`](#sublevel)
     - [`sublevel.prefix`](#sublevelprefix)
     - [`sublevel.db`](#subleveldb)
@@ -82,12 +88,18 @@
   - [`db._batch(operations, options, callback)`](#db_batchoperations-options-callback)
   - [`db._chainedBatch()`](#db_chainedbatch)
   - [`db._iterator(options)`](#db_iteratoroptions)
+  - [`db._keys(options)`](#db_keysoptions)
+  - [`db._values(options)`](#db_valuesoptions)
   - [`db._clear(options, callback)`](#db_clearoptions-callback)
   - [`sublevel = db._sublevel(name, options)`](#sublevel--db_sublevelname-options)
   - [`iterator = AbstractIterator(db, options)`](#iterator--abstractiteratordb-options)
     - [`iterator._next(callback)`](#iterator_nextcallback)
+    - [`iterator._nextv(size, options, callback)`](#iterator_nextvsize-options-callback)
+    - [`iterator._all(options, callback)`](#iterator_alloptions-callback)
     - [`iterator._seek(target, options)`](#iterator_seektarget-options)
     - [`iterator._close(callback)`](#iterator_closecallback)
+  - [`keyIterator = AbstractKeyIterator(db, options)`](#keyiterator--abstractkeyiteratordb-options)
+  - [`valueIterator = AbstractValueIterator(db, options)`](#valueiterator--abstractvalueiteratordb-options)
   - [`chainedBatch = AbstractChainedBatch(db)`](#chainedbatch--abstractchainedbatchdb)
     - [`chainedBatch._put(key, value, options)`](#chainedbatch_putkey-value-options)
     - [`chainedBatch._del(key, options)`](#chainedbatch_delkey-options)
@@ -181,9 +193,13 @@ As far as `abstract-level` goes, the following browsers are supported and contin
 
 ## Public API For Consumers
 
-### `db = constructor(...[, options])`
+This module has a public API for consumers of a database and a [private API](#private-api-for-implementors) for concrete implementations. The public API, as documented in this section, offers a simple yet rich interface that is common between all implementations. Implementations may have additional options or methods. TypeScript [type declarations](https://www.typescriptlang.org/docs/handbook/2/type-declarations.html) are [included](./index.d.ts) (and exported for reuse) only for the public API.
 
-The signature of this function is implementation-specific but all should have an `options` argument as the last. Typically, constructors take a `location` as their first argument, pointing to where the data will be stored. That may be a file path, URL, something else or none at all, since not all implementations are disk-based or persistent. Others take another database rather than a location as their first argument.
+An `abstract-level` database is at its core a [key-value database](https://en.wikipedia.org/wiki/Key%E2%80%93value_database). A key-value pair is referred to as an _entry_ here and typically returned as an array, comparable to [`Object.entries()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/entries).
+
+### `db = new Constructor(...[, options])`
+
+Creating a database is done by calling a class constructor. Implementations export a class that extends the [`AbstractLevel`](./abstract-level.js) class and has its own constructor with an implementation-specific signature. All constructors should have an `options` argument as the last. Typically, constructors take a `location` as their first argument, pointing to where the data will be stored. That may be a file path, URL, something else or none at all, since not all implementations are disk-based or persistent. Others take another database rather than a location as their first argument.
 
 The optional `options` object may contain:
 
@@ -203,7 +219,7 @@ A read-only string property that is one of:
 
 ### `db.open([options][, callback])`
 
-Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the database constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably [`memory-level`](https://github.com/Level/memory-level) and [`browser-level`](https://github.com/Level/browser-level), previously `memdown` and `level-js`) and will indicate so via `db.supports.createIfMissing` and `db.supports.errorIfExists`.
+Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the database constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably [`memory-level`](https://github.com/Level/memory-level) and [`browser-level`](https://github.com/Level/browser-level)) and will indicate so via `db.supports.createIfMissing` and `db.supports.errorIfExists`.
 
 The optional `options` object may contain:
 
@@ -219,9 +235,9 @@ The `open()` and `close()` methods are idempotent. If the database is already op
 
 Close the database. The `callback` function will be called with no arguments if closing succeeded or with a single `error` argument if closing failed. If no callback is provided, a promise is returned.
 
-A database may have associated resources like file handles and locks. When the database is no longer needed (for the remainder of a program) it's recommended to call `close()` to free up resources.
+A database may have associated resources like file handles and locks. When the database is no longer needed (for the remainder of a program) it's recommended to call `db.close()` to free up resources.
 
-After `close()` has been called, no further read & write operations are allowed unless and until `open()` is called again. For example, `db.get(key)` will yield an error with code [`LEVEL_DATABASE_NOT_OPEN`](#errors).
+After `db.close()` has been called, no further read & write operations are allowed unless and until `db.open()` is called again. For example, `db.get(key)` will yield an error with code [`LEVEL_DATABASE_NOT_OPEN`](#errors). Any unclosed iterators or chained batches will be closed by `db.close()` and can then no longer be used even when `db.open()` is called again.
 
 ### `db.supports`
 
@@ -319,39 +335,65 @@ The `callback` function will be called with no arguments if the batch was succes
 
 Create a [`chainedBatch`](#chainedbatch) object, when `batch()` is called with zero arguments. A chained batch can be used to build and eventually commit an atomic batch of operations. Depending on how it's used, it is possible to obtain greater performance with this form of `batch()`. On several implementations however, it is just sugar.
 
-### `db.iterator([options])`
+### `iterator = db.iterator([options])`
 
-Create an [`iterator`](#iterator). The optional `options` object may contain the following _range options_ to control the range of entries to be iterated:
+Create an [iterator](#iterator). The optional `options` object may contain the following _range options_ to control the range of entries to be iterated:
 
-- `gt` (greater than), `gte` (greater than or equal) define the lower bound of the range to be iterated. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries iterated will be the same.
-- `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be iterated. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries iterated will be the same.
+- `gt` (greater than) or `gte` (greater than or equal): define the lower bound of the range to be iterated. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries iterated will be the same.
+- `lt` (less than) or `lte` (less than or equal): define the higher bound of the range to be iterated. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries iterated will be the same.
 - `reverse` (boolean, default: `false`): iterate entries in reverse order. Beware that a reverse seek can be slower than a forward seek.
-- `limit` (number, default: `-1`): limit the number of entries iterated. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be returned instead of the lowest keys.
+- `limit` (number, default: `Infinity`): limit the number of entries yielded. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be returned instead of the lowest keys.
 
-If no range options are provided, the iterator will visit all entries of the database, starting at the lowest key and ending at the highest key. In addition to range options, the `options` object may contain:
+The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no range options are provided, the iterator will visit all entries of the database, starting at the lowest key and ending at the highest key (unless `reverse` is true). In addition to range options, the `options` object may contain:
 
-- `keys` (boolean, default: `true`): whether to return the key of each entry. If set to `false`, the iterator will yield keys with a value of `undefined`.
-- `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, the iterator will yield values with a value of `undefined`.
+- `keys` (boolean, default: `true`): whether to return the key of each entry. If set to `false`, the iterator will yield keys that are `undefined`. Prefer to use `db.keys()` instead.
+- `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, the iterator will yield values that are `undefined`. Prefer to use `db.values()` instead.
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
-
-If only keys or values are needed, setting the `values` or `keys` option to `false` may increase performance because that data won't have to be fetched, copied or decoded.
 
 Lastly, an implementation is free to add its own options.
 
 > :pushpin: To instead consume data using Node.js streams, see [`level-read-stream`](https://github.com/Level/read-stream).
 
+### `keyIterator = db.keys([options])`
+
+Create a [key iterator](#keyiterator), having the same interface as `db.iterator()` except that it yields keys instead of entries. If only keys are needed, using `db.keys()` may increase performance because values won't have to fetched, copied or decoded. Options are the same as for `db.iterator()` except that `db.keys()` does not take `keys`, `values` and `valueEncoding` options.
+
+```js
+// Iterate lazily
+for await (const key of db.keys({ gt: 'a' })) {
+  console.log(key)
+}
+
+// Get all at once. Setting a limit is recommended.
+const keys = await db.keys({ gt: 'a', limit: 10 }).all()
+```
+
+### `valueIterator = db.values([options])`
+
+Create a [value iterator](#valueiterator), having the same interface as `db.iterator()` except that it yields values instead of entries. If only values are needed, using `db.values()` may increase performance because keys won't have to fetched, copied or decoded. Options are the same as for `db.iterator()` except that `db.values()` does not take `keys` and `values` options. Note that it _does_ take a `keyEncoding` option, relevant for the encoding of range options.
+
+```js
+// Iterate lazily
+for await (const value of db.values({ gt: 'a' })) {
+  console.log(value)
+}
+
+// Get all at once. Setting a limit is recommended.
+const values = await db.values({ gt: 'a', limit: 10 }).all()
+```
+
 ### `db.clear([options][, callback])`
 
 Delete all entries or a range. Not guaranteed to be atomic. Accepts the following options (with the same rules as on iterators):
 
-- `gt` (greater than), `gte` (greater than or equal) define the lower bound of the range to be deleted. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
-- `lt` (less than), `lte` (less than or equal) define the higher bound of the range to be deleted. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
+- `gt` (greater than) or `gte` (greater than or equal): define the lower bound of the range to be deleted. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
+- `lt` (less than) or `lte` (less than or equal): define the higher bound of the range to be deleted. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
 - `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
-- `limit` (number, default: `-1`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
+- `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
 
-If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
+The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
 ### `sublevel = db.sublevel(name[, options])`
 
@@ -387,7 +429,7 @@ for await (const [key, value] of db.iterator()) {
 }
 ```
 
-> :pushpin: The key structure is equal to that of [`subleveldown`](https://github.com/Level/subleveldown). This means that an `abstract-level` sublevel can read sublevels previously created with (and populated by) `subleveldown`.
+> :pushpin: The key structure is equal to that of [`subleveldown`](https://github.com/Level/subleveldown) which offered sublevels before they were built-in to `abstract-level`. This means that an `abstract-level` sublevel can read sublevels previously created with (and populated by) `subleveldown`.
 
 Internally, sublevels operate on keys that are either a string, Buffer or Uint8Array, depending on parent database and choice of encoding. Which is to say: binary keys are fully supported. The `name` must however always be a string and can only contain ASCII characters.
 
@@ -492,9 +534,11 @@ A reference to the database that created this chained batch.
 
 ### `iterator`
 
-An iterator allows one to lazily read a range of entries stored in the database. It reads from a snapshot of the database, created at the time `db.iterator()` was called. This means the iterator will not see the data of simultaneous write operations. Most but not all implementations can offer this guarantee, as indicated by `db.supports.snapshots`.
+An iterator allows one to lazily read a range of entries stored in the database. The entries will be sorted by keys in [lexicographic order](https://en.wikipedia.org/wiki/Lexicographic_order) (in other words: byte order) which in short means key `'a'` comes before `'b'` and key `'10'` comes before `'2'`.
 
-Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) or by manually calling `iterator.next()` in succession. In the latter mode, `iterator.close()` must always be called. In contrast, finishing, throwing, breaking or returning from a `for await...of` loop automatically calls `iterator.close()`.
+An iterator reads from a snapshot of the database, created at the time `db.iterator()` was called. This means the iterator will not see the data of simultaneous write operations. Most but not all implementations can offer this guarantee, as indicated by `db.supports.snapshots`.
+
+Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) and `iterator.all()`, or by manually calling `iterator.next()` or `nextv()` in succession. In the latter case, `iterator.close()` must always be called. In contrast, finishing, throwing, breaking or returning from a `for await...of` loop automatically calls `iterator.close()`, as does `iterator.all()`.
 
 An iterator reaches its natural end in the following situations:
 
@@ -502,11 +546,23 @@ An iterator reaches its natural end in the following situations:
 - The end of the range has been reached
 - The last `iterator.seek()` was out of range.
 
-An iterator keeps track of when a `next()` call is in progress and when `close()` has been called. It doesn't allow concurrent `next()` calls, it does allow `close()` while a `next()` is in progress and it doesn't allow `next()` after `close()` has been called.
+An iterator keeps track of calls that are in progress. It doesn't allow concurrent `next()`, `nextv()` or `all()` calls (including a combination thereof) and will throw an error with code [`LEVEL_ITERATOR_BUSY`](#errors) if that happens:
+
+```js
+// Not awaited and no callback provided
+iterator.next()
+
+try {
+  // Which means next() is still in progress here
+  iterator.all()
+} catch (err) {
+  console.log(err.code) // 'LEVEL_ITERATOR_BUSY'
+}
+```
 
 #### `for await...of iterator`
 
-Yields arrays containing a `key` and `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`.
+Yields entries, which are arrays containing a `key` and `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`.
 
 ```js
 try {
@@ -522,15 +578,51 @@ Note for implementors: this uses `iterator.next()` and `iterator.close()` under 
 
 #### `iterator.next([callback])`
 
-Advance the iterator to the next key and yield the entry at that key. If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null`, a `key` and a `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`. If the iterator has reached its natural end, both `key` and `value` will be `undefined`.
+Advance to the next entry and yield that entry. If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null`, a `key` and a `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`. If the iterator has reached its natural end, both `key` and `value` will be `undefined`.
 
-If no callback is provided, a promise is returned for either an array (containing a `key` and `value`) or `undefined` if the iterator reached its natural end.
+If no callback is provided, a promise is returned for either an entry array (containing a `key` and `value`) or `undefined` if the iterator reached its natural end.
 
-**Note:** `iterator.close()` must always be called once there's no intention to call `next()` again. Even if `next()` yielded an error and even if the iterator reached its natural end. Not closing the iterator will result in memory leaks and may also affect performance of other operations if many iterators are unclosed and each is holding a snapshot of the database.
+**Note:** `iterator.close()` must always be called once there's no intention to call `next()` or `nextv()` again. Even if such calls yielded an error and even if the iterator reached its natural end. Not closing the iterator will result in memory leaks and may also affect performance of other operations if many iterators are unclosed and each is holding a snapshot of the database.
+
+#### `iterator.nextv(size[, options][, callback])`
+
+Advance repeatedly and get at most `size` amount of entries in a single call. Can be faster than repeated `next()` calls. The `size` argument must be an integer and has a soft minimum of 1. There are no `options` by default but implementations may add theirs.
+
+If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null` and an array of entries, where each entry is an array containing a key and value. The natural end of the iterator will be signaled by yielding an empty array. If no callback is provided, a promise is returned.
+
+```js
+const iterator = db.iterator()
+
+while (true) {
+  const entries = await iterator.nextv(100)
+
+  if (entries.length === 0) {
+    break
+  }
+
+  for (const [key, value] of entries) {
+    // ..
+  }
+}
+
+await iterator.close()
+```
+
+#### `iterator.all([options][, callback])`
+
+Advance repeatedly and get all (remaining) entries as an array, automatically closing the iterator. Assumes that those entries fit in memory. If that's not the case, instead use `next()`, `nextv()` or `for await...of`. There are no `options` by default but implementations may add theirs. If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null` and an array of entries, where each entry is an array containing a key and value. If no callback is provided, a promise is returned.
+
+```js
+const entries = await db.iterator({ limit: 100 }).all()
+
+for (const [key, value] of entries) {
+  // ..
+}
+```
 
 #### `iterator.seek(target[, options])`
 
-Seek the iterator to a given key or the closest key. Subsequent calls to `iterator.next()` (including implicit calls in a `for await...of` loop) will yield entries with keys equal to or larger than `target`, or equal to or smaller than `target` if the `reverse` option passed to `db.iterator()` was true.
+Seek to the key closest to `target`. Subsequent calls to `iterator.next()`, `nextv()` or `all()` (including implicit calls in a `for await...of` loop) will yield entries with keys equal to or larger than `target`, or equal to or smaller than `target` if the `reverse` option passed to `db.iterator()` was true.
 
 The optional `options` object may contain:
 
@@ -544,9 +636,32 @@ If range options like `gt` were passed to `db.iterator()` and `target` does not 
 
 Free up underlying resources. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the iterator is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
 
+If a `next()` ,`nextv()` or `all()` call is in progress, closing will wait for that to finish. After `close()` has been called, further calls to `next()` ,`nextv()` or `all()` will yield an error with code [`LEVEL_ITERATOR_NOT_OPEN`](#errors).
+
 #### `iterator.db`
 
 A reference to the database that created this iterator.
+
+#### `iterator.count`
+
+Read-only getter that indicates how many keys have been yielded so far (by any method) excluding calls that errored or yielded `undefined`.
+
+#### `iterator.limit`
+
+Read-only getter that reflects the `limit` that was set in options. Greater than or equal to zero. Equals `Infinity` if no limit, which allows for easy math:
+
+```js
+const hasMore = iterator.count < iterator.limit
+const remaining = iterator.limit - iterator.count
+```
+
+### `keyIterator`
+
+A key iterator has the same interface as `iterator` except that its methods yield keys instead of entries. For the `keyIterator.next(callback)` method, this means that the `callback` will receive two arguments (an error and key) instead of three. Usage is otherwise the same.
+
+### `valueIterator`
+
+A value iterator has the same interface as `iterator` except that its methods yield values instead of entries. For the `valueIterator.next(callback)` method, this means that the `callback` will receive two arguments (an error and value) instead of three. Usage is otherwise the same.
 
 ### `sublevel`
 
@@ -768,27 +883,40 @@ See [`Level/awesome`](https://github.com/Level/awesome#shared-access) for module
 
 ## Private API For Implementors
 
-To implement a `abstract-level` database, extend its prototype and override the private underscored versions of the methods. For example, to implement the public `put()` method, override the private `_put()` method.
+To implement an `abstract-level` database, extend the [`AbstractLevel`](./abstract-level.js) class and override the private underscored versions of its methods. For example, to implement the public `put()` method, override the private `_put()` method. The same goes for other classes (some of which are optional to override). All classes can be found on the main export of the npm package:
 
-Each of the private methods listed below will receive exactly the number and types of arguments described, regardless of what is passed in through the public API. Public methods provide type checking: if a consumer calls `batch(123)` they'll get an error that the first argument must be an array. Optional arguments get sensible defaults: a `get(key)` call translates to `_get(key, options, callback)`.
+```js
+const {
+  AbstractLevel,
+  AbstractSublevel,
+  AbstractIterator,
+  AbstractKeyIterator,
+  AbstractValueIterator,
+  AbstractChainedBatch
+} = require('abstract-level')
+```
 
-All callbacks are error-first and must be asynchronous. If an operation within your implementation is synchronous, invoke the callback on a next tick using microtask scheduling. For convenience, instances of `AbstractLevel`, `AbstractIterator` and `AbstractChainedBatch` include a `nextTick(fn, ...args)` method that uses [`process.nextTick()`](https://nodejs.org/api/process.html#processnexttickcallback-args) in Node.js and [`queueMicrotask()`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) in browsers.
+Naming-wise, implementations should use a class name in the form of `*Level` (suffixed, for example `MemoryLevel`) and an npm package name in the form of `*-level` (for example `memory-level`). While utilities and plugins should use a package name in the form of `level-*` (prefixed).
 
-Where possible, the default private methods are sensible noops that do nothing. For example, `_open(callback)` will merely invoke `callback` on a next tick. Other methods have functional defaults. Each method documents whether implementing it is mandatory.
+Each of the private methods listed below will receive exactly the number and types of arguments described, regardless of what is passed in through the public API. Public methods provide type checking: if a consumer calls `db.batch(123)` they'll get an error that the first argument must be an array. Optional arguments get sensible defaults: a `db.get(key)` call translates to a `db._get(key, options, callback)` call.
+
+All callbacks are error-first and must be asynchronous. If an operation within your implementation is synchronous, invoke the callback on a next tick using microtask scheduling. For convenience, instances of `AbstractLevel`, `AbstractIterator` and other classes include a `nextTick(fn, ...args)` utility method that uses [`process.nextTick()`](https://nodejs.org/api/process.html#processnexttickcallback-args) in Node.js and [`queueMicrotask()`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) in browsers. It's recommended to exclusively use this utility (including in unit tests) as it guarantees a consistent order of operations.
+
+Where possible, the default private methods are sensible noops that do nothing. For example, `db._open(callback)` will merely invoke `callback` on a next tick. Other methods have functional defaults. Each method documents whether implementing it is mandatory.
 
 When throwing or yielding an error, prefer using a [known error code](#errors). If new codes are required for your implementation and you wish to use the `LEVEL_` prefix for consistency, feel free to open an issue to discuss. We'll likely want to document those codes here.
 
 ### Example
 
-Let's implement a simplistic in-memory database:
+Let's implement a basic in-memory database:
 
 ```js
 const { AbstractLevel } = require('abstract-level')
 const ModuleError = require('module-error')
 
 class ExampleLevel extends AbstractLevel {
-  // This in-memory example doesn't have a location
-  constructor (location, options) {
+  // This in-memory example doesn't have a location argument
+  constructor (options) {
     // Declare supported encodings
     const encodings = { utf8: true }
 
@@ -840,7 +968,7 @@ const value = await db.get('foo')
 console.log(value) // 'bar'
 ```
 
-Although our simple implementation only supports `'utf8'` strings internally, we do get to use [encodings](#encodings) that encode _to_ that. For example, the `'json'` encoding which encodes to `'utf8'`:
+Although our basic implementation only supports `'utf8'` strings internally, we do get to use [encodings](#encodings) that encode _to_ that. For example, the `'json'` encoding which encodes to `'utf8'`:
 
 ```js
 const db = new ExampleLevel({ valueEncoding: 'json' })
@@ -854,7 +982,7 @@ See [`memory-level`](https://github.com/Level/memory-level) if you are looking f
 
 ### `db = AbstractLevel(manifest[, options])`
 
-The constructor. Sets the [`status`](#dbstatus) to `'opening'`. Takes a [manifest](https://github.com/Level/supports) object that `abstract-level` will enrich. At minimum, the manifest must declare which `encodings` are supported in the private API. For example:
+The database constructor. Sets the [`status`](#dbstatus) to `'opening'`. Takes a [manifest](https://github.com/Level/supports) object that the constructor will enrich with defaults. At minimum, the manifest must declare which `encodings` are supported in the private API. For example:
 
 ```js
 class ExampleLevel extends AbstractLevel {
@@ -940,12 +1068,12 @@ The default `_batch()` invokes `callback` on a next tick. It must be overridden.
 
 ### `db._chainedBatch()`
 
-The default `_chainedBatch()` returns a functional `AbstractChainedBatch` instance that uses `db._batch(array, options, callback)` under the hood. To implement chained batch in an optimized manner, extend `AbstractChainedBatch` and return an instance of this prototype in the `_chainedBatch()` method:
+The default `_chainedBatch()` returns a functional `AbstractChainedBatch` instance that uses `db._batch(array, options, callback)` under the hood. To implement chained batch in an optimized manner, extend `AbstractChainedBatch` and return an instance of this class in the `_chainedBatch()` method:
 
 ```js
 const { AbstractChainedBatch } = require('abstract-level')
 
-class ChainedBatch extends AbstractChainedBatch {
+class ExampleChainedBatch extends AbstractChainedBatch {
   constructor (db) {
     super(db)
   }
@@ -953,19 +1081,19 @@ class ChainedBatch extends AbstractChainedBatch {
 
 class ExampleLevel extends AbstractLevel {
   _chainedBatch () {
-    return new ChainedBatch(this)
+    return new ExampleChainedBatch(this)
   }
 }
 ```
 
 ### `db._iterator(options)`
 
-The default `_iterator()` returns a noop `AbstractIterator` instance. It must be overridden, by extending `AbstractIterator` and returning an instance of this prototype in the `_iterator(options)` method:
+The default `_iterator()` returns a noop `AbstractIterator` instance. It must be overridden, by extending `AbstractIterator` and returning an instance of this class in the `_iterator(options)` method:
 
 ```js
 const { AbstractIterator } = require('abstract-level')
 
-class Iterator extends AbstractIterator {
+class ExampleIterator extends AbstractIterator {
   constructor (db, options) {
     super(db, options)
   }
@@ -975,12 +1103,60 @@ class Iterator extends AbstractIterator {
 
 class ExampleLevel extends AbstractLevel {
   _iterator (options) {
-    return new Iterator(this, options)
+    return new ExampleIterator(this, options)
   }
 }
 ```
 
-The `options` object will always have the following properties: `reverse`, `keys`, `values`, `limit`, `keyEncoding` and `valueEncoding`. If the user passed range options to `db.iterator()`, those will be encoded and set in `options`.
+The `options` object will always have the following properties: `reverse`, `keys`, `values`, `limit`, `keyEncoding` and `valueEncoding`. The `limit` will always be an integer, greater than or equal to `-1` and less than `Infinity`. If the user passed range options to `db.iterator()`, those will be encoded and set in `options`.
+
+### `db._keys(options)`
+
+The default `_keys()` returns a functional iterator that wraps `db._iterator()` in order to map entries to keys. For optimal performance it can be overridden by extending `AbstractKeyIterator`:
+
+```js
+const { AbstractKeyIterator } = require('abstract-level')
+
+class ExampleKeyIterator extends AbstractKeyIterator {
+  constructor (db, options) {
+    super(db, options)
+  }
+
+  // ..
+}
+
+class ExampleLevel extends AbstractLevel {
+  _keys (options) {
+    return new ExampleKeyIterator(this, options)
+  }
+}
+```
+
+The `options` object will always have the following properties: `reverse`, `limit` and `keyEncoding`. The `limit` will always be an integer, greater than or equal to `-1` and less than `Infinity`. If the user passed range options to `db.keys()`, those will be encoded and set in `options`.
+
+### `db._values(options)`
+
+The default `_values()` returns a functional iterator that wraps `db._iterator()` in order to map entries to values. For optimal performance it can be overridden by extending `AbstractValueIterator`:
+
+```js
+const { AbstractValueIterator } = require('abstract-level')
+
+class ExampleValueIterator extends AbstractValueIterator {
+  constructor (db, options) {
+    super(db, options)
+  }
+
+  // ..
+}
+
+class ExampleLevel extends AbstractLevel {
+  _values (options) {
+    return new ExampleValueIterator(this, options)
+  }
+}
+```
+
+The `options` object will always have the following properties: `reverse`, `limit`, `keyEncoding` and `valueEncoding`. The `limit` will always be an integer, greater than or equal to -1 and less than Infinity. If the user passed range options to `db.values()`, those will be encoded and set in `options`.
 
 ### `db._clear(options, callback)`
 
@@ -1025,19 +1201,57 @@ The first argument to this constructor must be an instance of the relevant `Abst
 
 #### `iterator._next(callback)`
 
-Advance the iterator to the next key and yield the entry at that key. If nexting failed, call the `callback` function with an error. Otherwise, call `callback` with `null`, a `key` and a `value`.
+Advance to the next entry and yield that entry. If the operation failed, call the `callback` function with an error. Otherwise, call `callback` with `null`, a `key` and a `value`. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_next()` will not be called.
 
 The default `_next()` invokes `callback` on a next tick. It must be overridden.
 
+#### `iterator._nextv(size, options, callback)`
+
+Advance repeatedly and get at most `size` amount of entries in a single call. The `size` argument will always be an integer greater than 0. If a `limit` was set then `size` will be at most `limit - iterator.count`. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_nextv()` will not be called. There are no default options but `options` will always be an object. If the operation failed, call the `callback` function with an error. Otherwise, call `callback` with `null` and an array of entries. An empty array signifies the natural end of the iterator, so yield an array with at least one entry if the end has not been reached yet.
+
+The default `_nextv()` is a functional default that makes repeated calls to `_next()` and should be overridden for better performance.
+
+#### `iterator._all(options, callback)`
+
+Advance repeatedly and get all (remaining) entries as an array. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_all()` will not be called. Do not call `close()` here because `all()` will do so (regardless of any error) and this may become an opt-out behavior in the future. There are no default options but `options` will always be an object. If the operation failed, call the `callback` function with an error. Otherwise, call `callback` with `null` and an array of entries.
+
+The default `_all()` is a functional default that makes repeated calls to `_nextv()` and should be overridden for better performance.
+
 #### `iterator._seek(target, options)`
 
-Seek the iterator to a given key or the closest key. The `options` object will always have the following properties: `keyEncoding`. This method is optional. If supported, set `db.supports.seek` to `true` (via the manifest passed to the database constructor) which also enables relevant tests in the [test suite](#test-suite).
+Seek to the key closest to `target`. The `options` object will always have the following properties: `keyEncoding`. This method is optional. The default will throw an error with code [`LEVEL_NOT_SUPPORTED`](#errors). If supported, set `db.supports.seek` to `true` (via the manifest passed to the database constructor) which also enables relevant tests in the [test suite](#test-suite).
 
 #### `iterator._close(callback)`
 
 Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
 
 The default `_close()` invokes `callback` on a next tick. Overriding is optional.
+
+### `keyIterator = AbstractKeyIterator(db, options)`
+
+A key iterator has the same interface and constructor arguments as `AbstractIterator` except that it must yields keys instead of entries. For the `keyIterator._next(callback)` method, this means that the `callback` must be given two arguments (an error and key) instead of three. The same goes for value iterators:
+
+```js
+class ExampleKeyIterator extends AbstractKeyIterator {
+  _next (callback) {
+    this.nextTick(callback, null, 'key')
+  }
+}
+
+class ExampleValueIterator extends AbstractValueIterator {
+  _next (callback) {
+    this.nextTick(callback, null, 'value')
+  }
+}
+```
+
+The `options` argument must be the original `options` object that was passed to `db._keys()` and it is therefore not (publicly) possible to create a key iterator via constructors alone. The same goes for value iterators via `db._values()`.
+
+**Note:** the `AbstractKeyIterator` and `AbstractValueIterator` classes do _not_ extend the `AbstractIterator` class. Similarly, if your implementation overrides `db._keys()` returning a custom subclass of `AbstractKeyIterator`, then that subclass must implement methods like `_next()` separately from your subclass of `AbstractIterator`.
+
+### `valueIterator = AbstractValueIterator(db, options)`
+
+A value iterator has the same interface and constructor arguments as `AbstractIterator` except that it must yields values instead of entries. For further details, see `keyIterator` above.
 
 ### `chainedBatch = AbstractChainedBatch(db)`
 
@@ -1076,8 +1290,8 @@ const ExampleLevel = require('.')
 
 suite({
   test,
-  factory () {
-    return new ExampleLevel()
+  factory (options) {
+    return new ExampleLevel(options)
   }
 })
 ```
@@ -1094,8 +1308,8 @@ const ExampleLevel = require('.')
 
 suite({
   test,
-  factory () {
-    return new ExampleLevel(tempy.directory())
+  factory (options) {
+    return new ExampleLevel(tempy.directory(), options)
   }
 })
 ```
@@ -1127,8 +1341,8 @@ const ExampleLevel = require('.')
 
 const testCommon = suite.common({
   test,
-  factory () {
-    return new ExampleLevel()
+  factory (options) {
+    return new ExampleLevel(options)
   }
 })
 

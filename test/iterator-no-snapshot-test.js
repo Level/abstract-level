@@ -1,7 +1,5 @@
 'use strict'
 
-const concat = require('level-concat-iterator')
-
 exports.noSnapshot = function (test, testCommon) {
   function make (run) {
     return function (t) {
@@ -33,11 +31,11 @@ exports.noSnapshot = function (test, testCommon) {
   }
 
   function verify (t, it, db) {
-    concat(it, function (err, entries) {
+    it.all(function (err, entries) {
       t.ifError(err, 'no iterator error')
 
-      const kv = entries.map(function (entry) {
-        return entry.key.toString() + entry.value.toString()
+      const kv = entries.map(function ([key, value]) {
+        return key.toString() + value.toString()
       })
 
       if (kv.length === 3) {

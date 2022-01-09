@@ -1,12 +1,12 @@
 'use strict'
 
 const test = require('tape')
-const { mockDown } = require('../util')
+const { mockLevel } = require('../util')
 
 test('defer() requires valid function argument', function (t) {
   t.plan(7)
 
-  const db = mockDown()
+  const db = mockLevel()
 
   for (const invalid of [123, true, false, null, undefined, {}]) {
     try {
@@ -22,7 +22,7 @@ test('defer() requires valid function argument', function (t) {
 test('defer() custom operation', function (t) {
   t.plan(6)
 
-  const db = mockDown({
+  const db = mockLevel({
     custom (arg, callback) {
       if (this.status === 'opening') {
         t.is(arg, 123)
@@ -46,7 +46,7 @@ test('defer() custom operation', function (t) {
 test('defer() custom operation with failed open', function (t) {
   t.plan(4)
 
-  const db = mockDown({
+  const db = mockLevel({
     _open (options, callback) {
       t.pass('opened')
       this.nextTick(callback, new Error('_open error'))
@@ -70,7 +70,7 @@ test('defer() custom operation with failed open', function (t) {
 test('defer() can drop custom synchronous operation', function (t) {
   t.plan(3)
 
-  const db = mockDown({
+  const db = mockLevel({
     _open (options, callback) {
       t.pass('opened')
       this.nextTick(callback, new Error('_open error'))

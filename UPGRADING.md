@@ -283,6 +283,8 @@ super({
 
 Node.js readable streams must now be created with a new standalone module called [`level-read-stream`](https://github.com/Level/read-stream), rather than database methods like `db.createReadStream()`. Please see its [upgrade guide](https://github.com/Level/read-stream/blob/main/UPGRADING.md#100) for details.
 
+To offer an alternative to `db.createKeyStream()` and `db.createValueStream()`, two new types of iterators have been added: `db.keys()` and `db.values()`. Their default implementations are functional but implementors may want to override them for optimal performance. The same goes for two new methods on iterators: `nextv()` and `all()`. To achieve this and honor the `limit` option, abstract iterators now count how many items they yielded, which may remove the need for implementations to do so on their own. Please see the README for details.
+
 ### 4. Zero-length keys and range options are now valid
 
 These keys sort before anything else. Historically they weren't supported for causing segmentation faults in `leveldown`. That doesn't apply to today's codebase. Implementations must now support:
@@ -408,8 +410,10 @@ The abstract test suite of `abstract-level` has some breaking changes compared t
 
 - Options to skip tests have been removed in favor of `db.supports`
 - Support of `db.clear()` and `db.getMany()` is now mandatory. The default (slow) implementation of `_clear()` has been removed.
+- Added tests that `gte` and `lte` range options take precedence over `gt` and `lt` respectively. This is incompatible with [`ltgt`](https://github.com/dominictarr/ltgt) but aligns with `subleveldown`, [`level-option-wrap`](https://github.com/substack/level-option-wrap) and half of `leveldown`. There was no good choice.
 - The `setUp` and `tearDown` functions have been removed from the test suite and `suite.common()`.
 - Added ability to access manifests via `testCommon.supports`, by lazily copying it from `testCommon.factory().supports`. This requires that the manifest does not change during the lifetime of a `db`.
+- Your `factory()` function must now accept an `options` argument.
 
 Many tests were imported from `levelup`, `encoding-down`, `deferred-leveldown`, `memdown`, `level-js` and `leveldown`. They test the changes described above and improve coverage of existing behavior.
 

@@ -1,13 +1,13 @@
 'use strict'
 
 const test = require('tape')
-const { mockDown } = require('../util')
+const { mockLevel } = require('../util')
 const nextTick = require('../../lib/next-tick')
 
 test('resource must be an object with a close() method', function (t) {
   t.plan(5)
 
-  const db = mockDown()
+  const db = mockLevel()
 
   for (const invalid of [null, undefined, {}, { close: 123 }]) {
     try {
@@ -23,7 +23,7 @@ test('resource must be an object with a close() method', function (t) {
 test('resource is closed on failed open', function (t) {
   t.plan(2)
 
-  const db = mockDown({
+  const db = mockLevel({
     _open: function (options, callback) {
       t.pass('opened')
       this.nextTick(callback, new Error('_open error'))
@@ -44,7 +44,7 @@ test('resource is closed on failed open', function (t) {
 test('resource is closed on db.close()', function (t) {
   t.plan(2)
 
-  const db = mockDown()
+  const db = mockLevel()
 
   const resource = {
     close: function (cb) {
@@ -61,7 +61,7 @@ test('resource is closed on db.close()', function (t) {
 test('resource is not closed on db.close() if detached', function (t) {
   t.plan(1)
 
-  const db = mockDown()
+  const db = mockLevel()
 
   const resource = {
     close: function (cb) {
