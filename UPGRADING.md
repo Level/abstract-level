@@ -49,7 +49,7 @@ Methods that take a callback now also support promises. They return a promise if
 
 #### 1.2. New: events
 
-An `abstract-level` database emits the same events as `levelup` would. With the exception of the `'ready'` alias that `levelup` has for the `'open'` event: `abstract-level` only emits `'open'`. The prototype of `require('abstract-level').AbstractLevel` inherits from `require('events').EventEmitter`.
+An `abstract-level` database emits the same events as `levelup` would.
 
 #### 1.3. New: idempotent open
 

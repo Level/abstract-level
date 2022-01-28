@@ -760,6 +760,7 @@ An `abstract-level` database is an [`EventEmitter`](https://nodejs.org/api/event
 | `clear`   | Entries were deleted | `options` (object)   |
 | `opening` | Database is opening  | -                    |
 | `open`    | Database has opened  | -                    |
+| `ready`   | Alias for `open`     | -                    |
 | `closing` | Database is closing  | -                    |
 | `closed`  | Database has closed. | -                    |
 

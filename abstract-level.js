@@ -171,6 +171,9 @@ class AbstractLevel extends EventEmitter {
         // Only emit public event if pending state changes are done
         if (this[kStatus] === 'open') this.emit('open')
 
+        // TODO (next major): remove this alias
+        if (this[kStatus] === 'open') this.emit('ready')
+
         maybeOpened()
       })
     } else if (this[kStatus] === 'open') {
