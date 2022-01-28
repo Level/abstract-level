@@ -1,7 +1,7 @@
 {
   "name": "abstract-level",
   "version": "0.0.1",
-  "description": "Abstract prototype for a lexicographically sorted key-value database",
+  "description": "Abstract class for a lexicographically sorted key-value database",
   "license": "MIT",
   "main": "index.js",
   "browser": {

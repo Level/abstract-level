@@ -1,6 +1,6 @@
 # ![abstract-level](./header.svg)
 
-**Abstract prototype for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
 
 > :pushpin: Which module should I use? What happened to `levelup`? Head over to the [FAQ](https://github.com/Level/community#faq).
 

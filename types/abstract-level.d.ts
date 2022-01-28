@@ -16,7 +16,7 @@ import {
 import { NodeCallback, RangeOptions } from './interfaces'
 
 /**
- * Abstract prototype for a lexicographically sorted key-value database.
+ * Abstract class for a lexicographically sorted key-value database.
  *
  * @template TFormat The type used internally by the database to store data.
  * @template KDefault The default type of keys if not overridden on operations.
