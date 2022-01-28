@@ -297,7 +297,8 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options to the underlying store
     if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+      // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
+      options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
 
     this._get(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err, value) => {
@@ -362,7 +363,7 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options
     if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+      options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
 
     const mappedKeys = new Array(keys.length)
@@ -433,7 +434,7 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options
     if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+      options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
 
     const mappedKey = this.prefixKey(keyEncoding.encode(key), keyFormat)
@@ -478,7 +479,7 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options
     if (options.keyEncoding !== keyFormat) {
-      options = { ...options, keyEncoding: keyFormat }
+      options = Object.assign({}, options, { keyEncoding: keyFormat })
     }
 
     this._del(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err) => {
