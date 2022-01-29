@@ -15,5 +15,9 @@ browsers:
 
 presets:
   local:
+    providers:
+      - airtap-playwright
     browsers:
-      - name: default
+      - name: chromium
+      - name: firefox
+      - name: webkit

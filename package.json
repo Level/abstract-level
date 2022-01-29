@@ -11,7 +11,7 @@
   "scripts": {
     "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | faucet) && nyc report",
     "test-browsers": "airtap --coverage test/self.js",
-    "test-browser-local": "airtap --coverage -p local --live test/self.js",
+    "test-browsers-local": "airtap --coverage -p local test/self.js",
     "coverage": "nyc report -r lcovonly"
   },
   "files": [
@@ -41,6 +41,7 @@
     "@types/node": "^17.0.6",
     "@voxpelli/tsconfig": "^3.1.0",
     "airtap": "^4.0.4",
+    "airtap-playwright": "^1.0.1",
     "airtap-sauce": "^1.1.0",
     "faucet": "^0.0.1",
     "hallmark": "^4.0.0",
