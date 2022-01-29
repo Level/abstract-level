@@ -9,13 +9,10 @@
   },
   "types": "./index.d.ts",
   "scripts": {
-    "test": "ts-standard && tsc && standard && hallmark && (nyc -s node test/self.js | faucet) && nyc report",
+    "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | faucet) && nyc report",
     "test-browsers": "airtap --coverage test/self.js",
     "test-browser-local": "airtap --coverage -p local --live test/self.js",
-    "coverage": "nyc report -r lcovonly",
-    "hallmark": "hallmark fix",
-    "dependency-check": "dependency-check --no-dev -i buffer -i queue-microtask . test/*.js",
-    "prepublishOnly": "npm run dependency-check"
+    "coverage": "nyc report -r lcovonly"
   },
   "files": [
     "abstract-chained-batch.js",
@@ -45,15 +42,14 @@
     "@voxpelli/tsconfig": "^3.1.0",
     "airtap": "^4.0.4",
     "airtap-sauce": "^1.1.0",
-    "dependency-check": "^4.1.0",
     "faucet": "^0.0.1",
     "hallmark": "^4.0.0",
     "nyc": "^15.1.0",
-    "sinon": "^12.0.1",
+    "sinon": "^13.0.0",
     "standard": "^16.0.4",
     "tape": "^5.4.0",
     "ts-standard": "^11.0.0",
-    "typescript": "^4.5.4"
+    "typescript": "^4.5.5"
   },
   "repository": {
     "type": "git",
