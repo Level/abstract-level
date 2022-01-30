@@ -476,4 +476,4 @@ Lastly, the error message `Parent database is not open` (courtesy of `subleveldo
 
 ---
 
-_For earlier releases, before `abstract-level` was forked from `abstract-leveldown`, please see [the upgrade guide of `abstract-leveldown`](https://github.com/Level/abstract-leveldown/blob/master/UPGRADING.md)._
+_For earlier releases, before `abstract-level` was forked from `abstract-leveldown` (v7.2.0), please see [the upgrade guide of `abstract-leveldown`](https://github.com/Level/abstract-leveldown/blob/master/UPGRADING.md)._
