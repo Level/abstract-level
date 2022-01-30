@@ -343,8 +343,7 @@ class AbstractIterator extends CommonIterator {
     if (err) return this[kReturnMany](cb, err)
 
     try {
-      for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i]
+      for (const entry of entries) {
         const key = entry[0]
         const value = entry[1]
 
