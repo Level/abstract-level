@@ -127,7 +127,7 @@ Usage of a typical implementation looks as follows.
 
 ```js
 // Create a database
-const db = level('./db', { valueEncoding: 'json' })
+const db = new Level('./db', { valueEncoding: 'json' })
 
 // Add an entry with key 'a' and value 1
 await db.put('a', 1)
@@ -166,8 +166,8 @@ Usage from TypeScript requires generic type parameters.
 
 ```ts
 // Specify types of keys and values (any, in the case of json).
-// The generic type parameters default to level<string, string>.
-const db = level<string, any>('./db', { valueEncoding: 'json' })
+// The generic type parameters default to Level<string, string>.
+const db = new Level<string, any>('./db', { valueEncoding: 'json' })
 
 // All relevant methods then use those types
 await db.put('a', { x: 123 })
