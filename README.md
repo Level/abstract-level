@@ -214,7 +214,7 @@ See [Encodings](#encodings) for a full description of these options. Other `opti
 
 ### `db.status`
 
-A read-only string property that is one of:
+Read-only getter that returns a string reflecting the current state of the database:
 
 - `'opening'` - waiting for the database to be opened
 - `'open'` - successfully opened the database
