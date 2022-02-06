@@ -17,9 +17,10 @@ exports.noSnapshot = function (test, testCommon) {
           t.ifError(err, 'no batch error')
 
           // For this test it is important that we don't read eagerly.
-          // NOTE: highWaterMark is not an abstract option atm, but
-          // it is supported by leveldown, rocksdb and others.
-          const it = db.iterator({ highWaterMark: 0 })
+          // NOTE: highWaterMarkBytes is not an abstract option, but
+          // it is supported by classic-level and others. Also set the
+          // old & equivalent leveldown highWaterMark option for compat.
+          const it = db.iterator({ highWaterMarkBytes: 0, highWaterMark: 0 })
 
           run(db, function (err) {
             t.ifError(err, 'no run error')
