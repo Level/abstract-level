@@ -367,7 +367,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 
 Lastly, an implementation is free to add its own options.
 
-> :pushpin: To instead consume data using Node.js streams, see [`level-read-stream`](https://github.com/Level/read-stream).
+> :pushpin: To instead consume data using streams, see [`level-read-stream`](https://github.com/Level/read-stream) and [`level-web-stream`](https://github.com/Level/web-stream).
 
 ### `keyIterator = db.keys([options])`
 
