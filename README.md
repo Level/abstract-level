@@ -8,7 +8,7 @@
 [![npm](https://img.shields.io/npm/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Node version](https://img.shields.io/node/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Test](https://img.shields.io/github/workflow/status/Level/abstract-level/Test?label=test)](https://github.com/Level/abstract-level/actions/workflows/test.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/Level/abstract-level?label=&logo=codecov&logoColor=fff)](https://codecov.io/gh/Level/abstract-level)
+[![Coverage](https://img.shields.io/codecov/c/github/Level/abstract-level?label=\&logo=codecov\&logoColor=fff)](https://codecov.io/gh/Level/abstract-level)
 [![Standard](https://img.shields.io/badge/standard-informational?logo=javascript\&logoColor=fff)](https://standardjs.com)
 [![Common Changelog](https://common-changelog.org/badge.svg)](https://common-changelog.org)
 [![Donate](https://img.shields.io/badge/donate-orange?logo=open-collective\&logoColor=fff)](https://opencollective.com/level)
@@ -30,7 +30,7 @@
   - [`db.put(key, value[, options][, callback])`](#dbputkey-value-options-callback)
   - [`db.del(key[, options][, callback])`](#dbdelkey-options-callback)
   - [`db.batch(operations[, options][, callback])`](#dbbatchoperations-options-callback)
-  - [`db.batch()`](#dbbatch)
+  - [`chainedBatch = db.batch()`](#chainedbatch--dbbatch)
   - [`iterator = db.iterator([options])`](#iterator--dbiteratoroptions)
   - [`keyIterator = db.keys([options])`](#keyiterator--dbkeysoptions)
   - [`valueIterator = db.values([options])`](#valueiterator--dbvaluesoptions)
@@ -56,6 +56,8 @@
     - [`iterator.seek(target[, options])`](#iteratorseektarget-options)
     - [`iterator.close([callback])`](#iteratorclosecallback)
     - [`iterator.db`](#iteratordb)
+    - [`iterator.count`](#iteratorcount)
+    - [`iterator.limit`](#iteratorlimit)
   - [`keyIterator`](#keyiterator)
   - [`valueIterator`](#valueiterator)
   - [`sublevel`](#sublevel)
@@ -335,9 +337,17 @@ await db.batch([
 
 The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
-### `db.batch()`
+### `chainedBatch = db.batch()`
 
-Create a [`chainedBatch`](#chainedbatch) object, when `batch()` is called with zero arguments. A chained batch can be used to build and eventually commit an atomic batch of operations. Depending on how it's used, it is possible to obtain greater performance with this form of `batch()`. On several implementations however, it is just sugar.
+Create a [chained batch](#chainedbatch), when `batch()` is called with zero arguments. A chained batch can be used to build and eventually commit an atomic batch of operations. Depending on how it's used, it is possible to obtain greater performance with this form of `batch()`. On several implementations however, it is just sugar.
+
+```js
+await db.batch()
+  .del('bob')
+  .put('alice', 361)
+  .put('kim', 220)
+  .write()
+```
 
 ### `iterator = db.iterator([options])`
 
