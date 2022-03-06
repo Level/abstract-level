@@ -45,9 +45,9 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    * commits.
    */
   write (): Promise<void>
-  write (options: {}): Promise<void>
+  write (options: AbstractChainedBatchWriteOptions): Promise<void>
   write (callback: NodeCallback<void>): void
-  write (options: {}, callback: NodeCallback<void>): void
+  write (options: AbstractChainedBatchWriteOptions, callback: NodeCallback<void>): void
 
   /**
    * Free up underlying resources. This should be done even if the chained batch has
@@ -112,4 +112,12 @@ export interface AbstractChainedBatchDelOptions<TDatabase, K> {
    * is provided).
    */
   sublevel?: AbstractSublevel<TDatabase, any, any, any> | undefined
+}
+
+/**
+ * Options for the {@link AbstractChainedBatch.write} method.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface AbstractChainedBatchWriteOptions {
+  // There are no abstract options but implementations may add theirs.
 }

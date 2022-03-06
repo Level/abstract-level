@@ -26,7 +26,8 @@ export {
 export {
   AbstractChainedBatch,
   AbstractChainedBatchPutOptions,
-  AbstractChainedBatchDelOptions
+  AbstractChainedBatchDelOptions,
+  AbstractChainedBatchWriteOptions
 } from './types/abstract-chained-batch'
 
 export {
