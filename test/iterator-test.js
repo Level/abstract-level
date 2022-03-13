@@ -127,7 +127,7 @@ exports.sequence = function (test, testCommon) {
 
         // NOTE: adapted from leveldown
         test(`${mode}().${method}() after db.close() yields error (deferred: ${deferred})`, async function (t) {
-          t.plan(1)
+          t.plan(2)
 
           const db = testCommon.factory()
           if (!deferred) await db.open()
@@ -137,22 +137,25 @@ exports.sequence = function (test, testCommon) {
 
           const it = db[mode]()
 
-          // The first call should succeed, because it was scheduled before close()
+          // The first call *should* succeed, because it was scheduled before close(). However, success
+          // is not a must. Because nextv() and all() fallback to next*(), they're allowed to fail. An
+          // implementation can also choose to abort any pending call on close.
           let promise = it[method](...requiredArgs).then(() => {
-            // The second call should fail, because it was scheduled after close()
-            return it[method](...requiredArgs).catch(err => {
+            t.pass('Optionally succeeded')
+          }).catch((err) => {
+            t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+          })
+
+          // The second call *must* fail, because it was scheduled after close()
+          promise = promise.then(() => {
+            return it[method](...requiredArgs).then(() => {
+              t.fail('Expected an error')
+            }).catch((err) => {
               t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
             })
           })
 
-          if (method !== 'next') {
-            // However, because nextv() and all() fallback to next*(), they're allowed to fail too (for now)
-            promise = promise.catch((err) => {
-              t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
-            })
-          }
-
-          await Promise.all([db.close(), promise])
+          return Promise.all([db.close(), promise])
         })
       }
     }
