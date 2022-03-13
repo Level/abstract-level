@@ -654,8 +654,8 @@ class AbstractLevel extends EventEmitter {
     options.values = options.values !== false
 
     // We need the original encoding options in AbstractIterator in order to decode data
-    Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
-    Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+    options[AbstractIterator.keyEncoding] = keyEncoding
+    options[AbstractIterator.valueEncoding] = valueEncoding
 
     // Forward encoding options to private API
     options.keyEncoding = keyEncoding.format
@@ -684,8 +684,8 @@ class AbstractLevel extends EventEmitter {
     options = rangeOptions(options, keyEncoding)
 
     // We need the original encoding options in AbstractKeyIterator in order to decode data
-    Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
-    Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+    options[AbstractIterator.keyEncoding] = keyEncoding
+    options[AbstractIterator.valueEncoding] = valueEncoding
 
     // Forward encoding options to private API
     options.keyEncoding = keyEncoding.format
@@ -713,8 +713,8 @@ class AbstractLevel extends EventEmitter {
     options = rangeOptions(options, keyEncoding)
 
     // We need the original encoding options in AbstractValueIterator in order to decode data
-    Object.defineProperty(options, AbstractIterator.keyEncoding, { value: keyEncoding })
-    Object.defineProperty(options, AbstractIterator.valueEncoding, { value: valueEncoding })
+    options[AbstractIterator.keyEncoding] = keyEncoding
+    options[AbstractIterator.valueEncoding] = valueEncoding
 
     // Forward encoding options to private API
     options.keyEncoding = keyEncoding.format
