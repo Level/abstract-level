@@ -1,4 +1,4 @@
-# ![abstract-level](./header.svg)
+# abstract-level
 
 **Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
 
