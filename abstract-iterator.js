@@ -18,6 +18,7 @@ const kClosed = Symbol('closed')
 const kCloseCallbacks = Symbol('closeCallbacks')
 const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
+const kAbortOnClose = Symbol('abortOnClose')
 const kLegacy = Symbol('legacy')
 const kKeys = Symbol('keys')
 const kValues = Symbol('values')
@@ -25,6 +26,7 @@ const kLimit = Symbol('limit')
 const kCount = Symbol('count')
 
 const emptyOptions = Object.freeze({})
+const noop = () => {}
 let warnedEnd = false
 
 // This class is an internal utility for common functionality between AbstractIterator,
@@ -54,6 +56,12 @@ class CommonIterator {
     this[kLegacy] = legacy
     this[kLimit] = Number.isInteger(options.limit) && options.limit >= 0 ? options.limit : Infinity
     this[kCount] = 0
+
+    // Undocumented option to abort pending work on close(). Used by the
+    // many-level module as a temporary solution to a blocked close().
+    // TODO (next major): consider making this the default behavior. Native
+    // implementations should have their own logic to safely close iterators.
+    this[kAbortOnClose] = !!options.abortOnClose
 
     this.db = db
     this.db.attachResource(this)
@@ -219,6 +227,9 @@ class CommonIterator {
   [kFinishWork] () {
     const cb = this[kCallback]
 
+    // Callback will be null if work was aborted on close
+    if (this[kAbortOnClose] && cb === null) return noop
+
     this[kWorking] = false
     this[kCallback] = null
 
@@ -277,6 +288,13 @@ class CommonIterator {
 
       if (!this[kWorking]) {
         this._close(this[kHandleClose])
+      } else if (this[kAbortOnClose]) {
+        // Don't wait for work to finish. Subsequently ignore the result.
+        const cb = this[kFinishWork]()
+
+        cb(new ModuleError('Aborted on iterator close()', {
+          code: 'LEVEL_ITERATOR_NOT_OPEN'
+        }))
       }
     }
 
