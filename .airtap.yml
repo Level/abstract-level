@@ -1,6 +1,5 @@
 providers:
   - airtap-sauce
-  - airtap-default
 
 browsers:
   - name: chrome
