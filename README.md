@@ -78,9 +78,14 @@
     - [`LEVEL_INVALID_KEY`](#level_invalid_key)
     - [`LEVEL_INVALID_VALUE`](#level_invalid_value)
     - [`LEVEL_CORRUPTION`](#level_corruption)
+    - [`LEVEL_IO_ERROR`](#level_io_error)
     - [`LEVEL_INVALID_PREFIX`](#level_invalid_prefix)
     - [`LEVEL_NOT_SUPPORTED`](#level_not_supported)
     - [`LEVEL_LEGACY`](#level_legacy)
+    - [`LEVEL_LOCKED`](#level_locked)
+    - [`LEVEL_READONLY`](#level_readonly)
+    - [`LEVEL_CONNECTION_LOST`](#level_connection_lost)
+    - [`LEVEL_REMOTE_ERROR`](#level_remote_error)
   - [Shared Access](#shared-access)
 - [Private API For Implementors](#private-api-for-implementors)
   - [Example](#example)
@@ -805,7 +810,10 @@ try {
   await db.open()
 } catch (err) {
   console.error(err.code) // 'LEVEL_DATABASE_NOT_OPEN'
-  console.error(err.cause) // 'Error: Failed to acquire lock'
+
+  if (err.cause && err.cause.code === 'LEVEL_LOCKED') {
+    // Another process or instance has opened the database
+  }
 }
 ```
 
@@ -860,6 +868,10 @@ When a value is `null`, `undefined` or (if an implementation deems it so) otherw
 
 Data could not be read (from an underlying store) due to a corruption.
 
+#### `LEVEL_IO_ERROR`
+
+Data could not be read (from an underlying store) due to an input/output error, for example from the filesystem.
+
 #### `LEVEL_INVALID_PREFIX`
 
 When a sublevel prefix contains characters outside of the supported byte range.
@@ -885,6 +897,22 @@ module.exports = function plugin (db) {
 #### `LEVEL_LEGACY`
 
 When a method, option or other property was used that has been removed from the API.
+
+#### `LEVEL_LOCKED`
+
+When an attempt was made to open a database that is already open in another process or instance. Used by `classic-level` and other implementations of `abstract-level` that use exclusive locks.
+
+#### `LEVEL_READONLY`
+
+When an attempt was made to write data to a read-only database. Used by `many-level`.
+
+#### `LEVEL_CONNECTION_LOST`
+
+When a database relies on a connection to a remote party and that connection has been lost. Used by `many-level`.
+
+#### `LEVEL_REMOTE_ERROR`
+
+When a remote party encountered an unexpected condition that it can't reflect with a more specific code. Used by `many-level`.
 
 ### Shared Access
 
