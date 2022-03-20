@@ -84,7 +84,6 @@
     - [`LEVEL_LEGACY`](#level_legacy)
     - [`LEVEL_LOCKED`](#level_locked)
     - [`LEVEL_READONLY`](#level_readonly)
-    - [`LEVEL_ASSERT`](#level_assert)
     - [`LEVEL_CONNECTION_LOST`](#level_connection_lost)
     - [`LEVEL_REMOTE_ERROR`](#level_remote_error)
   - [Shared Access](#shared-access)
@@ -910,10 +909,6 @@ When an attempt was made to open a database that is already open in another proc
 #### `LEVEL_READONLY`
 
 When an attempt was made to write data to a read-only database. Used by `many-level`.
-
-#### `LEVEL_ASSERT`
-
-When an internal assertion failed. This could indicate a bug. If so, please open a detailed issue in the relevant repository or [`Level/community`](https://github.com/Level/community) when in doubt. Be sure to include steps to reproduce.
 
 #### `LEVEL_CONNECTION_LOST`
 
