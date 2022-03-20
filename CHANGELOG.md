@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.3] - 2022-03-20
+
+### Added
+
+- Document error codes of `classic-level` and `many-level` ([#20](https://github.com/Level/abstract-level/issues/20)) ([`4b3464c`](https://github.com/Level/abstract-level/commit/4b3464c)) (Vincent Weevers)
+
+### Fixed
+
+- Add hidden `abortOnClose` option to iterators ([`2935180`](https://github.com/Level/abstract-level/commit/2935180)) (Vincent Weevers)
+- Make internal iterator decoding options enumerable ([`eb08363`](https://github.com/Level/abstract-level/commit/eb08363)) (Vincent Weevers)
+- Restore Sauce Labs browser tests ([`90b8816`](https://github.com/Level/abstract-level/commit/90b8816)) (Vincent Weevers)
+
 ## [1.0.2] - 2022-03-06
 
 ### Fixed
@@ -18,6 +30,8 @@
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[1.0.3]: https://github.com/Level/abstract-level/releases/tag/v1.0.3
 
 [1.0.2]: https://github.com/Level/abstract-level/releases/tag/v1.0.2
 
