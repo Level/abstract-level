@@ -21,6 +21,7 @@ const kValueEncoding = Symbol('valueEncoding')
 const kAbortOnClose = Symbol('abortOnClose')
 const kLegacy = Symbol('legacy')
 const kKeys = Symbol('keys')
+const kFlatten = Symbol('flatten')
 const kValues = Symbol('values')
 const kLimit = Symbol('limit')
 const kCount = Symbol('count')
@@ -336,6 +337,7 @@ class AbstractIterator extends CommonIterator {
     super(db, options, true)
     this[kKeys] = options.keys !== false
     this[kValues] = options.values !== false
+    this[kFlatten] = options.flatten === true
   }
 
   [kHandleOne] (err, key, value) {
@@ -361,12 +363,51 @@ class AbstractIterator extends CommonIterator {
     if (err) return this[kReturnMany](cb, err)
 
     try {
-      for (const entry of entries) {
-        const key = entry[0]
-        const value = entry[1]
+      if (entries && !Array.isArray(entries[0])) {
+        if (this[kFlatten]) {
+          for (let n = 0; n < entries.length; n += 2) {          
+            const key = entries[n + 0]
+            const value = entries[n + 1]
+      
+            entries[n + 0] = this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+            entries[n + 1] = this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
+          }
+        } else {
+          const items = entries
+          entries = []
+          for (let n = 0; n < items.length; n += 2) {          
+            const key = items[n + 0]
+            const value = items[n + 1]
+            const entry = [undefined, undefined]
+      
+            entry[0] = this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+            entry[1] = this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
 
-        entry[0] = this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined
-        entry[1] = this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
+            entries.push(entry)
+          }
+        }
+      } else {
+        if (this[kFlatten]) {
+          const items = entries
+          entries = []
+          for (const entry of items) {
+            const key = entry[0]
+            const value = entry[1]
+    
+            entries.push(
+              this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined,
+              this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
+            )
+          }     
+        } else {
+          for (const entry of entries) {
+            const key = entry[0]
+            const value = entry[1]
+    
+            entry[0] = this[kKeys] && key !== undefined ? this[kKeyEncoding].decode(key) : undefined
+            entry[1] = this[kValues] && value !== undefined ? this[kValueEncoding].decode(value) : undefined
+          }
+        }        
       }
     } catch (err) {
       return this[kReturnMany](cb, new IteratorDecodeError('entries', err))
@@ -412,6 +453,8 @@ class AbstractKeyIterator extends CommonIterator {
     const cb = this[kFinishWork]()
     if (err) return this[kReturnMany](cb, err)
 
+    // XXX
+
     try {
       for (let i = 0; i < keys.length; i++) {
         const key = keys[i]
@@ -448,6 +491,8 @@ class AbstractValueIterator extends CommonIterator {
   [kHandleMany] (err, values) {
     const cb = this[kFinishWork]()
     if (err) return this[kReturnMany](cb, err)
+
+    // XXX
 
     try {
       for (let i = 0; i < values.length; i++) {
