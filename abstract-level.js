@@ -27,6 +27,8 @@ const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const noop = () => {}
 
+const NOT_FOUND_ERROR = Object.assign(new Error('not found'), { code: 'LEVEL_NOT_FOUND' })
+
 class AbstractLevel extends EventEmitter {
   constructor (manifest, options) {
     super()
@@ -329,7 +331,15 @@ class AbstractLevel extends EventEmitter {
   }
 
   _get (key, options, callback) {
-    this.nextTick(callback, new Error('NotFound'))
+    this._getMany([key], options, (err, values) => {
+      if (err) {
+        callback(err)
+      } else if (values[0] === undefined) {
+        callback(NOT_FOUND_ERROR)
+      } else {
+        callback(null, values[0])
+      }
+    })
   }
 
   getMany (keys, options, callback) {
@@ -450,7 +460,7 @@ class AbstractLevel extends EventEmitter {
   }
 
   _put (key, value, options, callback) {
-    this.nextTick(callback)
+    this.batch([{ op: 'put', key }], options, callback)
   }
 
   del (key, options, callback) {
@@ -492,7 +502,7 @@ class AbstractLevel extends EventEmitter {
   }
 
   _del (key, options, callback) {
-    this.nextTick(callback)
+    this.batch([{ op: 'del', key }], options, callback)
   }
 
   batch (operations, options, callback) {
