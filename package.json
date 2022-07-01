@@ -37,7 +37,7 @@
     "queue-microtask": "^1.2.3"
   },
   "devDependencies": {
-    "@types/node": "^17.0.6",
+    "@types/node": "^18.0.0",
     "@voxpelli/tsconfig": "^4.0.0",
     "airtap": "^4.0.4",
     "airtap-playwright": "^1.0.1",
