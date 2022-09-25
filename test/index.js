@@ -54,6 +54,8 @@ function suite (options) {
   require('./clear-range-test').all(test, testCommon)
   require('./sublevel-test').all(test, testCommon)
 
+  require('./hooks/prewrite')(test, testCommon)
+
   // Run the same suite on a sublevel
   if (!testCommon.internals[kSublevels]) {
     const factory = testCommon.factory

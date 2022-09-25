@@ -31,6 +31,7 @@
     "is-buffer": "^2.0.5",
     "level-supports": "^4.0.0",
     "level-transcoder": "^1.0.1",
+    "maybe-combine-errors": "^1.0.0",
     "module-error": "^1.0.1",
     "queue-microtask": "^1.2.3"
   },

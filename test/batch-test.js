@@ -133,16 +133,18 @@ exports.args = function (test, testCommon) {
     const type = operation === null ? 'null' : typeof operation
 
     test('test batch() with ' + type + ' operation', assertAsync.ctx(function (t) {
-      t.plan(5)
+      t.plan(3)
 
       db.batch([operation], assertAsync(function (err) {
-        t.is(err && err.name, 'TypeError')
-        t.is(err && err.message, 'A batch operation must be an object', 'correct error message (callback)')
+        // We can either explicitly check the type of the op and throw a TypeError,
+        // or skip that for performance reasons in which case the next thing checked
+        // will be op.key or op.type. Doesn't matter, because we've documented that
+        // TypeErrors and such are not part of the semver contract.
+        t.ok(err && (err.name === 'TypeError' || err.code === 'LEVEL_INVALID_KEY'))
       }))
 
       db.batch([operation]).catch(function (err) {
-        t.is(err.name, 'TypeError')
-        t.is(err.message, 'A batch operation must be an object', 'correct error message (promise)')
+        t.ok(err.name === 'TypeError' || err.code === 'LEVEL_INVALID_KEY')
       })
     }))
   })
@@ -301,6 +303,55 @@ exports.events = function (test, testCommon) {
 
     await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
     await db.close()
+  })
+
+  test('test batch([]) (array-form) emits write event', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    const utf8 = db.keyEncoding('utf8')
+    await db.open()
+
+    t.ok(db.supports.events.write)
+
+    db.on('write', function (ops) {
+      t.same(ops, [
+        {
+          type: 'put',
+          key: 456,
+          value: 99,
+          custom: 123,
+          keyEncoding: utf8,
+          valueEncoding: utf8,
+          encodedKey: '456',
+          encodedValue: '99'
+        }
+      ])
+    })
+
+    await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
+    return db.close()
+  })
+
+  test('test batch([]) (array-form) emits write event in favor of batch event', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    db.on('write', function () {
+      t.pass('got write')
+    })
+
+    db.on('batch', function () {
+      t.fail('got batch')
+    })
+
+    // Once we remove the batch event, this test would still pass, but we should then remove it.
+    t.ok(db.supports.events.batch)
+
+    await db.batch([{ type: 'put', key: '123', value: '456' }])
+    return db.close()
   })
 }
 

@@ -1,6 +1,6 @@
 # abstract-level
 
-**Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, hooks, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
 
 > :pushpin: Which module should I use? What happened to `levelup`? Head over to the [FAQ](https://github.com/Level/community#faq).
 
@@ -64,8 +64,38 @@
   - [`sublevel`](#sublevel)
     - [`sublevel.prefix`](#sublevelprefix)
     - [`sublevel.db`](#subleveldb)
+  - [Hooks](#hooks)
+    - [`hook = db.hooks.prewrite`](#hook--dbhooksprewrite)
+      - [Example](#example)
+      - [Arguments](#arguments)
+        - [`op` (object)](#op-object)
+        - [`batch` (object)](#batch-object)
+    - [`hook = db.hooks.postopen`](#hook--dbhookspostopen)
+      - [Example](#example-1)
+      - [Arguments](#arguments-1)
+        - [`options` (object)](#options-object)
+    - [`hook = db.hooks.newsub`](#hook--dbhooksnewsub)
+      - [Example](#example-2)
+      - [Arguments](#arguments-2)
+        - [`sublevel` (object)](#sublevel-object)
+        - [`options` (object)](#options-object-1)
+    - [`hook`](#hook)
+      - [`hook.add(fn)`](#hookaddfn)
+      - [`hook.delete(fn)`](#hookdeletefn)
+    - [Hook Error Handling](#hook-error-handling)
+    - [Hooks On Sublevels](#hooks-on-sublevels)
   - [Encodings](#encodings)
   - [Events](#events)
+    - [`opening`](#opening)
+    - [`open`](#open)
+    - [`ready` (deprecated)](#ready-deprecated)
+    - [`closing`](#closing)
+    - [`closed`](#closed)
+    - [`write`](#write)
+    - [`clear`](#clear)
+    - [`put` (deprecated)](#put-deprecated)
+    - [`del` (deprecated)](#del-deprecated)
+    - [`batch` (deprecated)](#batch-deprecated)
   - [Errors](#errors)
     - [`LEVEL_NOT_FOUND`](#level_not_found)
     - [`LEVEL_DATABASE_NOT_OPEN`](#level_database_not_open)
@@ -84,12 +114,13 @@
     - [`LEVEL_NOT_SUPPORTED`](#level_not_supported)
     - [`LEVEL_LEGACY`](#level_legacy)
     - [`LEVEL_LOCKED`](#level_locked)
+    - [`LEVEL_HOOK_ERROR`](#level_hook_error)
     - [`LEVEL_READONLY`](#level_readonly)
     - [`LEVEL_CONNECTION_LOST`](#level_connection_lost)
     - [`LEVEL_REMOTE_ERROR`](#level_remote_error)
   - [Shared Access](#shared-access)
 - [Private API For Implementors](#private-api-for-implementors)
-  - [Example](#example)
+  - [Example](#example-3)
   - [`db = AbstractLevel(manifest[, options])`](#db--abstractlevelmanifest-options)
   - [`db._open(options, callback)`](#db_openoptions-callback)
   - [`db._close(callback)`](#db_closecallback)
@@ -507,7 +538,7 @@ When deferring a custom operation, do it early: after normalizing optional argum
 
 #### `chainedBatch.put(key, value[, options])`
 
-Queue a `put` operation on this batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) or [`LEVEL_INVALID_VALUE`](#errors) error if `key` or `value` is invalid. The optional `options` object may contain:
+Add a `put` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) or [`LEVEL_INVALID_VALUE`](#errors) error if `key` or `value` is invalid. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
@@ -515,18 +546,18 @@ Queue a `put` operation on this batch, not committed until `write()` is called. 
 
 #### `chainedBatch.del(key[, options])`
 
-Queue a `del` operation on this batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) error if `key` is invalid. The optional `options` object may contain:
+Add a `del` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) error if `key` is invalid. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The `key` will be prefixed with the `prefix` of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
 
 #### `chainedBatch.clear()`
 
-Clear all queued operations on this batch.
+Remove all operations from this chained batch, so that they will not be committed.
 
 #### `chainedBatch.write([options][, callback])`
 
-Commit the queued operations for this batch. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
+Commit the operations. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
 
 There are no `options` by default but implementations may add theirs. Note that `write()` does not take encoding options. Those can only be set on `put()` and `del()` because implementations may synchronously forward such calls to an underlying store and thus need keys and values to be encoded at that point.
 
@@ -536,11 +567,11 @@ After `write()` or `close()` has been called, no further operations are allowed.
 
 #### `chainedBatch.close([callback])`
 
-Free up underlying resources. This should be done even if the chained batch has zero queued operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
+Free up underlying resources. This should be done even if the chained batch has zero operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
 
 #### `chainedBatch.length`
 
-The number of queued operations on the current batch.
+The number of operations in this chained batch, including operations that were added by [`prewrite`](#hook--dbhooksprewrite) hook functions if any.
 
 #### `chainedBatch.db`
 
@@ -705,6 +736,142 @@ console.log(example.db === db) // true
 console.log(nested.db === db) // true
 ```
 
+### Hooks
+
+Hooks allow userland _hook functions_ to customize behavior of the database. Each hook is a different extension point, accessible via `db.hooks`. Some are shared between database methods to encapsulate common behavior. A hook is either synchronous or asynchronous, and functions added to a hook must respect that trait.
+
+#### `hook = db.hooks.prewrite`
+
+A synchronous hook for modifying or adding operations to [`db.batch([])`](#dbbatchoperations-options-callback), [`db.batch().put()`](#chainedbatchputkey-value-options), [`db.batch().del()`](#chainedbatchdelkey-options), [`db.put()`](#dbputkey-value-options-callback) and [`db.del()`](#dbdelkey-options-callback) calls. It does not include [`db.clear()`](#dbclearoptions-callback) because the entries deleted by such a call are not communicated back to `db`.
+
+Functions added to this hook will receive two arguments: `op` and `batch`.
+
+##### Example
+
+```js
+const charwise = require('charwise-compact')
+const books = db.sublevel('books', { valueEncoding: 'json' })
+const index = db.sublevel('authors', { keyEncoding: charwise })
+
+books.hooks.prewrite.add(function (op, batch) {
+  if (op.type === 'put') {
+    batch.add({
+      type: 'put',
+      key: [op.value.author, op.key],
+      value: '',
+      sublevel: index
+    })
+  }
+})
+
+// Will atomically commit it to the author index as well
+await books.put('12', { title: 'Siddhartha', author: 'Hesse' })
+```
+
+##### Arguments
+
+###### `op` (object)
+
+The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from `db.batch(operations)`) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
+
+The `key` and `value` have not yet been encoded at this point. The `keyEncoding` and `valueEncoding` properties are always encoding objects (rather than encoding names like `'json'`) which means hook functions can call (for example) `op.keyEncoding.encode(123)`.
+
+Hook functions can modify the `key`, `value`, `keyEncoding` and `valueEncoding` properties, but not `type` or `sublevel`. If a hook function modifies `keyEncoding` or `valueEncoding` it can use either encoding names or encoding objects, which will subsequently be normalized to encoding objects. Hook functions can also add custom properties to `op` which will be visible to other hook functions, the private API of the database and in the [`write`](#write) event.
+
+###### `batch` (object)
+
+The `batch` argument of the hook function is a ~~subset of the [chained batch](#chainedbatch) API with only `put()` and `del()` methods~~. The presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch, so that hook functions can add more operations to that batch. The hook function thus doesn't have to care whether the input came from `db.batch()`, `db.put()` or other.
+
+For hook functions to be generic, it is recommended to explicitly define a `keyEncoding` and `valueEncoding` on operations (instead of relying on database defaults) or to use an isolated sublevel with known defaults. Operations added by hook functions will be processed after all of the input operations (rather than interleaving). It is assumed that such operations can be freely mutated by `abstract-level`. Unlike input operations they will not be cloned before doing so.
+
+Because the `batch` argument follows the chained batch API, its methods also take a `sublevel` option. This is useful to atomically commit data to another sublevel and to encode that data via the sublevel (meaning to respect its default encoding, which in the above example is `charwise-compact` for keys of the `index` sublevel). For further details please see [chained batch](#chainedbatch).
+
+The hook function will not be called for batch operations that were added by either itself or other hook functions.
+
+#### `hook = db.hooks.postopen`
+
+An asynchronous hook that runs after the database has succesfully opened, but before deferred operations are executed and before events are emitted. It thus allows for additional initialization, including reading and writing data that deferred operations might need.
+
+Functions added to this hook must return a promise and will receive one argument: `options`. If one of the hook functions yields an error (or itself closes the database) then the database will be closed. The postopen hook always runs before the prewrite hook.
+
+##### Example
+
+```js
+db.hooks.postopen.add(async function (options) {
+  // Can read and write like usual
+  return db.put('example', 123, {
+    valueEncoding: 'json'
+  })
+})
+```
+
+##### Arguments
+
+###### `options` (object)
+
+The `options` that were provided in the originating [`db.open(options)`](#dbopenoptions-callback) call, merged with constructor options and defaults. Equivalent to what the private API received in [`db._open(options)`](#db_openoptions-callback).
+
+#### `hook = db.hooks.newsub`
+
+A synchronous hook that runs when a `AbstractSublevel` instance has been created by [`db.sublevel(options)`](#sublevel--dbsublevelname-options). Functions added to this hook will receive two arguments: `sublevel` and `options`.
+
+##### Example
+
+This hook can be useful to hook into a database and any sublevels created on that database. Userland modules that act like plugins might like the following pattern:
+
+```js
+module.exports = function logger (db, options) {
+  // Recurse so that db.sublevel('foo', opts) will call logger(sublevel, opts)
+  db.hooks.newsub.add(logger)
+
+  db.hooks.prewrite.add(function (op, batch) {
+    console.log('writing', { db, op })
+  })
+}
+```
+
+##### Arguments
+
+###### `sublevel` (object)
+
+The `AbstractSublevel` instance that was created.
+
+###### `options` (object)
+
+The `options` that were provided in the originating `db.sublevel(options)` call, merged with defaults. Equivalent to what the private API received in [`db._sublevel(options)`](#sublevel--db_sublevelname-options).
+
+#### `hook`
+
+##### `hook.add(fn)`
+
+Add the given `fn` function to this hook, if it wasn't already added.
+
+##### `hook.delete(fn)`
+
+Remove the given `fn` function from this hook.
+
+#### Hook Error Handling
+
+If a hook function throws an error, it will be wrapped in an error with code [`LEVEL_HOOK_ERROR`](#errors) and abort the originating call:
+
+```js
+try {
+  await db.put('abc', 123)
+} catch (err) {
+  if (err.code === 'LEVEL_HOOK_ERROR') {
+    console.log(err.cause)
+  }
+}
+```
+
+As a result, other hook functions will not be called.
+
+#### Hooks On Sublevels
+
+On sublevels and their parent database, hooks are triggered in bottom-up order, excluding any intermediate sublevels. For example, `db.sublevel(..).batch(..)` will trigger the `prewrite` hook of the sublevel and then the `prewrite` hook of `db`. Only direct operations on a database will trigger hooks, not when a sublevel is provided as an option. This means `db.batch([{ sublevel, ... }])` will trigger the `prewrite` hook of `db` but not of `sublevel`. These behaviors are symmetrical to [events](#events): `db.batch([{ sublevel, ... }])` will only emit a `write` event from `db` while `db.sublevel(..).batch([{ ... }])` will emit a `write` event from the sublevel and then another from `db` (this time with fully-qualified keys).
+
+Side note: that hooks are not triggered on "intermediate" sublevels (meaning the `a` sublevel in `db.sublevel('a').sublevel('b')`) is a result of how sublevels work in general. Nested sublevels, no matter their depth, are all connected to the same parent database rather than forming a tree. Feel free to open an issue in [`community`](https://github.com/Level/community) to discuss this potential gap, along with a good use case and examples.
+
 ### Encodings
 
 Any method that takes a `key` argument, `value` argument or range options like `gte`, hereby jointly referred to as `data`, runs that `data` through an _encoding_. This means to encode input `data` and decode output `data`.
@@ -764,29 +931,166 @@ Lastly, one way or another, every implementation _must_ support `data` of type S
 
 ### Events
 
-An `abstract-level` database is an [`EventEmitter`](https://nodejs.org/api/events.html) and emits the following events.
+An `abstract-level` database is an [`EventEmitter`](https://nodejs.org/api/events.html) and emits the events listed below.
 
-| Event     | Description          | Arguments            |
-| :-------- | :------------------- | :------------------- |
-| `put`     | Entry was updated    | `key, value` (any)   |
-| `del`     | Entry was deleted    | `key` (any)          |
-| `batch`   | Batch has executed   | `operations` (array) |
-| `clear`   | Entries were deleted | `options` (object)   |
-| `opening` | Database is opening  | -                    |
-| `open`    | Database has opened  | -                    |
-| `ready`   | Alias for `open`     | -                    |
-| `closing` | Database is closing  | -                    |
-| `closed`  | Database has closed. | -                    |
+The `put`, `del` and `batch` events are deprecated in favor of the `write` event and will be removed in a future version of `abstract-level`. If one or more `write` event listeners exist or if the [`prewrite`](#hook--dbhooksprewrite) hook is in use, either of which implies opting-in to the `write` event, then the deprecated events will not be emitted.
 
-For example you can do:
+#### `opening`
+
+Emitted when database is opening. Receives 0 arguments:
 
 ```js
-db.on('put', function (key, value) {
-  console.log('Updated', { key, value })
+db.once('opening', function () {
+  console.log('Opening..')
 })
 ```
 
-Any keys, values and range options in these events are the original arguments passed to the relevant operation that triggered the event, before having encoded them.
+#### `open`
+
+Emitted when database has successfully opened. Receives 0 arguments:
+
+```js
+db.once('open', function () {
+  console.log('Opened!')
+})
+```
+
+#### `ready` (deprecated)
+
+Alias for the `open` event. Deprecated in favor of the `open` event.
+
+#### `closing`
+
+Emitted when database is closing. Receives 0 arguments.
+
+#### `closed`
+
+Emitted when database has successfully closed. Receives 0 arguments.
+
+#### `write`
+
+Emitted when data was successfully written to the database as the result of `db.batch()`, `db.put()` or `db.del()`. Receives a single `operations` argument, which is an array containing normalized operation objects. The array will contain at least one operation object and reflects modifications made (and operations added) by the [`prewrite`](#hook--dbhooksprewrite) hook. Normalized means that every operation object has `keyEncoding` and (if `type` is `'put'`) `valueEncoding` properties and these are always encoding objects, rather than their string names like `'utf8'` or whatever was given in the input.
+
+Operation objects also include userland options that were provided in the `options` argument of the originating call, for example the `options` in a `db.put(key, value, options)` call:
+
+```js
+db.on('write', function (operations) {
+  for (const op of operations) {
+    if (op.type === 'put') {
+      console.log(op.key, op.value, op.foo)
+    }
+  }
+})
+
+// Put with a userland 'foo' option
+await db.put('abc', 'xyz', { foo: true })
+```
+
+The `key` and `value` of the operation object match the original input, before having encoded it. To provide access to encoded data, the operation object additionally has `encodedKey` and (if `type` is `'put'`) `encodedValue` properties. Event listeners can inspect [`keyEncoding.format`](https://github.com/Level/transcoder#encodingformat) and `valueEncoding.format` to determine the data type of `encodedKey` and `encodedValue`.
+
+As an example, given a sublevel created with `users = db.sublevel('users', { valueEncoding: 'json' })`, a call like `users.put('isa', { score: 10 })` will emit a `write` event from the sublevel with an `operations` argument that looks like the following. Note that specifics (in data types and encodings) may differ per database at it depends on which encodings an implementation supports and uses internally. This example assumes that the database uses `'utf8'`.
+
+```js
+[{
+  type: 'put'
+  key: 'isa',
+  value: { score: 10 },
+  keyEncoding: users.keyEncoding('utf8')
+  valueEncoding: users.valueEncoding('json'),
+  encodedKey: 'isa', // No change (was already utf8)
+  encodedValue: '{"score":10}', // JSON-encoded
+}]
+```
+
+Because sublevels encode and then forward operations to their parent database, a separate `write` event will be emitted from `db` with:
+
+```js
+[{
+  type: 'put'
+  key: '!users!isa', // Prefixed
+  value: '{"score":10}', // No change
+  keyEncoding: db.keyEncoding('utf8')
+  valueEncoding: db.valueEncoding('utf8'),
+  encodedKey: '!users!isa',
+  encodedValue: '{"score":10}'
+}]
+```
+
+Similarly, if a `sublevel` option was provided:
+
+```js
+await db.batch()
+  .del('isa', { sublevel: users })
+  .write()
+```
+
+We'll get:
+
+```js
+[{
+  type: 'del'
+  key: '!users!isa', // Prefixed
+  keyEncoding: db.keyEncoding('utf8'),
+  encodedKey: '!users!isa'
+}]
+```
+
+Lastly, newly added `write` event listeners are only called for subsequently created batches (including chained batches):
+
+```js
+const promise = db.batch([{ type: 'del', key: 'abc' }])
+db.on('write', listener) // Too late
+await promise
+```
+
+For the event listener to be called it must be added earlier:
+
+```js
+db.on('write', listener)
+await db.batch([{ type: 'del', key: 'abc' }])
+```
+
+The same is true for `db.put()` and `db.del()`.
+
+#### `clear`
+
+Emitted when a `db.clear()` call completed and entries were thus successfully deleted from the database. Receives a single `options` argument, which is the verbatim `options` argument that was passed to `db.clear(options)` (or an empty object if none) before having encoded range options.
+
+#### `put` (deprecated)
+
+Emitted when a `db.put()` call completed and an entry was thus successfully written to the database. Receives `key` and `value` arguments, which are the verbatim `key` and `value` that were passed to `db.put(key, value)` before having encoded them.
+
+```js
+db.on('put', function (key, value) {
+  console.log('Wrote', key, value)
+})
+```
+
+#### `del` (deprecated)
+
+Emitted when a `db.del()` call completed and an entry was thus successfully deleted from the database. Receives a single `key` argument, which is the verbatim `key` that was passed to `db.del(key)` before having encoded it.
+
+```js
+db.on('del', function (key) {
+  console.log('Deleted', key)
+})
+```
+
+#### `batch` (deprecated)
+
+Emitted when a `db.batch([])` or chained `db.batch().write()` call completed and the data was thus successfully written to the database. Receives a single `operations` argument, which is the verbatim `operations` array that was passed to `db.batch(operations)` before having encoded it, or the equivalent for a chained `db.batch().write()`.
+
+```js
+db.on('batch', function (operations) {
+  for (const op of operations) {
+    if (op.type === 'put') {
+      console.log('Wrote', op.key, op.value)
+    } else {
+      console.log('Deleted', op.key)
+    }
+  }
+})
+```
 
 ### Errors
 
@@ -900,6 +1204,10 @@ When a method, option or other property was used that has been removed from the 
 #### `LEVEL_LOCKED`
 
 When an attempt was made to open a database that is already open in another process or instance. Used by `classic-level` and other implementations of `abstract-level` that use exclusive locks.
+
+#### `LEVEL_HOOK_ERROR`
+
+An error occurred while running a hook function. The error will have a `cause` property set to the original error thrown from the hook function.
 
 #### `LEVEL_READONLY`
 
@@ -1100,7 +1408,7 @@ The default `_del()` invokes `callback` on a next tick. It must be overridden.
 
 Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an array containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. The `_batch()` method will not be called if the `operations` array is empty. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object. If the batch failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
 
-The public `batch()` method supports encoding options both in the `options` argument and per operation. The private `_batch()` method only receives encoding options per operation.
+The public `batch()` method supports encoding options both in the `options` argument and per operation. The private `_batch()` method should only support encoding options per operation, which are guaranteed to be set and to be normalized (the `options` argument in the private API might also contain encoding options but only because it's cheaper to not remove them).
 
 The default `_batch()` invokes `callback` on a next tick. It must be overridden.
 

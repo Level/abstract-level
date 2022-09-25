@@ -58,6 +58,7 @@ test('sublevel is extensible', function (t) {
     open: true,
     closing: true,
     closed: true,
+    write: true,
     put: true,
     del: true,
     batch: true,
