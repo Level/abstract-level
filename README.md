@@ -111,7 +111,7 @@ Close the database. Returns a promise.
 
 A database may have associated resources like file handles and locks. When the database is no longer needed (for the remainder of a program) it's recommended to call `db.close()` to free up resources.
 
-After `db.close()` has been called, no further read & write operations are allowed unless and until `db.open()` is called again. For example, `db.get(key)` will yield an error with code [`LEVEL_DATABASE_NOT_OPEN`](#errors). Any unclosed iterators or chained batches will be closed by `db.close()` and can then no longer be used even when `db.open()` is called again.
+After `db.close()` has been called, no further read & write operations are allowed unless and until `db.open()` is called again. For example, `db.get(key)` will yield an error with code [`LEVEL_DATABASE_NOT_OPEN`](#errors). Any unclosed iterators, snapshots and chained batches will be closed by `db.close()` and can then no longer be used even when `db.open()` is called again.
 
 ### `db.supports`
 
@@ -129,6 +129,7 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
+- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.snapshots` is true, the database will create its own implicit snapshot for this operation.
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
@@ -138,6 +139,7 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
+- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.snapshots` is true, the database will create its own implicit snapshot for this operation.
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
@@ -233,6 +235,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to [abort read operations on the iterator](#aborting-iterators).
+- `snapshot`: explicit [snapshot](#snapshot) for the iterator to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.snapshots` is true, the database will create its own implicit snapshot before returning an iterator.
 
 Lastly, an implementation is free to add its own options.
 
@@ -275,6 +278,7 @@ Delete all entries or a range. Not guaranteed to be atomic. Returns a promise. A
 - `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
 - `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
+- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.snapshots` is true, the database may create its own implicit snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
 
 The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted.
 
@@ -381,6 +385,12 @@ console.log(nested.prefixKey('a', 'utf8')) // '!example!!nested!a'
 console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 ```
 
+### `snapshot = db.snapshot()`
+
+**This is an experimental API and not widely supported at the time of writing.**
+
+Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#errors) error if `db.supports.explicitSnapshots` is not true. For details, see [Reading From Snapshots](#reading-from-snapshots).
+
 ### `db.defer(fn[, options])`
 
 Call the function `fn` at a later time when [`db.status`](#dbstatus) changes to `'open'` or `'closed'`. Known as a _deferred operation_. Used by `abstract-level` itself to implement "deferred open" which is a feature that makes it possible to call methods like `db.put()` before the database has finished opening. The `defer()` method is exposed for implementations and plugins to achieve the same on their custom methods:
@@ -463,8 +473,6 @@ A reference to the database that created this chained batch.
 ### `iterator`
 
 An iterator allows one to lazily read a range of entries stored in the database. The entries will be sorted by keys in [lexicographic order](https://en.wikipedia.org/wiki/Lexicographic_order) (in other words: byte order) which in short means key `'a'` comes before `'b'` and key `'10'` comes before `'2'`.
-
-An iterator reads from a snapshot of the database, created at the time `db.iterator()` was called. This means the iterator will not see the data of simultaneous write operations. Most but not all implementations can offer this guarantee, as indicated by `db.supports.snapshots`.
 
 Iterators can be consumed with [`for await...of`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of) and `iterator.all()`, or by manually calling `iterator.next()` or `nextv()` in succession. In the latter case, `iterator.close()` must always be called. In contrast, finishing, throwing, breaking or returning from a `for await...of` loop automatically calls `iterator.close()`, as does `iterator.all()`.
 
@@ -686,6 +694,18 @@ console.log(nested.path(true)) // ['nested']
 console.log(foo.path()) // ['example', 'nested', 'foo']
 console.log(foo.path(true)) // ['example', 'nested', 'foo']
 ```
+
+### `snapshot`
+
+#### `snapshot.close([callback])`
+
+Free up underlying resources. Be sure to call this when the snapshot is no longer needed, because snapshots may cause the database to temporarily pause internal storage optimizations. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the snapshot is an idempotent operation, such that calling `snapshot.close()` more than once is allowed and makes no difference.
+
+After `snapshot.close()` has been called, no further operations are allowed. For example, `db.get(key, { snapshot })` will yield an error with code [`LEVEL_SNAPSHOT_NOT_OPEN`](#errors). Any unclosed iterators (that use this snapshot) will be closed by `snapshot.close()` and can then no longer be used.
+
+#### `snapshot.db`
+
+A reference to the database that created this snapshot.
 
 ### Hooks
 
@@ -1079,6 +1099,10 @@ When `iterator.next()` or `seek()` was called while a previous `next()` call was
 
 When an operation was made on a chained batch while it was closing or closed, which may also be the result of the database being closed or that `write()` was called on the chained batch.
 
+#### `LEVEL_SNAPSHOT_NOT_OPEN`
+
+When an operation was made on a snapshot while it was closing or closed, which may also be the result of the database being closed.
+
 #### `LEVEL_ABORTED`
 
 When an operation was aborted by the user. For [web compatibility](https://dom.spec.whatwg.org/#aborting-ongoing-activities) this error can also be identified by its `name` which is `'AbortError'`:
@@ -1178,6 +1202,108 @@ When a database relies on a connection to a remote party and that connection has
 
 When a remote party encountered an unexpected condition that it can't reflect with a more specific code. Used by `many-level`.
 
+### Order Of Operations
+
+There is no defined order between parallel write operations. Consider:
+
+```js
+await Promise.all([
+  db.put('example', 1),
+  db.put('example', 2)
+])
+
+const result = await db.get('example')
+```
+
+The value of `result` could be either `1` or `2`, because the `db.put()` calls are asynchronous and awaited in parallel. Some implementations of `abstract-level` may unintentionally exhibit a "defined" order due to internal details. Implementations are free to change such details at any time, because per the asynchronous `abstract-level` interface that they follow, the order is theoretically random.
+
+Removing this concern (if necessary) must be done on an application-level. For example, the application could have a queue of operations, or per-key locks, or implement transactions on top of snapshots, or a versioning mechanism in its keyspace, or specialized data types like CRDT, or just say that conflicts are acceptable for that particular application, and so forth. The abundance of examples should explain why `abstract-level` itself doesn't enter this opinionated and application-specific problem space. Each solution has tradeoffs and `abstract-level`, being the core of a modular database, cannot decide which tradeoff to make.
+
+### Reading From Snapshots
+
+A snapshot is a lightweight "token" that represents the version of a database at a particular point in time. This allows for reading data without seeing subsequent writes made on the database. It comes in two forms:
+
+1. Implicit snapshots: created internally by the database itself and not visible to the outside.
+2. Explicit snapshots: created with `snapshot = db.snapshot()`. Because it acts as a token, `snapshot` has no methods of its own besides `snapshot.close()`. Instead the snapshot is to be passed to database (or [sublevel](#sublevel)) methods like `db.iterator()`.
+
+Use explicit snapshots wisely, because their lifetime must be managed manually. Implicit snapshots are typically more convenient and possibly more performant because they can handled natively and have their lifetime limited by the surrounding operation. That said, explicit snapshots can be useful to make multiple read operations that require a shared, consistent view of the data.
+
+Most but not all `abstract-level` implementations support snapshots. They can be divided into three groups.
+
+#### 1. Implementation does not support snapshots
+
+As indicated by `db.supports.snapshots` being false. In this case, operations read from the latest version of the database. This most noticeably affects iterators:
+
+```js
+await db.put('example', 'a')
+const it = db.iterator()
+await db.del('example')
+const entries = await it.all() // Likely an empty array
+```
+
+#### 2. Implementation supports implicit snapshots
+
+As indicated by `db.supports.snapshots` being true. An iterator, upon creation, will synchronously create a snapshot and subsequently read from that snapshot rather than the latest version of the database. There are no actual numerical versions, but let's say there are in order to clarify the behavior:
+
+```js
+await db.put('example', 'a')   // Results in v1
+const it = db.iterator()       // Creates snapshot of v1
+await db.del('example')        // Results in v2
+const entries = await it.all() // Reads from snapshot and thus v1
+```
+
+The `entries` array thus includes the deleted entry, because the snapshot of the iterator represents the database version from before the entry was deleted.
+
+Other read operations like `db.get()` also use a snapshot. Such calls synchronously create a snapshot and then asynchronously read from it. This means a write operation (to the same key) may not be visible unless awaited:
+
+```js
+await db.put('example', 1) // Awaited
+db.put('example', 2)       // Not awaited
+await db.get('example')    // Yields 1 (typically)
+```
+
+In other words, once a write operation has _finished_ (including having communicated that to the main thread of JavaScript, i.e. by resolving the promise in the above example) subsequent reads are guaranteed to include that data. That's because those reads use a snapshot created in the main thread which is aware of the finished write at this point. Before that point, no guarantee can be given.
+
+#### 3. Implementation supports explicit snapshots
+
+As indicated by `db.supports.explicitSnapshots` being true. This is the most precise and flexible way to control the version of the data to read. The previous example can be modified to get a consistent result:
+
+```js
+await db.put('example', 1)
+const snapshot = db.snapshot()
+db.put('example', 2)
+await db.get('example', { snapshot })) // Yields 1 (always)
+```
+
+The main use case for explicit snapshots is retrieving data from an index.
+
+```js
+// We'll use charwise to encode "compound" keys
+const charwise = require('charwise-compact')
+const players = db.sublevel('players', { valueEncoding: 'json' })
+const index = db.sublevel('scores', { keyEncoding: charwise })
+
+// Write sample data (using an atomic batch so that the index remains in-sync)
+await db.batch()
+  .put('alice', { score: 620 }, { sublevel: players })
+  .put([620, 'alice'], '', { sublevel: index })
+  .write()
+
+// Iterate players that have a score higher than 100
+const snapshot = db.snapshot()
+const iterator = index.keys({ gt: [100, charwise.HI], snapshot })
+
+for await (const key of iterator) {
+  // Index key is [620, 'alice'] so key[1] gives us 'alice'
+  const player = await players.get(key[1], { snapshot })
+}
+
+// Don't forget to close (and try/catch/finally)
+await snapshot.close()
+```
+
+On implementations that support implicit but not explicit snapshots, some of the above can be simulated. In particular, to get multiple entries from a snapshot, one could create an iterator and then repeatedly `seek()` to the desired entries.
+
 ### Shared Access
 
 Unless documented otherwise, implementations of `abstract-level` do _not_ support accessing a database from multiple processes running in parallel. That includes Node.js clusters and Electron renderer processes.
@@ -1195,7 +1321,8 @@ const {
   AbstractIterator,
   AbstractKeyIterator,
   AbstractValueIterator,
-  AbstractChainedBatch
+  AbstractChainedBatch,
+  AbstractSnapshot
 } = require('abstract-level')
 ```
 
@@ -1488,6 +1615,39 @@ class ExampleSublevel extends AbstractSublevel {
 }
 ```
 
+### `snapshot = db._snapshot()`
+
+The default `_snapshot()` throws a [`LEVEL_NOT_SUPPORTED`](#errors) error. To implement this method, extend `AbstractSnapshot`, return an instance of this class in an overridden `_snapshot()` method and set `manifest.explicitSnapshots` to `true`:
+
+```js
+const { AbstractSnapshot } = require('abstract-level')
+
+class ExampleSnapshot extends AbstractSnapshot {
+  constructor (db) {
+    super(db)
+  }
+
+  // ..
+}
+
+class ExampleLevel extends AbstractLevel {
+  constructor (/* ..., */ options) {
+    const manifest = {
+      explicitSnapshots: true,
+      // ...
+    }
+
+    super(manifest, options)
+  }
+
+  _snapshot () {
+    return new ExampleSnapshot(this)
+  }
+}
+```
+
+The snapshot of the underlying database (or other mechanisms to achieve the same effect) must be created synchronously, such that a call like `db.put()` made immediately after `db._snapshot()` will not affect the snapshot. As for previous write operations that are still in progress at the time that `db._snapshot()` is called: `db._snapshot()` does not have to (and should not) wait for such operations. Solving inconsistencies that may arise from this behavior is an application-level concern. To be clear, if the application awaits the write operations before calling `db.snapshot()` then the snapshot does need to reflect (include) those operations.
+
 ### `iterator = AbstractIterator(db, options)`
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it. The `options` argument must be the original `options` object that was passed to `db._iterator()` and it is therefore not (publicly) possible to create an iterator via constructors alone.
@@ -1590,6 +1750,16 @@ Free up underlying resources. This method is guaranteed to only be called once. 
 
 The default `_close()` returns a resolved promise. Overriding is optional.
 
+### `snapshot = AbstractSnapshot(db)`
+
+The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `snapshot.db` which ensures that `db` will not be garbage collected in case there are no other references to it.
+
+#### `snapshot._close(callback)`
+
+Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
+
+The default `_close()` invokes `callback` on a next tick. Overriding is optional.
+
 ## Test Suite
 
 To prove that your implementation is `abstract-level` compliant, include the abstract test suite in your `test.js` (or similar):
@@ -1627,7 +1797,7 @@ suite({
 
 ### Excluding tests
 
-As not every implementation can be fully compliant due to limitations of its underlying storage, some tests may be skipped. This must be done via `db.supports` which is set via the constructor. For example, to skip snapshot tests:
+As not every implementation can be fully compliant due to limitations of its underlying storage, some tests may be skipped. This must be done via `db.supports` which is set via the constructor. For example, to skip tests of implicit snapshots:
 
 ```js
 const { AbstractLevel } = require('abstract-level')
