@@ -15,7 +15,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Install
-        run: npm install
+        run: npm install --ignore-scripts
       - name: Test
         run: npm test
       - name: Coverage

@@ -11,7 +11,6 @@
   "scripts": {
     "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | faucet) && nyc report",
     "test-browsers": "airtap --coverage test/self.js",
-    "test-browsers-local": "airtap --coverage -p local test/self.js",
     "coverage": "nyc report -r lcovonly"
   },
   "files": [
@@ -24,8 +23,7 @@
     "test",
     "types",
     "CHANGELOG.md",
-    "UPGRADING.md",
-    "sauce-labs.svg"
+    "UPGRADING.md"
   ],
   "dependencies": {
     "buffer": "^6.0.3",
@@ -41,7 +39,6 @@
     "@voxpelli/tsconfig": "^4.0.0",
     "airtap": "^4.0.4",
     "airtap-playwright": "^1.0.1",
-    "airtap-sauce": "^1.1.0",
     "faucet": "^0.0.3",
     "hallmark": "^4.0.0",
     "nyc": "^15.1.0",
