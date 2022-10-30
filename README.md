@@ -8,6 +8,7 @@
 [![npm](https://img.shields.io/npm/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Node version](https://img.shields.io/node/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Test](https://img.shields.io/github/workflow/status/Level/abstract-level/Test?label=test)](https://github.com/Level/abstract-level/actions/workflows/test.yml)
+[![Browsers](https://img.shields.io/github/workflow/status/Level/abstract-level/Browsers?label=browsers)](https://github.com/Level/abstract-level/actions/workflows/browsers.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Level/abstract-level?label=\&logo=codecov\&logoColor=fff)](https://codecov.io/gh/Level/abstract-level)
 [![Standard](https://img.shields.io/badge/standard-informational?logo=javascript\&logoColor=fff)](https://standardjs.com)
 [![Common Changelog](https://common-changelog.org/badge.svg)](https://common-changelog.org)
@@ -194,9 +195,7 @@ const xyz = db.sublevel<string, any>('xyz', { valueEncoding: 'json' })
 
 ## Supported Platforms
 
-We aim to support Active LTS and Current Node.js releases as well as browsers. Supported runtime environments may differ per implementation. As far as `abstract-level` goes, the following browsers are supported and continuously tested.
-
-[![Sauce Test Status](https://app.saucelabs.com/browser-matrix/abstract-leveldown.svg)](https://app.saucelabs.com/u/abstract-leveldown)
+We aim to support Active LTS and Current Node.js releases, as well as evergreen browsers that are based on Chromium, Firefox or Webkit. Supported runtime environments may differ per implementation.
 
 ## Public API For Consumers
 
@@ -1425,12 +1424,6 @@ npm install abstract-level
 > Individuals making significant and valuable contributions are given commit-access to the project to contribute as they see fit. This project is more like an open wiki than a standard guarded open source project.
 
 See the [Contribution Guide](https://github.com/Level/community/blob/master/CONTRIBUTING.md) for more details.
-
-## Big Thanks
-
-Cross-browser Testing Platform and Open Source ♥ Provided by [Sauce Labs](https://saucelabs.com).
-
-[![Sauce Labs logo](./sauce-labs.svg)](https://saucelabs.com)
 
 ## Donate
 
