@@ -112,8 +112,15 @@ class AbstractLevel extends EventEmitter {
         keyEncoding: this[kKeyEncoding].commonName,
         valueEncoding: this[kValueEncoding].commonName
       }),
+      entryFormat: Object.freeze({
+        keyEncoding: this[kKeyEncoding].format,
+        valueEncoding: this[kValueEncoding].format
+      }),
       key: Object.freeze({
         keyEncoding: this[kKeyEncoding].commonName
+      }),
+      keyFormat: Object.freeze({
+        keyEncoding: this[kKeyEncoding].format
       })
     }
 
@@ -494,7 +501,12 @@ class AbstractLevel extends EventEmitter {
     const enableWriteEvent = this[kEventMonitor].write
     const original = options
 
-    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+    // Avoid Object.assign() for default options
+    // TODO: benchmark on classic-level
+    // TODO: also apply this tweak to get() and getMany()
+    if (options === this[kDefaultOptions].entry) {
+      options = this[kDefaultOptions].entryFormat
+    } else if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
       options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
 
@@ -564,7 +576,10 @@ class AbstractLevel extends EventEmitter {
     const enableWriteEvent = this[kEventMonitor].write
     const original = options
 
-    if (options.keyEncoding !== keyFormat) {
+    // Avoid Object.assign() for default options
+    if (options === this[kDefaultOptions].key) {
+      options = this[kDefaultOptions].keyFormat
+    } else if (options.keyEncoding !== keyFormat) {
       options = Object.assign({}, options, { keyEncoding: keyFormat })
     }
 
@@ -708,7 +723,6 @@ class AbstractLevel extends EventEmitter {
       if (enableWriteEvent) {
         // Clone op before we mutate it for the private API
         // TODO (future semver-major): consider sending this shape to private API too
-        // TODO: benchmark if spread syntax is also slow in this particular case
         publicOperation = Object.assign({}, op)
 
         if (delegated) {
