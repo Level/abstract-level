@@ -502,7 +502,6 @@ class AbstractLevel extends EventEmitter {
     const original = options
 
     // Avoid Object.assign() for default options
-    // TODO: benchmark on classic-level
     // TODO: also apply this tweak to get() and getMany()
     if (options === this[kDefaultOptions].entry) {
       options = this[kDefaultOptions].entryFormat
