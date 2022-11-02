@@ -87,6 +87,10 @@ module.exports = function (test, testCommon) {
 
     const db = testCommon.factory()
 
+    // Note: may return a transcoder encoding
+    const utf8 = db.keyEncoding('utf8')
+    const json = db.valueEncoding('json')
+
     db.hooks.prewrite.add(function (op, batch) {
       batch.add({
         type: 'put',
@@ -104,8 +108,8 @@ module.exports = function (test, testCommon) {
           value: 'boop',
           keyEncoding: db.keyEncoding('utf8'),
           valueEncoding: db.valueEncoding('utf8'),
-          encodedKey: 'beep',
-          encodedValue: 'boop'
+          encodedKey: utf8.encode('beep'),
+          encodedValue: utf8.encode('boop')
         },
         {
           type: 'put',
@@ -113,8 +117,8 @@ module.exports = function (test, testCommon) {
           value: { abc: 123 },
           keyEncoding: db.keyEncoding('utf8'),
           valueEncoding: db.valueEncoding('json'),
-          encodedKey: 'from-hook',
-          encodedValue: '{"abc":123}'
+          encodedKey: utf8.encode('from-hook'),
+          encodedValue: json.encode({ abc: 123 })
         }
       ])
     })

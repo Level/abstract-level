@@ -309,6 +309,8 @@ exports.events = function (test, testCommon) {
     t.plan(2)
 
     const db = testCommon.factory()
+
+    // Note: may return a transcoder encoding
     const utf8 = db.keyEncoding('utf8')
     await db.open()
 
@@ -323,8 +325,8 @@ exports.events = function (test, testCommon) {
           custom: 123,
           keyEncoding: utf8,
           valueEncoding: utf8,
-          encodedKey: '456',
-          encodedValue: '99'
+          encodedKey: utf8.encode(456),
+          encodedValue: utf8.encode(99)
         }
       ])
     })
