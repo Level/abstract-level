@@ -494,7 +494,10 @@ export interface AbstractClearOptions<K> extends RangeOptions<K> {
  *
  * @template TDatabase Type of database.
  */
-export interface AbstractDatabaseHooks<TDatabase, TOpenOptions = AbstractOpenOptions> {
+export interface AbstractDatabaseHooks<
+  TDatabase,
+  TOpenOptions = AbstractOpenOptions,
+  TBatchOperation = AbstractBatchOperation<TDatabase, any, any>> {
   /**
    * An asynchronous hook that runs after the database has succesfully opened, but before
    * deferred operations are executed and before events are emitted. Example:
@@ -516,9 +519,9 @@ export interface AbstractDatabaseHooks<TDatabase, TOpenOptions = AbstractOpenOpt
    * })
    * ```
    *
-   * @todo Define types of `op` and `batch`.
+   * @todo Define type of `op`.
    */
-  prewrite: AbstractHook<(op: any, batch: any) => void>
+  prewrite: AbstractHook<(op: any, batch: AbstractPrewriteBatch<TBatchOperation>) => void>
 
   /**
    * A synchronous hook that runs when an {@link AbstractSublevel} instance has been
@@ -528,6 +531,17 @@ export interface AbstractDatabaseHooks<TDatabase, TOpenOptions = AbstractOpenOpt
     sublevel: AbstractSublevel<TDatabase, any, any, any>,
     options: AbstractSublevelOptions<any, any>
   ) => void>
+}
+
+/**
+ * An interface for prewrite hook functions to add operations, to be committed in the
+ * same batch as the input operation(s).
+ */
+export interface AbstractPrewriteBatch<TBatchOperation> {
+  /**
+   * Add a batch operation.
+   */
+  add: (op: TBatchOperation) => this
 }
 
 /**
