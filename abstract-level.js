@@ -697,6 +697,10 @@ class AbstractLevel extends EventEmitter {
       if (enablePrewriteHook) {
         try {
           this.hooks.prewrite.run(op, prewriteBatch)
+
+          // Normalize encodings again in case they were modified
+          op.keyEncoding = db.keyEncoding(op.keyEncoding)
+          if (isPut) op.valueEncoding = db.valueEncoding(op.valueEncoding)
         } catch (err) {
           this.nextTick(callback, new ModuleError('The prewrite hook failed on batch()', {
             code: 'LEVEL_HOOK_ERROR',

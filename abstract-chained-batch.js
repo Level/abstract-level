@@ -51,7 +51,7 @@ class AbstractChainedBatch {
 
       this[kPrewriteData] = data
       this[kPrewriteBatch] = new PrewriteBatch(db, data[kPrivateOperations], data[kPublicOperations])
-      this[kPrewriteRun] = db.hooks.prewrite.run // TODO: document why, and test
+      this[kPrewriteRun] = db.hooks.prewrite.run // TODO: document why
     } else {
       this[kPrewriteData] = null
       this[kPrewriteBatch] = null
@@ -103,6 +103,10 @@ class AbstractChainedBatch {
         // more than one operation at a time. On the other hand, if operations added by
         // hook functions are adjacent (i.e. sorted) committing them should be faster.
         this[kPrewriteRun](op, this[kPrewriteBatch])
+
+        // Normalize encodings again in case they were modified
+        op.keyEncoding = db.keyEncoding(op.keyEncoding)
+        op.valueEncoding = db.valueEncoding(op.valueEncoding)
       } catch (err) {
         throw new ModuleError('The prewrite hook failed on batch.put()', {
           code: 'LEVEL_HOOK_ERROR',
@@ -191,6 +195,9 @@ class AbstractChainedBatch {
     if (this[kPrewriteRun] !== null) {
       try {
         this[kPrewriteRun](op, this[kPrewriteBatch])
+
+        // Normalize encoding again in case it was modified
+        op.keyEncoding = db.keyEncoding(op.keyEncoding)
       } catch (err) {
         throw new ModuleError('The prewrite hook failed on batch.del()', {
           code: 'LEVEL_HOOK_ERROR',
