@@ -88,7 +88,12 @@ module.exports = function (test, testCommon) {
     const db = testCommon.factory()
 
     db.hooks.prewrite.add(function (op, batch) {
-      batch.put('from-hook', { abc: 123 }, { valueEncoding: 'json' })
+      batch.add({
+        type: 'put',
+        key: 'from-hook',
+        value: { abc: 123 },
+        valueEncoding: 'json'
+      })
     })
 
     db.on('write', function (ops) {

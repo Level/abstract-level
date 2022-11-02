@@ -70,6 +70,7 @@
       - [Arguments](#arguments)
         - [`op` (object)](#op-object)
         - [`batch` (object)](#batch-object)
+        - [`batch = batch.add(op)`](#batch--batchaddop)
     - [`hook = db.hooks.postopen`](#hook--dbhookspostopen)
       - [Example](#example-1)
       - [Arguments](#arguments-1)
@@ -772,7 +773,7 @@ await books.put('12', { title: 'Siddhartha', author: 'Hesse' })
 
 ###### `op` (object)
 
-The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from `db.batch(operations)`) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
+The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from [`db.batch([])`](#db_batchoperations-options-callback)) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
 
 The `key` and `value` have not yet been encoded at this point. The `keyEncoding` and `valueEncoding` properties are always encoding objects (rather than encoding names like `'json'`) which means hook functions can call (for example) `op.keyEncoding.encode(123)`.
 
@@ -780,13 +781,13 @@ Hook functions can modify the `key`, `value`, `keyEncoding` and `valueEncoding` 
 
 ###### `batch` (object)
 
-The `batch` argument of the hook function is a ~~subset of the [chained batch](#chainedbatch) API with only `put()` and `del()` methods~~. The presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch, so that hook functions can add more operations to that batch. The hook function thus doesn't have to care whether the input came from `db.batch()`, `db.put()` or other.
+The `batch` argument of the hook function is an interface to add operations, to be committed in the same batch as the input operation(s). This also works if the originating call was a singular operation like `db.put()` because the presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch. For originating calls like [`db.batch([])`](#dbbatchoperations-options-callback) that provide multiple input operations, operations will be added after the last input operation, rather than interleaving. The hook function will not be called for operations that were added by either itself or other hook functions.
 
-For hook functions to be generic, it is recommended to explicitly define a `keyEncoding` and `valueEncoding` on operations (instead of relying on database defaults) or to use an isolated sublevel with known defaults. Operations added by hook functions will be processed after all of the input operations (rather than interleaving). It is assumed that such operations can be freely mutated by `abstract-level`. Unlike input operations they will not be cloned before doing so.
+###### `batch = batch.add(op)`
 
-Because the `batch` argument follows the chained batch API, its methods also take a `sublevel` option. This is useful to atomically commit data to another sublevel and to encode that data via the sublevel (meaning to respect its default encoding, which in the above example is `charwise-compact` for keys of the `index` sublevel). For further details please see [chained batch](#chainedbatch).
+Add a batch operation, using the same format as the operations that [`db.batch([])`](#dbbatchoperations-options-callback) takes. However, it is assumed that `op` can be freely mutated by `abstract-level`. Unlike input operations it will not be cloned before doing so. The `add` method returns `batch` which allows for chaining, similar to the [chained batch](#chainedbatch) API.
 
-The hook function will not be called for batch operations that were added by either itself or other hook functions.
+For hook functions to be generic, it is recommended to explicitly define `keyEncoding` and `valueEncoding` properties on `op` (instead of relying on database defaults) or to use an isolated sublevel with known defaults.
 
 #### `hook = db.hooks.postopen`
 
