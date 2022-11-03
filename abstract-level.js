@@ -731,6 +731,7 @@ class AbstractLevel extends EventEmitter {
 
         if (delegated) {
           // Ensure emitted data makes sense in the context of this db
+          // TODO: it doesn't if this db is itself a sublevel
           publicOperation.key = prefixedKey
           publicOperation.keyEncoding = this.keyEncoding(keyFormat)
           publicOperation.encodedKey = prefixedKey

@@ -6,382 +6,551 @@ module.exports = function (test, testCommon) {
   shared(test, testCommon, 'prewrite')
 
   for (const deferred of [false, true]) {
-    test(`prewrite hook function receives put op (deferred: ${deferred})`, async function (t) {
-      t.plan(3)
+    for (const type of ['put', 'del']) {
+      for (const method of ['batch', 'chained batch', 'singular']) {
+        test(`prewrite hook function is called after open (deferred: ${deferred})`, async function (t) {
+          t.plan(1)
 
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
+          const db = testCommon.factory()
+          if (!deferred) await db.open()
 
-      db.hooks.prewrite.add(function (op, batch) {
-        t.same(op, {
+          db.hooks.prewrite.add(function (op, batch) {
+            t.is(db.status, 'open')
+          })
+
+          if (type === 'put') {
+            switch (method) {
+              case 'batch':
+                await db.batch([{ type: 'put', key: 'beep', value: 'boop' }])
+                break
+              case 'chained batch':
+                // Does not support deferred open
+                await db.open()
+                await db.batch().put('beep', 'boop').write()
+                break
+              case 'singular':
+                await db.put('beep', 'boop')
+                break
+            }
+          } else if (type === 'del') {
+            switch (method) {
+              case 'batch':
+                await db.batch([{ type: 'del', key: 'beep' }])
+                break
+              case 'chained batch':
+                // Does not support deferred open
+                await db.open()
+                await db.batch().del('beep').write()
+                break
+              case 'singular':
+                await db.del('beep')
+                break
+            }
+          }
+
+          return db.close()
+        })
+      }
+    }
+  }
+
+  test('prewrite hook function receives put op', async function (t) {
+    t.plan(3)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.same(op, {
+        type: 'put',
+        key: 'beep',
+        value: 'boop',
+        keyEncoding: db.keyEncoding('utf8'),
+        valueEncoding: db.valueEncoding('utf8')
+      })
+    })
+
+    await db.put('beep', 'boop')
+    await db.batch([{ type: 'put', key: 'beep', value: 'boop' }])
+    await db.batch().put('beep', 'boop').write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function receives del op', async function (t) {
+    t.plan(3)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.same(op, {
+        type: 'del',
+        key: 'beep',
+        keyEncoding: db.keyEncoding('utf8')
+      })
+    })
+
+    await db.del('beep')
+    await db.batch([{ type: 'del', key: 'beep' }])
+    await db.batch().del('beep').write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function receives put op with custom encodings and userland option', async function (t) {
+    t.plan(3)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.same(op, {
+        type: 'put',
+        key: 123, // Should not be JSON-encoded
+        value: 'boop',
+        keyEncoding: db.keyEncoding('json'),
+        valueEncoding: db.valueEncoding('json'),
+        userland: 456
+      })
+    })
+
+    await db.put(123, 'boop', { keyEncoding: 'json', valueEncoding: 'json', userland: 456 })
+    await db.batch([{ type: 'put', key: 123, value: 'boop', keyEncoding: 'json', valueEncoding: 'json', userland: 456 }])
+    await db.batch().put(123, 'boop', { keyEncoding: 'json', valueEncoding: 'json', userland: 456 }).write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function receives del op with custom encodings and userland option', async function (t) {
+    t.plan(3)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.same(op, {
+        type: 'del',
+        key: 123, // Should not be JSON-encoded
+        keyEncoding: db.keyEncoding('json'),
+        userland: 456
+      })
+    })
+
+    await db.del(123, { keyEncoding: 'json', userland: 456 })
+    await db.batch([{ type: 'del', key: 123, keyEncoding: 'json', userland: 456 }])
+    await db.batch().del(123, { keyEncoding: 'json', userland: 456 }).write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function can modify put operation', async function (t) {
+    t.plan(10 * 3)
+
+    const db = testCommon.factory({ keyEncoding: 'json', valueEncoding: 'utf8' })
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.is(op.keyEncoding, db.keyEncoding('json'))
+      t.is(op.valueEncoding, db.valueEncoding('utf8'))
+
+      op.key = '456'
+      op.value = { x: 1 }
+
+      // Flip the encodings
+      op.keyEncoding = 'utf8'
+      op.valueEncoding = 'json'
+
+      // Test adding a userland option
+      op.userland = 456
+    })
+
+    db.on('write', function (ops) {
+      t.is(ops.length, 1)
+      t.is(ops[0].key, '456')
+      t.same(ops[0].value, { x: 1 })
+      t.is(ops[0].keyEncoding, db.keyEncoding('utf8'))
+      t.is(ops[0].valueEncoding, db.valueEncoding('json'))
+      t.same(ops[0].encodedKey, db.keyEncoding('utf8').encode('456'))
+      t.same(ops[0].encodedValue, db.valueEncoding('json').encode({ x: 1 }))
+      t.is(ops[0].userland, 456)
+    })
+
+    await db.put(123, 'boop')
+    await db.batch([{ type: 'put', key: 123, value: 'boop' }])
+    await db.batch().put(123, 'boop').write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function can modify del operation', async function (t) {
+    t.plan(6 * 3)
+
+    const db = testCommon.factory({ keyEncoding: 'json' })
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.is(op.keyEncoding, db.keyEncoding('json'))
+
+      op.key = '456'
+      op.keyEncoding = 'utf8'
+
+      // Test adding a userland option
+      op.userland = 456
+    })
+
+    db.on('write', function (ops) {
+      t.is(ops.length, 1)
+      t.is(ops[0].key, '456')
+      t.is(ops[0].keyEncoding, db.keyEncoding('utf8'))
+      t.same(ops[0].encodedKey, db.keyEncoding('utf8').encode('456'))
+      t.is(ops[0].userland, 456)
+    })
+
+    await db.del(123)
+    await db.batch([{ type: 'del', key: 123 }])
+    await db.batch().del(123).write()
+
+    return db.close()
+  })
+
+  test('second prewrite hook function sees modified operation of first', async function (t) {
+    t.plan(6 * 2)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.is(op.key, '1')
+      op.key = '2'
+    })
+
+    db.hooks.prewrite.add(function (op, batch) {
+      t.is(op.key, '2')
+    })
+
+    await db.put('1', 'boop')
+    await db.batch([{ type: 'put', key: '1', value: 'boop' }])
+    await db.batch().put('1', 'boop').write()
+
+    await db.del('1')
+    await db.batch([{ type: 'del', key: '1' }])
+    await db.batch().del('1').write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function triggered by put can add put operation', async function (t) {
+    t.plan(3)
+
+    const db = testCommon.factory()
+
+    // Note: may return a transcoder encoding
+    const utf8 = db.keyEncoding('utf8')
+    const json = db.valueEncoding('json')
+
+    db.hooks.prewrite.add(function (op, batch) {
+      batch.add({
+        type: 'put',
+        key: 'from-hook',
+        value: { abc: 123 },
+        valueEncoding: 'json'
+      })
+    })
+
+    db.on('write', function (ops) {
+      t.same(ops, [
+        {
           type: 'put',
           key: 'beep',
           value: 'boop',
           keyEncoding: db.keyEncoding('utf8'),
-          valueEncoding: db.valueEncoding('utf8')
-        })
-      })
-
-      await db.put('beep', 'boop')
-      await db.batch([{ type: 'put', key: 'beep', value: 'boop' }])
-      await db.batch().put('beep', 'boop').write()
-
-      return db.close()
-    })
-
-    test(`prewrite hook function receives del op (deferred: ${deferred})`, async function (t) {
-      t.plan(3)
-
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
-
-      db.hooks.prewrite.add(function (op, batch) {
-        t.same(op, {
-          type: 'del',
-          key: 'beep',
-          keyEncoding: db.keyEncoding('utf8')
-        })
-      })
-
-      await db.del('beep')
-      await db.batch([{ type: 'del', key: 'beep' }])
-      await db.batch().del('beep').write()
-
-      return db.close()
-    })
-
-    test(`prewrite hook function receives put op with custom encodings and userland option (deferred: ${deferred})`, async function (t) {
-      t.plan(3)
-
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
-
-      db.hooks.prewrite.add(function (op, batch) {
-        t.same(op, {
-          type: 'put',
-          key: 123, // Should not be JSON-encoded
-          value: 'boop',
-          keyEncoding: db.keyEncoding('json'),
-          valueEncoding: db.valueEncoding('json'),
-          userland: 456
-        })
-      })
-
-      await db.put(123, 'boop', { keyEncoding: 'json', valueEncoding: 'json', userland: 456 })
-      await db.batch([{ type: 'put', key: 123, value: 'boop', keyEncoding: 'json', valueEncoding: 'json', userland: 456 }])
-      await db.batch().put(123, 'boop', { keyEncoding: 'json', valueEncoding: 'json', userland: 456 }).write()
-
-      return db.close()
-    })
-
-    test(`prewrite hook function receives del op with custom encodings and userland option (deferred: ${deferred})`, async function (t) {
-      t.plan(3)
-
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
-
-      db.hooks.prewrite.add(function (op, batch) {
-        t.same(op, {
-          type: 'del',
-          key: 123, // Should not be JSON-encoded
-          keyEncoding: db.keyEncoding('json'),
-          userland: 456
-        })
-      })
-
-      await db.del(123, { keyEncoding: 'json', userland: 456 })
-      await db.batch([{ type: 'del', key: 123, keyEncoding: 'json', userland: 456 }])
-      await db.batch().del(123, { keyEncoding: 'json', userland: 456 }).write()
-
-      return db.close()
-    })
-
-    test(`prewrite hook function can modify put operation (deferred: ${deferred})`, async function (t) {
-      t.plan(10 * 3)
-
-      const db = testCommon.factory({ keyEncoding: 'json', valueEncoding: 'utf8' })
-      if (!deferred) await db.open()
-
-      db.hooks.prewrite.add(function (op, batch) {
-        t.is(op.keyEncoding, db.keyEncoding('json'))
-        t.is(op.valueEncoding, db.valueEncoding('utf8'))
-
-        op.key = '456'
-        op.value = { x: 1 }
-
-        // Flip the encodings
-        op.keyEncoding = 'utf8'
-        op.valueEncoding = 'json'
-
-        // Test adding a userland option
-        op.userland = 456
-      })
-
-      db.on('write', function (ops) {
-        t.is(ops.length, 1)
-        t.is(ops[0].key, '456')
-        t.same(ops[0].value, { x: 1 })
-        t.is(ops[0].keyEncoding, db.keyEncoding('utf8'))
-        t.is(ops[0].valueEncoding, db.valueEncoding('json'))
-        t.same(ops[0].encodedKey, db.keyEncoding('utf8').encode('456'))
-        t.same(ops[0].encodedValue, db.valueEncoding('json').encode({ x: 1 }))
-        t.is(ops[0].userland, 456)
-      })
-
-      await db.put(123, 'boop')
-      await db.batch([{ type: 'put', key: 123, value: 'boop' }])
-      await db.batch().put(123, 'boop').write()
-
-      return db.close()
-    })
-
-    test(`prewrite hook function can modify del operation (deferred: ${deferred})`, async function (t) {
-      t.plan(6 * 3)
-
-      const db = testCommon.factory({ keyEncoding: 'json' })
-      if (!deferred) await db.open()
-
-      db.hooks.prewrite.add(function (op, batch) {
-        t.is(op.keyEncoding, db.keyEncoding('json'))
-
-        op.key = '456'
-        op.keyEncoding = 'utf8'
-
-        // Test adding a userland option
-        op.userland = 456
-      })
-
-      db.on('write', function (ops) {
-        t.is(ops.length, 1)
-        t.is(ops[0].key, '456')
-        t.is(ops[0].keyEncoding, db.keyEncoding('utf8'))
-        t.same(ops[0].encodedKey, db.keyEncoding('utf8').encode('456'))
-        t.is(ops[0].userland, 456)
-      })
-
-      await db.del(123)
-      await db.batch([{ type: 'del', key: 123 }])
-      await db.batch().del(123).write()
-
-      return db.close()
-    })
-
-    test(`prewrite hook function triggered by put can add operations (deferred: ${deferred})`, async function (t) {
-      t.plan(3)
-
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
-
-      // Note: may return a transcoder encoding
-      const utf8 = db.keyEncoding('utf8')
-      const json = db.valueEncoding('json')
-
-      db.hooks.prewrite.add(function (op, batch) {
-        batch.add({
+          valueEncoding: db.valueEncoding('utf8'),
+          encodedKey: utf8.encode('beep'),
+          encodedValue: utf8.encode('boop')
+        },
+        {
           type: 'put',
           key: 'from-hook',
           value: { abc: 123 },
-          valueEncoding: 'json'
-        })
-      })
-
-      db.on('write', function (ops) {
-        t.same(ops, [
-          {
-            type: 'put',
-            key: 'beep',
-            value: 'boop',
-            keyEncoding: db.keyEncoding('utf8'),
-            valueEncoding: db.valueEncoding('utf8'),
-            encodedKey: utf8.encode('beep'),
-            encodedValue: utf8.encode('boop')
-          },
-          {
-            type: 'put',
-            key: 'from-hook',
-            value: { abc: 123 },
-            keyEncoding: db.keyEncoding('utf8'),
-            valueEncoding: db.valueEncoding('json'),
-            encodedKey: utf8.encode('from-hook'),
-            encodedValue: json.encode({ abc: 123 })
-          }
-        ])
-      })
-
-      await db.put('beep', 'boop')
-      await db.batch([{ type: 'put', key: 'beep', value: 'boop' }])
-      await db.batch().put('beep', 'boop').write()
-
-      return db.close()
+          keyEncoding: db.keyEncoding('utf8'),
+          valueEncoding: db.valueEncoding('json'),
+          encodedKey: utf8.encode('from-hook'),
+          encodedValue: json.encode({ abc: 123 })
+        }
+      ])
     })
 
-    test(`prewrite hook function triggered by del can add operations (deferred: ${deferred})`, async function (t) {
-      t.plan(3)
+    await db.put('beep', 'boop')
+    await db.batch([{ type: 'put', key: 'beep', value: 'boop' }])
+    await db.batch().put('beep', 'boop').write()
 
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
+    return db.close()
+  })
 
-      // Note: may return a transcoder encoding
-      const utf8 = db.keyEncoding('utf8')
+  test('prewrite hook function triggered by del can add del operation', async function (t) {
+    t.plan(3)
 
-      db.hooks.prewrite.add(function (op, batch) {
-        batch.add({ type: 'del', key: 'from-hook' })
-      })
+    const db = testCommon.factory()
 
-      db.on('write', function (ops) {
-        t.same(ops, [
-          {
-            type: 'del',
-            key: 'beep',
-            keyEncoding: db.keyEncoding('utf8'),
-            encodedKey: utf8.encode('beep')
-          },
-          {
-            type: 'del',
-            key: 'from-hook',
-            keyEncoding: db.keyEncoding('utf8'),
-            encodedKey: utf8.encode('from-hook')
-          }
-        ])
-      })
+    // Note: may return a transcoder encoding
+    const utf8 = db.keyEncoding('utf8')
 
-      await db.del('beep')
-      await db.batch([{ type: 'del', key: 'beep' }])
-      await db.batch().del('beep').write()
-
-      return db.close()
+    db.hooks.prewrite.add(function (op, batch) {
+      batch.add({ type: 'del', key: 'from-hook' })
     })
 
-    test(`prewrite hook function is called once for every input operation (deferred: ${deferred})`, async function (t) {
-      t.plan(2)
-
-      const calls = []
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
-
-      db.hooks.prewrite.add(function (op, batch) {
-        calls.push(op.key)
-      })
-
-      await db.batch([{ type: 'del', key: '1' }, { type: 'put', key: '2', value: '123' }])
-      t.same(calls.splice(0, calls.length), ['1', '2'])
-
-      await db.batch().del('1').put('2', '123').write()
-      t.same(calls.splice(0, calls.length), ['1', '2'])
-
-      return db.close()
+    db.on('write', function (ops) {
+      t.same(ops, [
+        {
+          type: 'del',
+          key: 'beep',
+          keyEncoding: db.keyEncoding('utf8'),
+          encodedKey: utf8.encode('beep')
+        },
+        {
+          type: 'del',
+          key: 'from-hook',
+          keyEncoding: db.keyEncoding('utf8'),
+          encodedKey: utf8.encode('from-hook')
+        }
+      ])
     })
 
-    test(`prewrite hook adds operations after input operations (deferred: ${deferred})`, async function (t) {
-      t.plan(2)
+    await db.del('beep')
+    await db.batch([{ type: 'del', key: 'beep' }])
+    await db.batch().del('beep').write()
 
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
+    return db.close()
+  })
 
-      db.hooks.prewrite.add(function (op, batch) {
-        if (op.key === 'input1') {
-          batch
-            .add({ type: 'del', key: 'hook1' })
-            .add({ type: 'del', key: 'hook2' })
-            .add({ type: 'put', key: 'hook3', value: 'foo' })
+  test('prewrite hook function can add operations with sublevel option', async function (t) {
+    t.plan(2 * 6)
+
+    const db = testCommon.factory()
+    const sublevel = db.sublevel('sub', { keyEncoding: 'json', valueEncoding: 'json' })
+
+    // Note: may return a transcoder encoding
+    const utf8 = db.keyEncoding('utf8')
+
+    db.hooks.prewrite.add(function (op, batch) {
+      batch.add({ type: 'put', key: 'from-hook-1', value: { x: 22 }, sublevel })
+      batch.add({ type: 'del', key: 'from-hook-2', sublevel })
+    })
+
+    db.on('write', function (ops) {
+      t.is(ops[0].key, 'from-input')
+      t.same(ops.slice(1), [
+        {
+          type: 'put',
+          key: db.prefixKey(utf8.encode('!sub!"from-hook-1"'), utf8.format), // bug
+          value: utf8.encode('{"x":22}'),
+          keyEncoding: db.keyEncoding(sublevel.keyEncoding().format),
+          valueEncoding: db.valueEncoding(sublevel.valueEncoding().format),
+          encodedKey: db.prefixKey(utf8.encode('!sub!"from-hook-1"'), utf8.format), // bug
+          encodedValue: utf8.encode('{"x":22}'),
+          sublevel: null // Should be unset
+        },
+        {
+          type: 'del',
+          key: db.prefixKey(utf8.encode('!sub!"from-hook-2"'), utf8.format), // bug
+          keyEncoding: db.keyEncoding(sublevel.keyEncoding().format),
+          encodedKey: db.prefixKey(utf8.encode('!sub!"from-hook-2"'), utf8.format), // bug
+          sublevel: null // Should be unset
+        }
+      ])
+    })
+
+    await db.put('from-input', 'abc')
+    await db.batch([{ type: 'put', key: 'from-input', value: 'abc' }])
+    await db.batch().put('from-input', 'abc').write()
+
+    await db.del('from-input')
+    await db.batch([{ type: 'del', key: 'from-input' }])
+    await db.batch().del('from-input').write()
+
+    return db.close()
+  })
+
+  test('db catches invalid operations added by prewrite hook function', async function (t) {
+    const db = testCommon.factory()
+    const errEncoding = {
+      name: 'test',
+      format: 'utf8',
+      encode () {
+        throw new Error()
+      },
+      decode () {
+        throw new Error()
+      }
+    }
+
+    const hookFunctions = [
+      (op, batch) => batch.add(),
+      (op, batch) => batch.add({}),
+      (op, batch) => batch.add({ type: 'del' }),
+      (op, batch) => batch.add({ type: 'del', key: null }),
+      (op, batch) => batch.add({ type: 'del', key: undefined }),
+      (op, batch) => batch.add({ type: 'put', key: 'a' }),
+      (op, batch) => batch.add({ type: 'put', key: 'a', value: null }),
+      (op, batch) => batch.add({ type: 'put', key: 'a', value: undefined }),
+      (op, batch) => batch.add({ type: 'nope', key: 'a', value: 'b' }),
+      (op, batch) => batch.add({ type: 'del', key: 'a', keyEncoding: errEncoding }),
+      (op, batch) => batch.add({ type: 'put', key: 'a', value: 'b', keyEncoding: errEncoding }),
+      (op, batch) => batch.add({ type: 'put', key: 'a', value: 'b', valueEncoding: errEncoding })
+    ]
+
+    const triggers = [
+      () => db.put('beep', 'boop'),
+      () => db.batch([{ type: 'put', key: 'beep', value: 'boop' }]),
+      () => db.batch().put('beep', 'boop').write(),
+      () => db.del('beep'),
+      () => db.batch([{ type: 'del', key: 'beep' }]),
+      () => db.batch().del('beep').write()
+    ]
+
+    t.plan(hookFunctions.length * triggers.length * 2)
+
+    db.on('write', function (ops) {
+      t.fail('should not write')
+    })
+
+    for (const trigger of triggers) {
+      for (const fn of hookFunctions) {
+        db.hooks.prewrite.add(fn)
+
+        try {
+          await trigger()
+        } catch (err) {
+          t.is(err.code, 'LEVEL_HOOK_ERROR')
+        }
+
+        db.hooks.prewrite.delete(fn)
+        t.is(db.hooks.prewrite.noop, true)
+      }
+    }
+
+    return db.close()
+  })
+
+  test('prewrite hook function is called once for every input operation', async function (t) {
+    t.plan(2)
+
+    const calls = []
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      calls.push(op.key)
+    })
+
+    await db.batch([{ type: 'del', key: '1' }, { type: 'put', key: '2', value: '123' }])
+    t.same(calls.splice(0, calls.length), ['1', '2'])
+
+    await db.batch().del('1').put('2', '123').write()
+    t.same(calls.splice(0, calls.length), ['1', '2'])
+
+    return db.close()
+  })
+
+  test('prewrite hook adds operations after input operations', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      if (op.key === 'input1') {
+        batch
+          .add({ type: 'del', key: 'hook1' })
+          .add({ type: 'del', key: 'hook2' })
+          .add({ type: 'put', key: 'hook3', value: 'foo' })
+      }
+    })
+
+    db.on('write', function (ops) {
+      t.same(ops.map(op => op.key), [
+        'input1', 'input2', 'hook1', 'hook2', 'hook3'
+      ], 'order is correct')
+    })
+
+    await db.batch([{ type: 'del', key: 'input1' }, { type: 'put', key: 'input2', value: '123' }])
+    await db.batch().del('input1').put('input2', '123').write()
+
+    return db.close()
+  })
+
+  test('prewrite hook does not copy input options to added operations', async function (t) {
+    t.plan(6)
+
+    const db = testCommon.factory()
+
+    db.hooks.prewrite.add(function (op, batch) {
+      batch.add({ type: 'put', key: 'from-hook-a', value: 'xyz' })
+      batch.add({ type: 'del', key: 'from-hook-b' })
+    })
+
+    db.on('write', function (ops) {
+      const relevant = ops.map(op => {
+        return {
+          key: op.key,
+          hasOption: 'userland' in op,
+          keyEncoding: op.keyEncoding.commonName
         }
       })
 
-      db.on('write', function (ops) {
-        t.same(ops.map(op => op.key), [
-          'input1', 'input2', 'hook1', 'hook2', 'hook3'
-        ], 'order is correct')
-      })
-
-      await db.batch([{ type: 'del', key: 'input1' }, { type: 'put', key: 'input2', value: '123' }])
-      await db.batch().del('input1').put('input2', '123').write()
-
-      return db.close()
+      t.same(relevant, [
+        {
+          key: 'input-a',
+          keyEncoding: 'json',
+          hasOption: true
+        },
+        {
+          key: 'from-hook-a',
+          keyEncoding: 'utf8', // Should be the database default (2x)
+          hasOption: false
+        },
+        {
+          key: 'from-hook-b',
+          keyEncoding: 'utf8',
+          hasOption: false
+        }
+      ])
     })
 
-    test(`prewrite hook does not copy input options to added operations (deferred: ${deferred})`, async function (t) {
-      t.plan(6)
+    await db.put('input-a', 'boop', { keyEncoding: 'json', userland: 123 })
+    await db.batch([{ type: 'put', key: 'input-a', value: 'boop', keyEncoding: 'json', userland: 123 }])
+    await db.batch().put('input-a', 'boop', { keyEncoding: 'json', userland: 123 }).write()
 
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
+    await db.del('input-a', { keyEncoding: 'json', userland: 123 })
+    await db.batch([{ type: 'del', key: 'input-a', keyEncoding: 'json', userland: 123 }])
+    await db.batch().del('input-a', { keyEncoding: 'json', userland: 123 }).write()
 
-      db.hooks.prewrite.add(function (op, batch) {
-        batch.add({ type: 'put', key: 'from-hook-a', value: 'xyz' })
-        batch.add({ type: 'del', key: 'from-hook-b' })
-      })
+    return db.close()
+  })
 
-      db.on('write', function (ops) {
-        const relevant = ops.map(op => {
-          return {
-            key: op.key,
-            hasOption: 'userland' in op,
-            keyEncoding: op.keyEncoding.commonName
-          }
-        })
+  test('error thrown from prewrite hook function is catched', async function (t) {
+    t.plan(6 * 2)
 
-        t.same(relevant, [
-          {
-            key: 'input-a',
-            keyEncoding: 'json',
-            hasOption: true
-          },
-          {
-            key: 'from-hook-a',
-            keyEncoding: 'utf8', // Should be the database default (2x)
-            hasOption: false
-          },
-          {
-            key: 'from-hook-b',
-            keyEncoding: 'utf8',
-            hasOption: false
-          }
-        ])
-      })
+    const db = testCommon.factory()
 
-      await db.put('input-a', 'boop', { keyEncoding: 'json', userland: 123 })
-      await db.batch([{ type: 'put', key: 'input-a', value: 'boop', keyEncoding: 'json', userland: 123 }])
-      await db.batch().put('input-a', 'boop', { keyEncoding: 'json', userland: 123 }).write()
-
-      await db.del('input-a', { keyEncoding: 'json', userland: 123 })
-      await db.batch([{ type: 'del', key: 'input-a', keyEncoding: 'json', userland: 123 }])
-      await db.batch().del('input-a', { keyEncoding: 'json', userland: 123 }).write()
-
-      return db.close()
+    db.hooks.prewrite.add(function (op, batch) {
+      throw new Error('test')
     })
 
-    test(`error thrown from prewrite hook function is catched (deferred: ${deferred})`, async function (t) {
-      t.plan(6 * 2)
+    const verify = (err) => {
+      t.is(err.code, 'LEVEL_HOOK_ERROR')
+      t.is(err.cause.message, 'test')
+    }
 
-      const db = testCommon.factory()
-      if (!deferred) await db.open()
+    await db.batch([{ type: 'del', key: '1' }]).catch(verify)
+    await db.batch([{ type: 'put', key: '1', value: '2' }]).catch(verify)
 
-      db.hooks.prewrite.add(function (op, batch) {
-        throw new Error('test')
-      })
+    const batch1 = db.batch()
+    const batch2 = db.batch()
 
-      const verify = (err) => {
-        t.is(err.code, 'LEVEL_HOOK_ERROR')
-        t.is(err.cause.message, 'test')
-      }
+    try { batch1.del('1') } catch (err) { verify(err) }
+    try { batch2.put('1', '2') } catch (err) { verify(err) }
 
-      await db.batch([{ type: 'del', key: '1' }]).catch(verify)
-      await db.batch([{ type: 'put', key: '1', value: '2' }]).catch(verify)
+    await batch1.close()
+    await batch2.close()
 
-      const batch1 = db.batch()
-      const batch2 = db.batch()
+    await db.del('1').catch(verify)
+    await db.put('1', '2').catch(verify)
 
-      try { batch1.del('1') } catch (err) { verify(err) }
-      try { batch2.put('1', '2') } catch (err) { verify(err) }
-
-      await batch1.close()
-      await batch2.close()
-
-      await db.del('1').catch(verify)
-      await db.put('1', '2').catch(verify)
-
-      return db.close()
-    })
-  }
+    return db.close()
+  })
 
   test('operations added by prewrite hook function count towards chained batch length', async function (t) {
     t.plan(2)
