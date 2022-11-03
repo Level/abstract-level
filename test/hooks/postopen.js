@@ -1,6 +1,10 @@
 'use strict'
 
+const shared = require('./shared')
+
 module.exports = function (test, testCommon) {
+  shared(test, testCommon, 'postopen')
+
   test('postopen hook function is called before deferred operations and open event', async function (t) {
     t.plan(5)
 

@@ -1,6 +1,10 @@
 'use strict'
 
+const shared = require('./shared')
+
 module.exports = function (test, testCommon) {
+  shared(test, testCommon, 'prewrite')
+
   for (const deferred of [false, true]) {
     test(`prewrite hook function receives put op (deferred: ${deferred})`, async function (t) {
       t.plan(3)
