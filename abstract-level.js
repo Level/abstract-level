@@ -470,6 +470,8 @@ class AbstractLevel extends EventEmitter {
   put (key, value, options, callback) {
     if (!this.hooks.prewrite.noop) {
       // Forward to batch() which will run the hook
+      // Note: technically means that put() supports the sublevel option in this case,
+      // but it generally doesn't per documentation (which makes sense). Same for del().
       return this.batch([{ type: 'put', key, value }], options, callback)
     }
 
@@ -632,7 +634,7 @@ class AbstractLevel extends EventEmitter {
     callback = fromCallback(callback, kPromise)
     options = getOptions(options, this[kDefaultOptions].empty)
 
-    // TODO (not urgent): freeze prewrite hook
+    // TODO (not urgent): freeze prewrite hook and write event
     if (this[kStatus] === 'opening') {
       this.defer(() => this.batch(operations, options, callback))
       return callback[kPromise]
@@ -730,7 +732,6 @@ class AbstractLevel extends EventEmitter {
 
         if (delegated) {
           // Ensure emitted data makes sense in the context of this db
-          // TODO: write test (also for chained batch)
           publicOperation.key = prefixedKey
           publicOperation.keyEncoding = this.keyEncoding(keyFormat)
           publicOperation.encodedKey = prefixedKey

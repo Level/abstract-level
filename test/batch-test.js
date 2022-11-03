@@ -304,57 +304,6 @@ exports.events = function (test, testCommon) {
     await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
     await db.close()
   })
-
-  test('test batch([]) (array-form) emits write event', async function (t) {
-    t.plan(2)
-
-    const db = testCommon.factory()
-
-    // Note: may return a transcoder encoding
-    const utf8 = db.keyEncoding('utf8')
-    await db.open()
-
-    t.ok(db.supports.events.write)
-
-    db.on('write', function (ops) {
-      t.same(ops, [
-        {
-          type: 'put',
-          key: 456,
-          value: 99,
-          custom: 123,
-          keyEncoding: utf8,
-          valueEncoding: utf8,
-          encodedKey: utf8.encode(456),
-          encodedValue: utf8.encode(99)
-        }
-      ])
-    })
-
-    await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
-    return db.close()
-  })
-
-  test('test batch([]) (array-form) emits write event in favor of batch event', async function (t) {
-    t.plan(2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    db.on('write', function () {
-      t.pass('got write')
-    })
-
-    db.on('batch', function () {
-      t.fail('got batch')
-    })
-
-    // Once we remove the batch event, this test would still pass, but we should then remove it.
-    t.ok(db.supports.events.batch)
-
-    await db.batch([{ type: 'put', key: '123', value: '456' }])
-    return db.close()
-  })
 }
 
 exports.tearDown = function (test, testCommon) {

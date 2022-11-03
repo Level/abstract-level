@@ -54,6 +54,7 @@ function suite (options) {
   require('./clear-range-test').all(test, testCommon)
   require('./sublevel-test').all(test, testCommon)
 
+  require('./events/write')(test, testCommon)
   require('./hooks/prewrite')(test, testCommon)
 
   // Run the same suite on a sublevel
