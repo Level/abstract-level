@@ -56,6 +56,7 @@ function suite (options) {
 
   require('./events/write')(test, testCommon)
   require('./hooks/postopen')(test, testCommon)
+  require('./hooks/newsub')(test, testCommon)
   require('./hooks/prewrite')(test, testCommon)
 
   // Run the same suite on a sublevel
