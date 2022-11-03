@@ -196,7 +196,6 @@ class AbstractLevel extends EventEmitter {
         this[kStatus] = 'open'
 
         // Skip postopen hook if it has 0 hook functions
-        // TODO: write tests
         // TODO (not urgent): freeze postopen.run before we start opening
         if (this.hooks.postopen.noop) {
           return finishOpen()

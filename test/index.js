@@ -55,6 +55,7 @@ function suite (options) {
   require('./sublevel-test').all(test, testCommon)
 
   require('./events/write')(test, testCommon)
+  require('./hooks/postopen')(test, testCommon)
   require('./hooks/prewrite')(test, testCommon)
 
   // Run the same suite on a sublevel
