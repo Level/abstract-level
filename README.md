@@ -90,7 +90,6 @@
   - [Events](#events)
     - [`opening`](#opening)
     - [`open`](#open)
-    - [`ready` (deprecated)](#ready-deprecated)
     - [`closing`](#closing)
     - [`closed`](#closed)
     - [`write`](#write)
@@ -992,10 +991,6 @@ db.once('open', function () {
   console.log('Opened!')
 })
 ```
-
-#### `ready` (deprecated)
-
-Alias for the `open` event. Deprecated in favor of the `open` event.
 
 #### `closing`
 
