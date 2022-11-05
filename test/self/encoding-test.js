@@ -222,7 +222,7 @@ for (const deferred of [false, true]) {
 
   // NOTE: adapted from encoding-down
   test(`chainedBatch.put() and del() encode utf8 key and value (deferred: ${deferred})`, async function (t) {
-    t.plan(deferred ? 2 : 4)
+    t.plan(deferred ? 2 : 5)
 
     let db
 
@@ -243,11 +243,14 @@ for (const deferred of [false, true]) {
           return mockChainedBatch(this, {
             _put: function (key, value, options) {
               t.same({ key, value }, { key: '1', value: '2' })
-              t.same(options, { keyEncoding: 'utf8', valueEncoding: 'utf8' })
+
+              // May contain additional options just because it's cheaper to not remove them
+              t.is(options.keyEncoding, 'utf8')
+              t.is(options.valueEncoding, 'utf8')
             },
             _del: function (key, options) {
               t.is(key, '3')
-              t.same(options, { keyEncoding: 'utf8' })
+              t.is(options.keyEncoding, 'utf8')
             }
           })
         }
@@ -260,7 +263,7 @@ for (const deferred of [false, true]) {
 
   // NOTE: adapted from encoding-down
   test(`chainedBatch.put() and del() take encoding options (deferred: ${deferred})`, async function (t) {
-    t.plan(deferred ? 2 : 4)
+    t.plan(deferred ? 2 : 5)
 
     let db
 
@@ -284,11 +287,14 @@ for (const deferred of [false, true]) {
           return mockChainedBatch(this, {
             _put: function (key, value, options) {
               t.same({ key, value }, { key: '"1"', value: '{"x":[2]}' })
-              t.same(options, { keyEncoding: 'utf8', valueEncoding: 'utf8' })
+
+              // May contain additional options just because it's cheaper to not remove them
+              t.is(options.keyEncoding, 'utf8')
+              t.is(options.valueEncoding, 'utf8')
             },
             _del: function (key, options) {
               t.is(key, '"3"')
-              t.same(options, { keyEncoding: 'utf8' })
+              t.is(options.keyEncoding, 'utf8')
             }
           })
         }

@@ -45,6 +45,83 @@ exports.all = function (test, testCommon) {
     })
   }
 
+  for (const method of ['batch', 'chained batch']) {
+    test(`${method} with descendant sublevel option`, async function (t) {
+      t.plan(25)
+
+      const db = testCommon.factory()
+      await db.open()
+
+      const a = db.sublevel('a')
+      const b = a.sublevel('b')
+      const c = b.sublevel('c')
+
+      // Note: may return a transcoder encoding
+      const utf8 = db.keyEncoding('utf8')
+
+      const put = method === 'batch'
+        ? (db, key, opts) => db.batch([{ type: 'put', key, value: 'x', ...opts }])
+        : (db, key, opts) => db.batch().put(key, key, opts).write()
+
+      const del = method === 'batch'
+        ? (db, key, opts) => db.batch([{ type: 'del', key, ...opts }])
+        : (db, key, opts) => db.batch().del(key, opts).write()
+
+      // Note: not entirely a noop. Use of sublevel option triggers data to be encoded early
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('1'), 'got put 1'))
+      await put(db, '1', { sublevel: db })
+
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('!a!2'), 'got put 2'))
+      await put(db, '2', { sublevel: a })
+      await put(a, '2', { sublevel: a }) // Same
+
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('!a!!b!3'), 'got put 3'))
+      await put(db, '3', { sublevel: b })
+      await put(a, '3', { sublevel: b }) // Same
+      await put(b, '3', { sublevel: b }) // Same
+
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('!a!!b!!c!4'), 'got put 4'))
+      await put(db, '4', { sublevel: c })
+      await put(a, '4', { sublevel: c }) // Same
+      await put(b, '4', { sublevel: c }) // Same
+      await put(c, '4', { sublevel: c }) // Same
+
+      t.same(await db.keys().all(), ['!a!!b!!c!4', '!a!!b!3', '!a!2', '1'], 'db has entries')
+      t.same(await a.keys().all(), ['!b!!c!4', '!b!3', '2'], 'sublevel a has entries')
+      t.same(await b.keys().all(), ['!c!4', '3'], 'sublevel b has entries')
+      t.same(await c.keys().all(), ['4'], 'sublevel c has entries')
+
+      // Test deletes
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('1'), 'got del 1'))
+      await del(db, '1', { sublevel: db })
+
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('!a!2'), 'got del 2'))
+      await del(db, '2', { sublevel: a })
+      await del(a, '2', { sublevel: a }) // Same
+
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('!a!!b!3'), 'got del 3'))
+      await del(db, '3', { sublevel: b })
+      await del(a, '3', { sublevel: b }) // Same
+      await del(b, '3', { sublevel: b }) // Same
+
+      db.removeAllListeners('write')
+      db.on('write', (ops) => t.same(ops[0].key, utf8.encode('!a!!b!!c!4'), 'got del 4'))
+      await del(db, '4', { sublevel: c })
+      await del(a, '4', { sublevel: c }) // Same
+      await del(b, '4', { sublevel: c }) // Same
+      await del(c, '4', { sublevel: c }) // Same
+
+      t.same(await db.keys().all(), [], 'db has no entries')
+      return db.close()
+    })
+  }
+
   for (const deferred of [false, true]) {
     for (const keyEncoding of ['buffer', 'view']) {
       if (!testCommon.supports.encodings[keyEncoding]) return

@@ -29,7 +29,12 @@ declare class AbstractSublevel<TDatabase, TFormat, KDefault, VDefault>
   /**
    * Parent database. A read-only property.
    */
-  get db (): TDatabase
+  get parent (): TDatabase
+
+  /**
+   * Root database. A read-only property.
+   */
+  get db (): AbstractLevel<any, any, any>
 }
 
 /**

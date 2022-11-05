@@ -2,7 +2,7 @@
 
 const { fromCallback } = require('catering')
 const ModuleError = require('module-error')
-const { getOptions, getCallback } = require('./lib/common')
+const { getOptions, getCallback, emptyOptions, noop, deprecate } = require('./lib/common')
 
 const kPromise = Symbol('promise')
 const kCallback = Symbol('callback')
@@ -24,10 +24,6 @@ const kKeys = Symbol('keys')
 const kValues = Symbol('values')
 const kLimit = Symbol('limit')
 const kCount = Symbol('count')
-
-const emptyOptions = Object.freeze({})
-const noop = () => {}
-let warnedEnd = false
 
 // This class is an internal utility for common functionality between AbstractIterator,
 // AbstractKeyIterator and AbstractValueIterator. It's not exported.
@@ -264,7 +260,7 @@ class CommonIterator {
         options = { ...options, keyEncoding: keyFormat }
       }
 
-      const mapped = this.db.prefixKey(keyEncoding.encode(target), keyFormat)
+      const mapped = this.db.prefixKey(keyEncoding.encode(target), keyFormat, false)
       this._seek(mapped, options)
     }
   }
@@ -377,14 +373,7 @@ class AbstractIterator extends CommonIterator {
   }
 
   end (callback) {
-    if (!warnedEnd && typeof console !== 'undefined') {
-      warnedEnd = true
-      console.warn(new ModuleError(
-        'The iterator.end() method was renamed to close() and end() is an alias that will be removed in a future version',
-        { code: 'LEVEL_LEGACY' }
-      ))
-    }
-
+    deprecate('The iterator.end() method was renamed to close() and end() is an alias that will be removed in a future version')
     return this.close(callback)
   }
 }
