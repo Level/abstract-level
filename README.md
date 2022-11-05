@@ -145,7 +145,8 @@
     - [`iterator._close(callback)`](#iterator_closecallback)
   - [`keyIterator = AbstractKeyIterator(db, options)`](#keyiterator--abstractkeyiteratordb-options)
   - [`valueIterator = AbstractValueIterator(db, options)`](#valueiterator--abstractvalueiteratordb-options)
-  - [`chainedBatch = AbstractChainedBatch(db)`](#chainedbatch--abstractchainedbatchdb)
+  - [`chainedBatch = AbstractChainedBatch(db, options)`](#chainedbatch--abstractchainedbatchdb-options)
+    - [`chainedBatch._add(op)`](#chainedbatch_addop)
     - [`chainedBatch._put(key, value, options)`](#chainedbatch_putkey-value-options)
     - [`chainedBatch._del(key, options)`](#chainedbatch_delkey-options)
     - [`chainedBatch._clear()`](#chainedbatch_clear)
@@ -1636,25 +1637,31 @@ The `options` argument must be the original `options` object that was passed to 
 
 A value iterator has the same interface and constructor arguments as `AbstractIterator` except that it must yields values instead of entries. For further details, see `keyIterator` above.
 
-### `chainedBatch = AbstractChainedBatch(db)`
+### `chainedBatch = AbstractChainedBatch(db, options)`
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `chainedBatch.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it.
 
+There are two ways to implement a chained batch. If `options.add` is true, only `_add()` will be called. If `options.add` is false or not provided, only `_put()` and `_del()` will be called.
+
+#### `chainedBatch._add(op)`
+
+Add a `put` or `del` operation. The `op` object will always have the following properties: `type`, `key`, `keyEncoding` and (if `type` is `'put'`) `value` and `valueEncoding`.
+
 #### `chainedBatch._put(key, value, options)`
 
-Queue a `put` operation on this batch. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`.
+Add a `put` operation. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`.
 
 #### `chainedBatch._del(key, options)`
 
-Queue a `del` operation on this batch. The `options` object will always have the following properties: `keyEncoding`.
+Add a `del` operation. The `options` object will always have the following properties: `keyEncoding`.
 
 #### `chainedBatch._clear()`
 
-Clear all queued operations on this batch.
+Remove all operations from this batch.
 
 #### `chainedBatch._write(options, callback)`
 
-The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the queued operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an error. Otherwise call `callback` without any arguments. The `_write()` method will not be called if the chained batch has zero queued operations.
+The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an error. Otherwise call `callback` without any arguments. The `_write()` method will not be called if the chained batch contains zero operations.
 
 #### `chainedBatch._close(callback)`
 

@@ -251,7 +251,6 @@ class AbstractChainedBatch {
 
   _del (key, options) {}
 
-  // TODO: docs
   _add (op) {}
 
   clear () {
