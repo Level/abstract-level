@@ -26,11 +26,11 @@ module.exports = function (test, testCommon) {
             t.same(ops, [
               {
                 type: 'put',
-                key: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format) : 456,
+                key: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format, true) : 456,
                 value: withSublevel ? subEncoding.encode('99') : 99,
                 keyEncoding: db.keyEncoding(withSublevel ? subEncoding.format : 'utf8'),
                 valueEncoding: db.valueEncoding(withSublevel ? subEncoding.format : 'utf8'),
-                encodedKey: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format) : dbEncoding.encode('456'),
+                encodedKey: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format, true) : dbEncoding.encode('456'),
                 encodedValue: (withSublevel ? subEncoding : dbEncoding).encode('99'),
                 custom: 123,
                 sublevel: null // Should be unset
@@ -73,9 +73,9 @@ module.exports = function (test, testCommon) {
             t.same(ops, [
               {
                 type: 'del',
-                key: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format) : 456,
+                key: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format, true) : 456,
                 keyEncoding: db.keyEncoding(withSublevel ? subEncoding.format : 'utf8'),
-                encodedKey: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format) : dbEncoding.encode('456'),
+                encodedKey: withSublevel ? sublevel.prefixKey(subEncoding.encode('456'), subEncoding.format, true) : dbEncoding.encode('456'),
                 custom: 123,
                 sublevel: null // Should be unset
               }

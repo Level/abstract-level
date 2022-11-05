@@ -260,7 +260,7 @@ class CommonIterator {
         options = { ...options, keyEncoding: keyFormat }
       }
 
-      const mapped = this.db.prefixKey(keyEncoding.encode(target), keyFormat)
+      const mapped = this.db.prefixKey(keyEncoding.encode(target), keyFormat, false)
       this._seek(mapped, options)
     }
   }

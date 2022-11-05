@@ -6,6 +6,7 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 <details><summary>Click to expand</summary>
 
+- [Upcoming](#upcoming)
 - [1.0.0](#100)
   - [1. API parity with `levelup`](#1-api-parity-with-levelup)
     - [1.1. New: promises](#11-new-promises)
@@ -30,6 +31,39 @@ This document describes breaking changes and how to upgrade. For a complete list
   - [9. Sublevels are builtin](#9-sublevels-are-builtin)
 
 </details>
+
+## Upcoming
+
+The next major release adds [hooks](./README.md#hooks). To achieve hooks, two low-impact breaking changes have been made to nested sublevels. Nested sublevels, no matter their depth, were previously all connected to the same parent database rather than forming a tree. In the following example, the `colorIndex` sublevel would previously forward its operations directly to `db`:
+
+```js
+const indexes = db.sublevel('idx')
+const colorIndex = indexes.sublevel('colors')
+```
+
+It will now forward its operations to `indexes`, which in turn forwards them to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels. This decreased performance is the **first breaking change** and mainly affects sublevels nested at a depth of more than 2.
+
+To optionally negate it, a new feature has been added to `db.sublevel(name)`: it now accepts an array `name` too. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
+
+```js
+const colorIndex = db.sublevel(['idx', 'colors'])
+```
+
+The **second breaking change** is that if a `sublevel` is provided as an option to `db.batch()`, that sublevel must now be a descendant of `db`:
+
+```js
+const colorIndex = indexes.sublevel('colors')
+const flavorIndex = indexes.sublevel('flavors')
+
+// No longer works because colorIndex isn't a descendant of flavorIndex
+flavorIndex.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
+
+// OK
+indexes.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
+
+// OK
+db.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
+```
 
 ## 1.0.0
 

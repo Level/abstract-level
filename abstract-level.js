@@ -14,6 +14,7 @@ const { DatabaseHooks } = require('./lib/hooks')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 const { EventMonitor } = require('./lib/event-monitor')
 const { getCallback, getOptions, noop, emptyOptions } = require('./lib/common')
+const { prefixDescendantKey } = require('./lib/prefixes')
 const rangeOptions = require('./lib/range-options')
 
 const kPromise = Symbol('promise')
@@ -135,6 +136,10 @@ class AbstractLevel extends EventEmitter {
 
   get status () {
     return this[kStatus]
+  }
+
+  get parent () {
+    return null
   }
 
   keyEncoding (encoding) {
@@ -361,7 +366,7 @@ class AbstractLevel extends EventEmitter {
       options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
 
-    this._get(this.prefixKey(keyEncoding.encode(key), keyFormat), options, (err, value) => {
+    this._get(this.prefixKey(keyEncoding.encode(key), keyFormat, true), options, (err, value) => {
       if (err) {
         // Normalize not found error for backwards compatibility with abstract-leveldown and level(up)
         if (err.code === 'LEVEL_NOT_FOUND' || err.notFound || /NotFound/i.test(err)) {
@@ -437,7 +442,7 @@ class AbstractLevel extends EventEmitter {
         return callback[kPromise]
       }
 
-      mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat)
+      mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
     }
 
     this._getMany(mappedKeys, options, (err, values) => {
@@ -511,7 +516,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     const encodedKey = keyEncoding.encode(key)
-    const prefixedKey = this.prefixKey(encodedKey, keyFormat)
+    const prefixedKey = this.prefixKey(encodedKey, keyFormat, true)
     const encodedValue = valueEncoding.encode(value)
 
     this._put(prefixedKey, encodedValue, options, (err) => {
@@ -584,7 +589,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     const encodedKey = keyEncoding.encode(key)
-    const prefixedKey = this.prefixKey(encodedKey, keyFormat)
+    const prefixedKey = this.prefixKey(encodedKey, keyFormat, true)
 
     this._del(prefixedKey, options, (err) => {
       if (err) return callback(err)
@@ -715,9 +720,9 @@ class AbstractLevel extends EventEmitter {
       // Encode data for private API
       // TODO: benchmark a try/catch around this
       const keyEncoding = op.keyEncoding
-      const encodedKey = keyEncoding.encode(op.key)
+      const preencodedKey = keyEncoding.encode(op.key)
       const keyFormat = keyEncoding.format
-      const prefixedKey = db.prefixKey(encodedKey, keyFormat)
+      const encodedKey = delegated ? prefixDescendantKey(preencodedKey, keyFormat, db, this) : preencodedKey
 
       // Prevent double prefixing
       if (delegated) op.sublevel = null
@@ -728,21 +733,18 @@ class AbstractLevel extends EventEmitter {
         // Clone op before we mutate it for the private API
         // TODO (future semver-major): consider sending this shape to private API too
         publicOperation = Object.assign({}, op)
+        publicOperation.encodedKey = encodedKey
 
         if (delegated) {
           // Ensure emitted data makes sense in the context of this db
-          // TODO: it doesn't if this db is itself a sublevel
-          publicOperation.key = prefixedKey
+          publicOperation.key = encodedKey
           publicOperation.keyEncoding = this.keyEncoding(keyFormat)
-          publicOperation.encodedKey = prefixedKey
-        } else {
-          publicOperation.encodedKey = encodedKey
         }
 
         publicOperations[i] = publicOperation
       }
 
-      op.key = prefixedKey
+      op.key = this.prefixKey(encodedKey, keyFormat, true)
       op.keyEncoding = keyFormat
 
       if (isPut) {
@@ -795,7 +797,6 @@ class AbstractLevel extends EventEmitter {
     const xopts = AbstractSublevel.defaults(options)
     const sublevel = this._sublevel(name, xopts)
 
-    // TODO: write test
     if (!this.hooks.newsub.noop) {
       try {
         this.hooks.newsub.run(sublevel, xopts)
@@ -814,7 +815,7 @@ class AbstractLevel extends EventEmitter {
     return new AbstractSublevel(this, name, options)
   }
 
-  prefixKey (key, keyFormat) {
+  prefixKey (key, keyFormat, local) {
     return key
   }
 

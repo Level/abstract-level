@@ -336,19 +336,19 @@ module.exports = function (test, testCommon) {
       t.same(ops.slice(1), [
         {
           type: 'put',
-          key: db.prefixKey(utf8.encode('!sub!"from-hook-1"'), utf8.format), // bug
+          key: utf8.encode('!sub!"from-hook-1"'),
           value: utf8.encode('{"x":22}'),
           keyEncoding: db.keyEncoding(sublevel.keyEncoding().format),
           valueEncoding: db.valueEncoding(sublevel.valueEncoding().format),
-          encodedKey: db.prefixKey(utf8.encode('!sub!"from-hook-1"'), utf8.format), // bug
+          encodedKey: utf8.encode('!sub!"from-hook-1"'),
           encodedValue: utf8.encode('{"x":22}'),
           sublevel: null // Should be unset
         },
         {
           type: 'del',
-          key: db.prefixKey(utf8.encode('!sub!"from-hook-2"'), utf8.format), // bug
+          key: utf8.encode('!sub!"from-hook-2"'),
           keyEncoding: db.keyEncoding(sublevel.keyEncoding().format),
-          encodedKey: db.prefixKey(utf8.encode('!sub!"from-hook-2"'), utf8.format), // bug
+          encodedKey: utf8.encode('!sub!"from-hook-2"'),
           sublevel: null // Should be unset
         }
       ])
@@ -361,6 +361,145 @@ module.exports = function (test, testCommon) {
     await db.del('from-input')
     await db.batch([{ type: 'del', key: 'from-input' }])
     await db.batch().del('from-input').write()
+
+    return db.close()
+  })
+
+  test('prewrite hook function can add operations with descendant sublevel option', async function (t) {
+    t.plan(20)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    const a = db.sublevel('a')
+    const b = a.sublevel('b')
+    const c = b.sublevel('c')
+
+    // Note: may return a transcoder encoding
+    const utf8 = db.keyEncoding('utf8')
+
+    const put = async (db, key, opts) => {
+      const fn = function (op, batch) {
+        batch.add({ type: 'put', key, value: 'x', ...opts })
+      }
+
+      db.hooks.prewrite.add(fn)
+
+      try {
+        await db.put('0', '0')
+      } finally {
+        db.hooks.prewrite.delete(fn)
+      }
+    }
+
+    const del = async (db, key, opts) => {
+      const fn = function (op, batch) {
+        batch.add({ type: 'del', key, ...opts })
+      }
+
+      db.hooks.prewrite.add(fn)
+
+      try {
+        await db.del('0')
+      } finally {
+        db.hooks.prewrite.delete(fn)
+      }
+    }
+
+    // Note: not entirely a noop. Use of sublevel option triggers data to be encoded early
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('1'), 'got put 1'))
+    await put(db, '1', { sublevel: db })
+
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('!a!2'), 'got put 2'))
+    await put(db, '2', { sublevel: a })
+    await put(a, '2', { sublevel: a }) // Same
+
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('!a!!b!3'), 'got put 3'))
+    await put(db, '3', { sublevel: b })
+    await put(a, '3', { sublevel: b }) // Same
+    await put(b, '3', { sublevel: b }) // Same
+
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('!a!!b!!c!4'), 'got put 4'))
+    await put(db, '4', { sublevel: c })
+    await put(a, '4', { sublevel: c }) // Same
+    await put(b, '4', { sublevel: c }) // Same
+    await put(c, '4', { sublevel: c }) // Same
+
+    // Test deletes
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('1'), 'got del 1'))
+    await del(db, '1', { sublevel: db })
+
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('!a!2'), 'got del 2'))
+    await del(db, '2', { sublevel: a })
+    await del(a, '2', { sublevel: a }) // Same
+
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('!a!!b!3'), 'got del 3'))
+    await del(db, '3', { sublevel: b })
+    await del(a, '3', { sublevel: b }) // Same
+    await del(b, '3', { sublevel: b }) // Same
+
+    db.removeAllListeners('write')
+    db.on('write', (ops) => t.same(ops[1].key, utf8.encode('!a!!b!!c!4'), 'got del 4'))
+    await del(db, '4', { sublevel: c })
+    await del(a, '4', { sublevel: c }) // Same
+    await del(b, '4', { sublevel: c }) // Same
+    await del(c, '4', { sublevel: c }) // Same
+
+    return db.close()
+  })
+
+  test('prewrite hook is triggered bottom-up for nested sublevels', async function (t) {
+    const db = testCommon.factory()
+    const a = db.sublevel('a')
+    const b = a.sublevel('b')
+    const order = []
+    const triggers = [
+      [['b', 'a', 'root'], () => b.put('a', 'a')],
+      [['b', 'a', 'root'], () => b.batch([{ type: 'put', key: 'a', value: 'a' }])],
+      [['b', 'a', 'root'], () => b.batch().put('a', 'a').write()],
+      [['b', 'a', 'root'], () => b.del('a')],
+      [['b', 'a', 'root'], () => b.batch([{ type: 'del', key: 'a' }])],
+      [['b', 'a', 'root'], () => b.batch().del('a').write()],
+
+      [['a', 'root'], () => a.put('a', 'a')],
+      [['a', 'root'], () => a.batch([{ type: 'put', key: 'a', value: 'a' }])],
+      [['a', 'root'], () => a.batch().put('a', 'a').write()],
+      [['a', 'root'], () => a.del('a')],
+      [['a', 'root'], () => a.batch([{ type: 'del', key: 'a' }])],
+      [['a', 'root'], () => a.batch().del('a').write()],
+
+      [['root'], () => db.put('a', 'a')],
+      [['root'], () => db.batch([{ type: 'put', key: 'a', value: 'a' }])],
+      [['root'], () => db.batch().put('a', 'a').write()],
+      [['root'], () => db.del('a')],
+      [['root'], () => db.batch([{ type: 'del', key: 'a' }])],
+      [['root'], () => db.batch().del('a').write()],
+
+      // The sublevel option should not trigger the prewrite hook
+      [['root'], () => db.put('a', 'a', { sublevel: a })],
+      [['root'], () => db.batch([{ type: 'put', key: 'a', value: 'a', sublevel: a }])],
+      [['root'], () => db.batch().put('a', 'a', { sublevel: a }).write()],
+      [['root'], () => db.del('a', { sublevel: a })],
+      [['root'], () => db.batch([{ type: 'del', key: 'a', sublevel: a }])],
+      [['root'], () => db.batch().del('a', { sublevel: a }).write()]
+    ]
+
+    t.plan(triggers.length)
+
+    db.hooks.prewrite.add((op, batch) => { order.push('root') })
+    a.hooks.prewrite.add((op, batch) => { order.push('a') })
+    b.hooks.prewrite.add((op, batch) => { order.push('b') })
+
+    for (const [expectedOrder, trigger] of triggers) {
+      await trigger()
+      t.same(order.splice(0, order.length), expectedOrder)
+    }
 
     return db.close()
   })

@@ -3,6 +3,7 @@
 const { fromCallback } = require('catering')
 const ModuleError = require('module-error')
 const { getCallback, getOptions, emptyOptions } = require('./lib/common')
+const { prefixDescendantKey } = require('./lib/prefixes')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 
 const kPromise = Symbol('promise')
@@ -117,9 +118,9 @@ class AbstractChainedBatch {
 
     // Encode data for private API
     const keyEncoding = op.keyEncoding
-    const encodedKey = keyEncoding.encode(op.key)
+    const preencodedKey = keyEncoding.encode(op.key)
     const keyFormat = keyEncoding.format
-    const prefixedKey = db.prefixKey(encodedKey, keyFormat)
+    const encodedKey = delegated ? prefixDescendantKey(preencodedKey, keyFormat, db, this.db) : preencodedKey
     const valueEncoding = op.valueEncoding
     const encodedValue = valueEncoding.encode(op.value)
     const valueFormat = valueEncoding.format
@@ -130,18 +131,15 @@ class AbstractChainedBatch {
     if (this[kPublicOperations] !== null) {
       // Clone op before we mutate it for the private API
       const publicOperation = Object.assign({}, op)
+      publicOperation.encodedKey = encodedKey
+      publicOperation.encodedValue = encodedValue
 
       if (delegated) {
         // Ensure emitted data makes sense in the context of this db
-        publicOperation.key = prefixedKey
+        publicOperation.key = encodedKey
         publicOperation.value = encodedValue
         publicOperation.keyEncoding = this.db.keyEncoding(keyFormat)
         publicOperation.valueEncoding = this.db.valueEncoding(valueFormat)
-        publicOperation.encodedKey = prefixedKey
-        publicOperation.encodedValue = encodedValue
-      } else {
-        publicOperation.encodedKey = encodedKey
-        publicOperation.encodedValue = encodedValue
       }
 
       this[kPublicOperations].push(publicOperation)
@@ -155,7 +153,7 @@ class AbstractChainedBatch {
       this[kLegacyOperations].push(legacyOperation)
     }
 
-    op.key = prefixedKey
+    op.key = this.db.prefixKey(encodedKey, keyFormat, true)
     op.value = encodedValue
     op.keyEncoding = keyFormat
     op.valueEncoding = valueFormat
@@ -164,7 +162,7 @@ class AbstractChainedBatch {
       this._add(op)
     } else {
       // This "operation as options" trick avoids further cloning
-      this._put(prefixedKey, encodedValue, op)
+      this._put(op.key, encodedValue, op)
     }
 
     // Increment only on success
@@ -208,9 +206,9 @@ class AbstractChainedBatch {
 
     // Encode data for private API
     const keyEncoding = op.keyEncoding
-    const encodedKey = keyEncoding.encode(op.key)
+    const preencodedKey = keyEncoding.encode(op.key)
     const keyFormat = keyEncoding.format
-    const prefixedKey = db.prefixKey(encodedKey, keyFormat)
+    const encodedKey = delegated ? prefixDescendantKey(preencodedKey, keyFormat, db, this.db) : preencodedKey
 
     // Prevent double prefixing
     if (delegated) op.sublevel = null
@@ -218,14 +216,12 @@ class AbstractChainedBatch {
     if (this[kPublicOperations] !== null) {
       // Clone op before we mutate it for the private API
       const publicOperation = Object.assign({}, op)
+      publicOperation.encodedKey = encodedKey
 
       if (delegated) {
         // Ensure emitted data makes sense in the context of this db
-        publicOperation.key = prefixedKey
+        publicOperation.key = encodedKey
         publicOperation.keyEncoding = this.db.keyEncoding(keyFormat)
-        publicOperation.encodedKey = prefixedKey
-      } else {
-        publicOperation.encodedKey = encodedKey
       }
 
       this[kPublicOperations].push(publicOperation)
@@ -238,14 +234,14 @@ class AbstractChainedBatch {
       this[kLegacyOperations].push(legacyOperation)
     }
 
-    op.key = prefixedKey
+    op.key = this.db.prefixKey(encodedKey, keyFormat, true)
     op.keyEncoding = keyFormat
 
     if (this[kAddMode]) {
       this._add(op)
     } else {
       // This "operation as options" trick avoids further cloning
-      this._del(prefixedKey, op)
+      this._del(op.key, op)
     }
 
     // Increment only on success

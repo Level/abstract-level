@@ -39,7 +39,7 @@
   - [`sublevel = db.sublevel(name[, options])`](#sublevel--dbsublevelname-options)
   - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
-  - [`key = db.prefixKey(key, keyFormat)`](#key--dbprefixkeykey-keyformat)
+  - [`key = db.prefixKey(key, keyFormat[, local])`](#key--dbprefixkeykey-keyformat-local)
   - [`db.defer(fn)`](#dbdeferfn)
   - [`chainedBatch`](#chainedbatch)
     - [`chainedBatch.put(key, value[, options])`](#chainedbatchputkey-value-options)
@@ -63,6 +63,7 @@
   - [`valueIterator`](#valueiterator)
   - [`sublevel`](#sublevel)
     - [`sublevel.prefix`](#sublevelprefix)
+    - [`sublevel.parent`](#sublevelparent)
     - [`sublevel.db`](#subleveldb)
   - [Hooks](#hooks)
     - [`hook = db.hooks.prewrite`](#hook--dbhooksprewrite)
@@ -332,7 +333,7 @@ Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argumen
 
 Each operation must be an object with at least a `type` property set to either `'put'` or `'del'`. If the `type` is `'put'`, the operation must have `key` and `value` properties. It may optionally have `keyEncoding` and / or `valueEncoding` properties to encode keys or values with a custom encoding for just that operation. If the `type` is `'del'`, the operation must have a `key` property and may optionally have a `keyEncoding` property.
 
-An operation of either type may also have a `sublevel` property, to prefix the key of the operation with the prefix of that sublevel. This allows atomically committing data to multiple sublevels. Keys and values will be encoded by the sublevel, to the same effect as a `sublevel.batch(..)` call. In the following example, the first `value` will be encoded with `'json'` rather than the default encoding of `db`:
+An operation of either type may also have a `sublevel` property, to prefix the key of the operation with the prefix of that sublevel. This allows atomically committing data to multiple sublevels. The given `sublevel` must be a descendant of `db`. Keys and values will be encoded by the sublevel, to the same effect as a `sublevel.batch(..)` call. In the following example, the first `value` will be encoded with `'json'` rather than the default encoding of `db`:
 
 ```js
 const people = db.sublevel('people', { valueEncoding: 'json' })
@@ -443,7 +444,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 
 ### `sublevel = db.sublevel(name[, options])`
 
-Create a [sublevel](#sublevel) that has the same interface as `db` (except for additional, implementation-specific methods) and prefixes the keys of operations before passing them on to `db`. The `name` argument is required and must be a string.
+Create a [sublevel](#sublevel) that has the same interface as `db` (except for additional, implementation-specific methods) and prefixes the keys of operations before passing them on to `db`. The `name` argument is required and must be a string, or an array of strings (explained further below).
 
 ```js
 const example = db.sublevel('example')
@@ -457,7 +458,7 @@ for await (const [key, value] of example.iterator()) {
 }
 ```
 
-Sublevels effectively separate a database into sections. Think SQL tables, but evented, ranged and realtime! Each sublevel is an `AbstractLevel` instance with its own keyspace, [events](https://github.com/Level/abstract-level#events) and [encodings](https://github.com/Level/abstract-level#encodings). For example, it's possible to have one sublevel with `'buffer'` keys and another with `'utf8'` keys. The same goes for values. Like so:
+Sublevels effectively separate a database into sections. Think SQL tables, but evented, ranged and realtime! Each sublevel is an `AbstractLevel` instance with its own keyspace, [encodings](https://github.com/Level/abstract-level#encodings), [hooks](https://github.com/Level/abstract-level#hooks) and [events](https://github.com/Level/abstract-level#events). For example, it's possible to have one sublevel with `'buffer'` keys and another with `'utf8'` keys. The same goes for values. Like so:
 
 ```js
 db.sublevel('one', { valueEncoding: 'json' })
@@ -489,6 +490,21 @@ The `keyEncoding` and `valueEncoding` options are forwarded to the `AbstractLeve
 
 Like regular databases, sublevels open themselves but they do not affect the state of the parent database. This means a sublevel can be individually closed and (re)opened. If the sublevel is created while the parent database is opening, it will wait for that to finish. If the parent database is closed, then opening the sublevel will fail and subsequent operations on the sublevel will yield errors with code [`LEVEL_DATABASE_NOT_OPEN`](#errors).
 
+Lastly, the `name` argument can be an array as a shortcut to create nested sublevels. Those are normally created like so:
+
+```js
+const indexes = db.sublevel('idx')
+const colorIndex = indexes.sublevel('colors')
+```
+
+Here, the parent database of `colorIndex` is `indexes`. Operations made on `colorIndex` are thus forwarded from that sublevel to `indexes` and from there to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
+
+```js
+const colorIndex = db.sublevel(['idx', 'colors'])
+```
+
+In this case, the parent database of `colorIndex` is `db`. Note that it's still possible to separately create the `indexes` sublevel, but it will be disconnected from `colorIndex`, meaning that `indexes` will not see (live) operations made on `colorIndex`.
+
 ### `encoding = db.keyEncoding([encoding])`
 
 Returns the given `encoding` argument as a normalized encoding object that follows the [`level-transcoder`](https://github.com/Level/transcoder) encoding interface. See [Encodings](#encodings) for an introduction. The `encoding` argument may be:
@@ -508,7 +524,7 @@ Assume that e.g. `db.keyEncoding().encode(key)` is safe to call at any time incl
 
 Same as `db.keyEncoding([encoding])` except that it returns the default `valueEncoding` of the database (if the `encoding` argument is omitted, `null` or `undefined`).
 
-### `key = db.prefixKey(key, keyFormat)`
+### `key = db.prefixKey(key, keyFormat[, local])`
 
 Add sublevel prefix to the given `key`, which must be already-encoded. If this database is not a sublevel, the given `key` is returned as-is. The `keyFormat` must be one of `'utf8'`, `'buffer'`, `'view'`. If `'utf8'` then `key` must be a string and the return value will be a string. If `'buffer'` then Buffer, if `'view'` then Uint8Array.
 
@@ -517,6 +533,16 @@ const sublevel = db.sublevel('example')
 
 console.log(db.prefixKey('a', 'utf8')) // 'a'
 console.log(sublevel.prefixKey('a', 'utf8')) // '!example!a'
+```
+
+By default, the given `key` will be prefixed to form a fully-qualified key in the context of the _root_ (i.e. top-most) database, as the following example will demonstrate. If `local` is true, the given `key` will instead be prefixed to form a fully-qualified key in the context of the _parent_ database.
+
+```js
+const sublevel = db.sublevel('example')
+const nested = sublevel.sublevel('nested')
+
+console.log(nested.prefixKey('a', 'utf8')) // '!example!!nested!a'
+console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 ```
 
 ### `db.defer(fn)`
@@ -543,14 +569,14 @@ Add a `put` operation to this chained batch, not committed until `write()` is ca
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
-- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The `key` will be prefixed with the `prefix` of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
+- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must be a descendant of `db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
 
 #### `chainedBatch.del(key[, options])`
 
 Add a `del` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) error if `key` is invalid. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
-- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The `key` will be prefixed with the `prefix` of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
+- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must be a descendant of `db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
 
 #### `chainedBatch.clear()`
 
@@ -725,9 +751,21 @@ console.log(example.prefix) // '!example!'
 console.log(nested.prefix) // '!example!!nested!'
 ```
 
-#### `sublevel.db`
+#### `sublevel.parent`
 
 Parent database. A read-only property.
+
+```js
+const example = db.sublevel('example')
+const nested = example.sublevel('nested')
+
+console.log(example.parent === db) // true
+console.log(nested.parent === example) // true
+```
+
+#### `sublevel.db`
+
+Root database. A read-only property.
 
 ```js
 const example = db.sublevel('example')
@@ -869,9 +907,7 @@ As a result, other hook functions will not be called.
 
 #### Hooks On Sublevels
 
-On sublevels and their parent database, hooks are triggered in bottom-up order, excluding any intermediate sublevels. For example, `db.sublevel(..).batch(..)` will trigger the `prewrite` hook of the sublevel and then the `prewrite` hook of `db`. Only direct operations on a database will trigger hooks, not when a sublevel is provided as an option. This means `db.batch([{ sublevel, ... }])` will trigger the `prewrite` hook of `db` but not of `sublevel`. These behaviors are symmetrical to [events](#events): `db.batch([{ sublevel, ... }])` will only emit a `write` event from `db` while `db.sublevel(..).batch([{ ... }])` will emit a `write` event from the sublevel and then another from `db` (this time with fully-qualified keys).
-
-Side note: that hooks are not triggered on "intermediate" sublevels (meaning the `a` sublevel in `db.sublevel('a').sublevel('b')`) is a result of how sublevels work in general. Nested sublevels, no matter their depth, are all connected to the same parent database rather than forming a tree. Feel free to open an issue in [`community`](https://github.com/Level/community) to discuss this potential gap, along with a good use case and examples.
+On sublevels and their parent database(s), hooks are triggered in bottom-up order. For example, `db.sublevel('a').sublevel('b').batch(..)` will trigger the `prewrite` hook of sublevel `a`, then the `prewrite` hook of sublevel `b` and then of `db`. Only direct operations on a database will trigger hooks, not when a sublevel is provided as an option. This means `db.batch([{ sublevel, ... }])` will trigger the `prewrite` hook of `db` but not of `sublevel`. These behaviors are symmetrical to [events](#events): `db.batch([{ sublevel, ... }])` will only emit a `write` event from `db` while `db.sublevel(..).batch([{ ... }])` will emit a `write` event from the sublevel and then another from `db` (this time with fully-qualified keys).
 
 ### Encodings
 
@@ -1533,11 +1569,11 @@ class ExampleSublevel extends AbstractSublevel {
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
 
-    key = this.prefixKey(keyEncoding.encode(key), keyFormat)
+    key = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
 
     // The parent database can be accessed like so. Make sure
     // to forward encoding options and use the full key.
-    this.db.del(key, { keyEncoding: keyFormat }, ...)
+    this.parent.del(key, { keyEncoding: keyFormat }, ...)
   }
 }
 ```

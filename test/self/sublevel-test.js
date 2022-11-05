@@ -71,6 +71,8 @@ test('sublevel is extensible', function (t) {
 
 // NOTE: adapted from subleveldown
 test('sublevel prefix and options', function (t) {
+  // TODO: rename "prefix" to "name" where appropriate. E.g. this test should be
+  // called 'empty name' rather than 'empty prefix'.
   t.test('empty prefix', function (t) {
     const sub = new NoopLevel().sublevel('')
     t.is(sub.prefix, '!!')
@@ -89,6 +91,38 @@ test('sublevel prefix and options', function (t) {
     t.end()
   })
 
+  t.test('array name', function (t) {
+    const sub = new NoopLevel().sublevel(['a', 'b'])
+    t.is(sub.prefix, '!a!!b!')
+    const alt = new NoopLevel().sublevel('a').sublevel('b')
+    t.is(alt.prefix, sub.prefix)
+    t.end()
+  })
+
+  t.test('empty array name', function (t) {
+    const sub = new NoopLevel().sublevel(['', ''])
+    t.is(sub.prefix, '!!!!')
+    const alt = new NoopLevel().sublevel('').sublevel('')
+    t.is(alt.prefix, sub.prefix)
+    t.end()
+  })
+
+  t.test('array name with single element', function (t) {
+    const sub = new NoopLevel().sublevel(['a'])
+    t.is(sub.prefix, '!a!')
+    const alt = new NoopLevel().sublevel('a')
+    t.is(alt.prefix, sub.prefix)
+    t.end()
+  })
+
+  t.test('array name and separator option', function (t) {
+    const sub = new NoopLevel().sublevel(['a', 'b'], { separator: '%' })
+    t.is(sub.prefix, '%a%%b%')
+    const alt = new NoopLevel().sublevel('a', { separator: '%' }).sublevel('b', { separator: '%' })
+    t.is(alt.prefix, sub.prefix)
+    t.end()
+  })
+
   t.test('separator is trimmed from prefix', function (t) {
     const sub1 = new NoopLevel().sublevel('!prefix')
     t.is(sub1.prefix, '!prefix!')
@@ -102,19 +136,29 @@ test('sublevel prefix and options', function (t) {
     const sub4 = new NoopLevel().sublevel('@prefix@', { separator: '@' })
     t.is(sub4.prefix, '@prefix@')
 
+    const sub5 = new NoopLevel().sublevel(['!!!a', 'b!!!'])
+    t.is(sub5.prefix, '!a!!b!')
+
+    const sub6 = new NoopLevel().sublevel(['a@@@', '@@@b'], { separator: '@' })
+    t.is(sub6.prefix, '@a@@b@')
+
     t.end()
   })
 
   t.test('repeated separator can not result in empty prefix', function (t) {
-    const sub = new NoopLevel().sublevel('!!!!')
-    t.is(sub.prefix, '!!')
+    const sub1 = new NoopLevel().sublevel('!!!!')
+    t.is(sub1.prefix, '!!')
+    const sub2 = new NoopLevel().sublevel(['!!!!', '!!!!'])
+    t.is(sub2.prefix, '!!!!')
     t.end()
   })
 
   t.test('invalid sublevel prefix', function (t) {
     t.throws(() => new NoopLevel().sublevel('foo\x05'), (err) => err.code === 'LEVEL_INVALID_PREFIX')
     t.throws(() => new NoopLevel().sublevel('foo\xff'), (err) => err.code === 'LEVEL_INVALID_PREFIX')
+    t.throws(() => new NoopLevel().sublevel(['ok', 'foo\xff']), (err) => err.code === 'LEVEL_INVALID_PREFIX')
     t.throws(() => new NoopLevel().sublevel('foo!', { separator: '@' }), (err) => err.code === 'LEVEL_INVALID_PREFIX')
+    t.throws(() => new NoopLevel().sublevel(['ok', 'foo!'], { separator: '@' }), (err) => err.code === 'LEVEL_INVALID_PREFIX')
     t.end()
   })
 
@@ -162,12 +206,24 @@ test('sublevel.prefixKey()', function (t) {
 
   t.same(sub.prefixKey('', 'utf8'), '!test!')
   t.same(sub.prefixKey('a', 'utf8'), '!test!a')
+  t.same(sub.prefixKey('', 'utf8', false), '!test!', 'explicitly global')
+  t.same(sub.prefixKey('a', 'utf8', false), '!test!a', 'explicitly global')
+  t.same(sub.prefixKey('', 'utf8', true), '!test!', 'local')
+  t.same(sub.prefixKey('a', 'utf8', true), '!test!a', 'local')
 
   t.same(sub.prefixKey(Buffer.from(''), 'buffer'), Buffer.from('!test!'))
   t.same(sub.prefixKey(Buffer.from('a'), 'buffer'), Buffer.from('!test!a'))
 
   t.same(sub.prefixKey(textEncoder.encode(''), 'view'), textEncoder.encode('!test!'))
   t.same(sub.prefixKey(textEncoder.encode('a'), 'view'), textEncoder.encode('!test!a'))
+
+  const nested = sub.sublevel('nested')
+  t.same(nested.prefixKey('', 'utf8'), '!test!!nested!')
+  t.same(nested.prefixKey('a', 'utf8'), '!test!!nested!a')
+  t.same(nested.prefixKey('', 'utf8', false), '!test!!nested!', 'explicitly global')
+  t.same(nested.prefixKey('a', 'utf8', false), '!test!!nested!a', 'explicitly global')
+  t.same(nested.prefixKey('', 'utf8', true), '!nested!', 'local')
+  t.same(nested.prefixKey('a', 'utf8', true), '!nested!a', 'local')
 
   t.end()
 })

@@ -220,9 +220,9 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Create a sublevel.
    * @param name Name of the sublevel, used to prefix keys.
    */
-  sublevel (name: string): AbstractSublevel<typeof this, TFormat, string, string>
+  sublevel (name: string | string[]): AbstractSublevel<typeof this, TFormat, string, string>
   sublevel<K = string, V = string> (
-    name: string,
+    name: string | string[],
     options: AbstractSublevelOptions<K, V>
   ): AbstractSublevel<typeof this, TFormat, K, V>
 
@@ -234,10 +234,11 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * @param keyFormat Format of {@link key}. One of `'utf8'`, `'buffer'`, `'view'`.
    * If `'utf8'` then {@link key} must be a string and the return value will be a string.
    * If `'buffer'` then Buffer, if `'view'` then Uint8Array.
+   * @param local If true, add prefix for parent database, else for root database (default).
    */
-  prefixKey (key: string, keyFormat: 'utf8'): string
-  prefixKey (key: Buffer, keyFormat: 'buffer'): Buffer
-  prefixKey (key: Uint8Array, keyFormat: 'view'): Uint8Array
+  prefixKey (key: string, keyFormat: 'utf8', local?: boolean | undefined): string
+  prefixKey (key: Buffer, keyFormat: 'buffer', local?: boolean | undefined): Buffer
+  prefixKey (key: Uint8Array, keyFormat: 'view', local?: boolean | undefined): Uint8Array
 
   /**
    * Returns the given {@link encoding} argument as a normalized encoding object
