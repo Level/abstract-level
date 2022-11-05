@@ -979,7 +979,7 @@ Emitted when database is opening. Receives 0 arguments:
 
 ```js
 db.once('opening', function () {
-  console.log('Opening..')
+  console.log('Opening...')
 })
 ```
 
@@ -1030,10 +1030,10 @@ As an example, given a sublevel created with `users = db.sublevel('users', { val
 
 ```js
 [{
-  type: 'put'
+  type: 'put',
   key: 'isa',
   value: { score: 10 },
-  keyEncoding: users.keyEncoding('utf8')
+  keyEncoding: users.keyEncoding('utf8'),
   valueEncoding: users.valueEncoding('json'),
   encodedKey: 'isa', // No change (was already utf8)
   encodedValue: '{"score":10}', // JSON-encoded
@@ -1044,10 +1044,10 @@ Because sublevels encode and then forward operations to their parent database, a
 
 ```js
 [{
-  type: 'put'
+  type: 'put',
   key: '!users!isa', // Prefixed
   value: '{"score":10}', // No change
-  keyEncoding: db.keyEncoding('utf8')
+  keyEncoding: db.keyEncoding('utf8'),
   valueEncoding: db.valueEncoding('utf8'),
   encodedKey: '!users!isa',
   encodedValue: '{"score":10}'
@@ -1066,7 +1066,7 @@ We'll get:
 
 ```js
 [{
-  type: 'del'
+  type: 'del',
   key: '!users!isa', // Prefixed
   keyEncoding: db.keyEncoding('utf8'),
   encodedKey: '!users!isa'

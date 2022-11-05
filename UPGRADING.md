@@ -43,7 +43,7 @@ const colorIndex = indexes.sublevel('colors')
 
 It will now forward its operations to `indexes`, which in turn forwards them to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels. This decreased performance is the **first breaking change** and mainly affects sublevels nested at a depth of more than 2.
 
-To optionally negate it, a new feature has been added to `db.sublevel(name)`: it now accepts an array `name` too. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
+To optionally negate it, a new feature has been added to `db.sublevel(name)`: it now also accepts a `name` that is an array. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
 
 ```js
 const colorIndex = db.sublevel(['idx', 'colors'])
