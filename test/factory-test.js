@@ -41,7 +41,7 @@ module.exports = function (test, testCommon) {
         db1.put('key', 'value', function (err) {
           t.error(err, 'put key in db1')
           db2.get('key', function (err, value) {
-            t.ok(err, 'db2 should be empty')
+            t.error(err, 'no error')
             t.is(value, undefined, 'db2 should be empty')
             close()
           })

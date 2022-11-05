@@ -1,14 +1,9 @@
 'use strict'
 
-const ModuleError = require('module-error')
 const { AbstractLevel, AbstractChainedBatch } = require('..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('..')
 
 const spies = []
-
-exports.verifyNotFoundError = function (err) {
-  return err.code === 'LEVEL_NOT_FOUND' && err.notFound === true && err.status === 404
-}
 
 exports.illegalKeys = [
   { name: 'null key', key: null },
@@ -130,14 +125,8 @@ class MinimalLevel extends AbstractLevel {
   }
 
   _get (key, options, callback) {
+    // Is undefined if not found
     const value = this[kEntries].get(key)
-
-    if (value === undefined) {
-      return this.nextTick(callback, new ModuleError(`Key ${key} was not found`, {
-        code: 'LEVEL_NOT_FOUND'
-      }))
-    }
-
     this.nextTick(callback, null, value)
   }
 
