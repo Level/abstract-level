@@ -133,16 +133,18 @@ exports.args = function (test, testCommon) {
     const type = operation === null ? 'null' : typeof operation
 
     test('test batch() with ' + type + ' operation', assertAsync.ctx(function (t) {
-      t.plan(5)
+      t.plan(3)
 
       db.batch([operation], assertAsync(function (err) {
-        t.is(err && err.name, 'TypeError')
-        t.is(err && err.message, 'A batch operation must be an object', 'correct error message (callback)')
+        // We can either explicitly check the type of the op and throw a TypeError,
+        // or skip that for performance reasons in which case the next thing checked
+        // will be op.key or op.type. Doesn't matter, because we've documented that
+        // TypeErrors and such are not part of the semver contract.
+        t.ok(err && (err.name === 'TypeError' || err.code === 'LEVEL_INVALID_KEY'))
       }))
 
       db.batch([operation]).catch(function (err) {
-        t.is(err.name, 'TypeError')
-        t.is(err.message, 'A batch operation must be an object', 'correct error message (promise)')
+        t.ok(err.name === 'TypeError' || err.code === 'LEVEL_INVALID_KEY')
       })
     }))
   })

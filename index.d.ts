@@ -10,7 +10,9 @@ export {
   AbstractBatchOperation,
   AbstractBatchPutOperation,
   AbstractBatchDelOperation,
-  AbstractClearOptions
+  AbstractClearOptions,
+  AbstractDatabaseHooks,
+  AbstractHook
 } from './types/abstract-level'
 
 export {

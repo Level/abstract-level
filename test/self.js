@@ -480,7 +480,7 @@ test('test batch([]) (array-form) extensibility', function (t) {
     t.equal(spy.callCount, 2, 'got _batch() call')
     t.equal(spy.getCall(1).thisValue, test, '`this` on _batch() was correct')
     t.equal(spy.getCall(1).args.length, 3, 'got three arguments')
-    t.deepEqual(spy.getCall(1).args[0], expectedArray, 'got expected array argument')
+    t.deepEqual(spy.getCall(1).args[0], expectedArray.map(o => ({ ...expectedOptions, ...o })), 'got expected array argument')
     t.deepEqual(spy.getCall(1).args[1], expectedOptions, 'got expected options argument')
     t.equal(typeof spy.getCall(1).args[2], 'function', 'got callback argument')
 
@@ -688,7 +688,7 @@ test('test AbstractChainedBatch#write() extensibility with options', function (t
 })
 
 test('test AbstractChainedBatch#put() extensibility', function (t) {
-  t.plan(7)
+  t.plan(8)
 
   const spy = sinon.spy()
   const expectedKey = 'key'
@@ -705,7 +705,11 @@ test('test AbstractChainedBatch#put() extensibility', function (t) {
     t.equal(spy.getCall(0).args.length, 3, 'got 3 arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
     t.equal(spy.getCall(0).args[1], expectedValue, 'got expected value argument')
-    t.same(spy.getCall(0).args[2], { keyEncoding: 'utf8', valueEncoding: 'utf8' }, 'got expected options argument')
+
+    // May contain more options, just because it's cheaper to not remove them
+    t.is(spy.getCall(0).args[2].keyEncoding, 'utf8', 'got expected keyEncoding option')
+    t.is(spy.getCall(0).args[2].valueEncoding, 'utf8', 'got expected valueEncoding option')
+
     t.equal(returnValue, test, 'get expected return value')
   })
 })
@@ -726,7 +730,10 @@ test('test AbstractChainedBatch#del() extensibility', function (t) {
     t.equal(spy.getCall(0).thisValue, test, '`this` on _del() was correct')
     t.equal(spy.getCall(0).args.length, 2, 'got 2 arguments')
     t.equal(spy.getCall(0).args[0], expectedKey, 'got expected key argument')
-    t.same(spy.getCall(0).args[1], { keyEncoding: 'utf8' }, 'got expected options argument')
+
+    // May contain more options, just because it's cheaper to not remove them
+    t.is(spy.getCall(0).args[1].keyEncoding, 'utf8', 'got expected keyEncoding option')
+
     t.equal(returnValue, test, 'get expected return value')
   })
 })

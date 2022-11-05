@@ -43,6 +43,11 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   supports: IManifest
 
   /**
+   * Allows userland _hook functions_ to customize behavior of the database.
+   */
+  hooks: AbstractDatabaseHooks<typeof this>
+
+  /**
    * Read-only getter that returns a string reflecting the current state of the database:
    *
    * - `'opening'` - waiting for the database to be opened
@@ -215,9 +220,9 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Create a sublevel.
    * @param name Name of the sublevel, used to prefix keys.
    */
-  sublevel (name: string): AbstractSublevel<typeof this, TFormat, string, string>
+  sublevel (name: string | string[]): AbstractSublevel<typeof this, TFormat, string, string>
   sublevel<K = string, V = string> (
-    name: string,
+    name: string | string[],
     options: AbstractSublevelOptions<K, V>
   ): AbstractSublevel<typeof this, TFormat, K, V>
 
@@ -229,10 +234,11 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * @param keyFormat Format of {@link key}. One of `'utf8'`, `'buffer'`, `'view'`.
    * If `'utf8'` then {@link key} must be a string and the return value will be a string.
    * If `'buffer'` then Buffer, if `'view'` then Uint8Array.
+   * @param local If true, add prefix for parent database, else for root database (default).
    */
-  prefixKey (key: string, keyFormat: 'utf8'): string
-  prefixKey (key: Buffer, keyFormat: 'buffer'): Buffer
-  prefixKey (key: Uint8Array, keyFormat: 'view'): Uint8Array
+  prefixKey (key: string, keyFormat: 'utf8', local?: boolean | undefined): string
+  prefixKey (key: Buffer, keyFormat: 'buffer', local?: boolean | undefined): Buffer
+  prefixKey (key: Uint8Array, keyFormat: 'view', local?: boolean | undefined): Uint8Array
 
   /**
    * Returns the given {@link encoding} argument as a normalized encoding object
@@ -482,4 +488,76 @@ export interface AbstractClearOptions<K> extends RangeOptions<K> {
    * Custom key encoding for this operation, used to encode range options.
    */
   keyEncoding?: string | Transcoder.PartialEncoding<K> | undefined
+}
+
+/**
+ * Allows userland _hook functions_ to customize behavior of the database.
+ *
+ * @template TDatabase Type of database.
+ */
+export interface AbstractDatabaseHooks<
+  TDatabase,
+  TOpenOptions = AbstractOpenOptions,
+  TBatchOperation = AbstractBatchOperation<TDatabase, any, any>> {
+  /**
+   * An asynchronous hook that runs after the database has succesfully opened, but before
+   * deferred operations are executed and before events are emitted. Example:
+   *
+   * ```js
+   * db.hooks.postopen.add(async function () {
+   *   // Initialize data
+   * })
+   * ```
+   */
+  postopen: AbstractHook<(options: TOpenOptions) => Promise<void>>
+
+  /**
+   * A synchronous hook for modifying or adding operations. Example:
+   *
+   * ```js
+   * db.hooks.prewrite.add(function (op, batch) {
+   *   op.key = op.key.toUpperCase()
+   * })
+   * ```
+   *
+   * @todo Define type of `op`.
+   */
+  prewrite: AbstractHook<(op: any, batch: AbstractPrewriteBatch<TBatchOperation>) => void>
+
+  /**
+   * A synchronous hook that runs when an {@link AbstractSublevel} instance has been
+   * created by {@link AbstractLevel.sublevel()}.
+   */
+  newsub: AbstractHook<(
+    sublevel: AbstractSublevel<TDatabase, any, any, any>,
+    options: AbstractSublevelOptions<any, any>
+  ) => void>
+}
+
+/**
+ * An interface for prewrite hook functions to add operations, to be committed in the
+ * same batch as the input operation(s).
+ */
+export interface AbstractPrewriteBatch<TBatchOperation> {
+  /**
+   * Add a batch operation.
+   */
+  add: (op: TBatchOperation) => this
+}
+
+/**
+ * @template TFn The hook-specific function signature.
+ */
+export interface AbstractHook<TFn extends Function> {
+  /**
+   * Add the given {@link fn} function to this hook, if it wasn't already added.
+   * @param fn Hook function.
+   */
+  add: (fn: TFn) => void
+
+  /**
+   * Remove the given {@link fn} function from this hook.
+   * @param fn Hook function.
+   */
+  delete: (fn: TFn) => void
 }
