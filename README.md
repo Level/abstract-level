@@ -99,7 +99,6 @@
     - [`del` (deprecated)](#del-deprecated)
     - [`batch` (deprecated)](#batch-deprecated)
   - [Errors](#errors)
-    - [`LEVEL_NOT_FOUND`](#level_not_found)
     - [`LEVEL_DATABASE_NOT_OPEN`](#level_database_not_open)
     - [`LEVEL_DATABASE_NOT_CLOSED`](#level_database_not_closed)
     - [`LEVEL_ITERATOR_NOT_OPEN`](#level_iterator_not_open)
@@ -296,7 +295,7 @@ Get a value from the database by `key`. The optional `options` object may contai
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
 
-The `callback` function will be called with an error if the operation failed. If the key was not found, the error will have code [`LEVEL_NOT_FOUND`](#errors). If successful the first argument will be `null` and the second argument will be the value. If no callback is provided, a promise is returned.
+The `callback` function will be called with an error if the operation failed. If successful the first argument will be nullish and the second argument will be the value. If the `key` was not found then the value will be `undefined`. If no callback is provided, a promise is returned.
 
 If the database indicates support of snapshots via `db.supports.snapshots` then `db.get()` _should_ read from a snapshot of the database, created at the time `db.get()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
 
@@ -1138,10 +1137,6 @@ A database may also throw [`TypeError`](https://developer.mozilla.org/en-US/docs
 
 Error codes will be one of the following.
 
-#### `LEVEL_NOT_FOUND`
-
-When a key was not found.
-
 #### `LEVEL_DATABASE_NOT_OPEN`
 
 When an operation was made on a database while it was closing or closed. Or when a database failed to `open()` including when `close()` was called in the mean time, thus changing the eventual `status`. The error may have a `cause` property that explains a failure to open:
@@ -1296,7 +1291,6 @@ Let's implement a basic in-memory database:
 
 ```js
 const { AbstractLevel } = require('abstract-level')
-const ModuleError = require('module-error')
 
 class ExampleLevel extends AbstractLevel {
   // This in-memory example doesn't have a location argument
@@ -1323,14 +1317,8 @@ class ExampleLevel extends AbstractLevel {
   }
 
   _get (key, options, callback) {
+    // Is undefined if not found
     const value = this._entries.get(key)
-
-    if (value === undefined) {
-      return this.nextTick(callback, new ModuleError(`Key ${key} was not found`, {
-        code: 'LEVEL_NOT_FOUND'
-      }))
-    }
-
     this.nextTick(callback, null, value)
   }
 
@@ -1420,9 +1408,9 @@ The default `_close()` is a sensible noop and invokes `callback` on a next tick.
 
 ### `db._get(key, options, callback)`
 
-Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If the key does not exist, call the `callback` function with an error that has code [`LEVEL_NOT_FOUND`](#errors). Otherwise call `callback` with `null` as the first argument and the value as the second.
+Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If an error occurs, call the `callback` function with an error. Otherwise call `callback` with `null` as the first argument and the value as the second. If the `key` was not found then use `undefined` as value.
 
-The default `_get()` invokes `callback` on a next tick with a `LEVEL_NOT_FOUND` error. It must be overridden.
+The default `_get()` invokes `callback` on a next tick with an `undefined` value. It must be overridden.
 
 ### `db._getMany(keys, options, callback)`
 

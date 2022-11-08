@@ -13,8 +13,9 @@ exports.all = function (test, testCommon) {
         t.is(db.status, 'open', 'status is ok')
 
         if (--pendingGets <= 0) {
-          db.get('k4', { valueEncoding: 'utf8' }, function (err) {
-            t.ok(err)
+          db.get('k4', { valueEncoding: 'utf8' }, function (err, v) {
+            t.ifError(err, 'no get() error')
+            t.is(v, undefined, 'not found')
             db.close(t.ifError.bind(t))
           })
         }
@@ -24,7 +25,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from levelup
   test('deferred open(): put() and get() on new database', function (t) {
-    t.plan(15)
+    t.plan(16)
 
     // Open database without callback, opens in next tick
     const db = testCommon.factory()
@@ -47,7 +48,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from levelup
   test('deferred open(): batch() on new database', function (t) {
-    t.plan(13)
+    t.plan(14)
 
     // Open database without callback, opens in next tick
     const db = testCommon.factory()
@@ -67,7 +68,7 @@ exports.all = function (test, testCommon) {
 
   // NOTE: copied from levelup
   test('deferred open(): chained batch() on new database', function (t) {
-    t.plan(13)
+    t.plan(14)
 
     // Open database without callback, opens in next tick
     const db = testCommon.factory()

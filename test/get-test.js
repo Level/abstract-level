@@ -1,7 +1,7 @@
 'use strict'
 
 const isBuffer = require('is-buffer')
-const { verifyNotFoundError, illegalKeys, assertAsync } = require('./util')
+const { illegalKeys, assertAsync } = require('./util')
 
 let db
 
@@ -69,9 +69,8 @@ exports.get = function (test, testCommon) {
       db.get('promises').then(function (value) {
         t.is(value, 'yes', 'got value without options')
 
-        db.get('not found').catch(function (err) {
-          t.ok(err, 'should error')
-          t.ok(verifyNotFoundError(err), 'correct error')
+        db.get('not found').then(function (value) {
+          t.is(value, undefined, 'not found')
 
           if (!db.supports.encodings.buffer) {
             return t.end()
@@ -105,9 +104,8 @@ exports.get = function (test, testCommon) {
 
       for (let i = 0; i < 10; ++i) {
         db.get('not found', function (err, value) {
-          t.ok(err, 'should error')
-          t.ok(verifyNotFoundError(err), 'correct error')
-          t.ok(typeof value === 'undefined', 'value is undefined')
+          t.error(err, 'no error')
+          t.is(value, undefined, 'not found')
           done()
         })
       }
@@ -115,14 +113,13 @@ exports.get = function (test, testCommon) {
   })
 
   test('test get() not found error is asynchronous', function (t) {
-    t.plan(4)
+    t.plan(3)
 
     let async = false
 
     db.get('not found', function (err, value) {
-      t.ok(err, 'should error')
-      t.ok(verifyNotFoundError(err), 'correct error')
-      t.ok(typeof value === 'undefined', 'value is undefined')
+      t.error(err, 'no error')
+      t.is(value, undefined, 'not found')
       t.ok(async, 'callback is asynchronous')
     })
 
