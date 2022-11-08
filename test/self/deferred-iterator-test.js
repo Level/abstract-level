@@ -10,13 +10,13 @@ const identity = (v) => v
 for (const mode of ['iterator', 'keys', 'values']) {
   const RealCtor = mode === 'iterator' ? AbstractIterator : mode === 'keys' ? AbstractKeyIterator : AbstractValueIterator
   const DeferredCtor = mode === 'iterator' ? DeferredIterator : mode === 'keys' ? DeferredKeyIterator : DeferredValueIterator
-  const nextArgs = mode === 'iterator' ? ['key', 'value'] : mode === 'keys' ? ['key'] : ['value']
+  const nextArg = mode === 'iterator' ? ['key', 'value'] : mode === 'keys' ? 'key' : 'value'
   const privateMethod = '_' + mode
   const publicMethod = mode
 
   // NOTE: adapted from deferred-leveldown
   test(`deferred ${mode}()`, function (t) {
-    t.plan(8)
+    t.plan(6)
 
     const keyEncoding = {
       format: 'utf8',
@@ -28,13 +28,11 @@ for (const mode of ['iterator', 'keys', 'values']) {
     }
 
     class MockIterator extends RealCtor {
-      _next (cb) {
-        this.nextTick(cb, null, ...nextArgs)
+      async _next (options) {
+        return nextArg
       }
 
-      _close (cb) {
-        this.nextTick(cb)
-      }
+      async _close () {}
     }
 
     const db = mockLevel({
@@ -42,9 +40,8 @@ for (const mode of ['iterator', 'keys', 'values']) {
         t.is(options.gt, 'FOO', 'got encoded range option')
         return new MockIterator(this, options)
       },
-      _open: function (options, callback) {
+      async _open (options) {
         t.pass('opened')
-        this.nextTick(callback)
       }
     }, { encodings: { utf8: true } }, {
       keyEncoding
@@ -55,29 +52,27 @@ for (const mode of ['iterator', 'keys', 'values']) {
 
     let nextFirst = false
 
-    it.next(function (err, ...rest) {
+    it.next().then(function (item) {
       nextFirst = true
-      t.error(err, 'no next() error')
-      t.same(rest, nextArgs)
+      t.is(item, nextArg)
     })
 
-    it.close(function (err) {
-      t.error(err, 'no close() error')
+    it.close().then(function () {
       t.ok(nextFirst)
     })
   })
 
   // NOTE: adapted from deferred-leveldown
   test(`deferred ${mode}(): non-deferred operations`, function (t) {
-    t.plan(6)
+    t.plan(4)
 
     class MockIterator extends RealCtor {
       _seek (target) {
         t.is(target, '123')
       }
 
-      _next (cb) {
-        this.nextTick(cb, null, ...nextArgs)
+      async _next (options) {
+        return nextArg
       }
     }
 
@@ -87,17 +82,11 @@ for (const mode of ['iterator', 'keys', 'values']) {
       }
     })
 
-    db.open(function (err) {
-      t.error(err, 'no open() error')
-
+    db.open().then(function () {
       it.seek(123)
-      it.next(function (err, ...rest) {
-        t.error(err, 'no next() error')
-        t.same(rest, nextArgs)
-
-        it.close(function (err) {
-          t.error(err, 'no close() error')
-        })
+      it.next().then(function (item) {
+        t.is(item, nextArg)
+        it.close().then(t.pass.bind(t, 'closed'))
       })
     })
 
@@ -107,7 +96,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
 
   // NOTE: adapted from deferred-leveldown
   test(`deferred ${mode}(): iterators are created in order`, function (t) {
-    t.plan(6)
+    t.plan(4)
 
     const order1 = []
     const order2 = []
@@ -120,11 +109,8 @@ for (const mode of ['iterator', 'keys', 'values']) {
           order.push('iterator created')
           return new MockIterator(this, options)
         },
-        _put: function (key, value, options, callback) {
+        async _put (key, value, options) {
           order.push('put')
-        },
-        _open: function (options, callback) {
-          this.nextTick(callback)
         }
       })
     }
@@ -132,13 +118,11 @@ for (const mode of ['iterator', 'keys', 'values']) {
     const db1 = db(order1)
     const db2 = db(order2)
 
-    db1.open(function (err) {
-      t.error(err, 'no error')
+    db1.open().then(function () {
       t.same(order1, ['iterator created', 'put'])
     })
 
-    db2.open(function (err) {
-      t.error(err, 'no error')
+    db2.open().then(function () {
       t.same(order2, ['put', 'iterator created'])
     })
 
@@ -154,9 +138,9 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.plan(5)
 
       const db = mockLevel({
-        _open (options, callback) {
+        async _open (options) {
           t.pass('opening')
-          this.nextTick(callback, new Error('_open error'))
+          throw new Error('_open error')
         },
         _iterator () {
           t.fail('should not be called')
@@ -170,7 +154,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.ok(it instanceof DeferredCtor)
 
       const original = it._close
-      it._close = function (...args) {
+      it._close = async function (...args) {
         t.pass('closed')
         return original.call(this, ...args)
       }
@@ -179,12 +163,11 @@ for (const mode of ['iterator', 'keys', 'values']) {
     })
 
     test(`deferred ${mode}(): deferred and real iterators are closed on db.close(), verified by ${method}()`, function (t) {
-      t.plan(10)
+      t.plan(8)
 
       class MockIterator extends RealCtor {
-        _close (callback) {
+        async _close () {
           t.pass('closed')
-          this.nextTick(callback)
         }
       }
 
@@ -198,21 +181,17 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.ok(it instanceof DeferredCtor)
 
       const original = it._close
-      it._close = function (...args) {
+      it._close = async function (...args) {
         t.pass('closed')
         return original.call(this, ...args)
       }
 
-      db.close(function (err) {
-        t.ifError(err, 'no close() error')
-
+      db.open().then(() => db.close()).then(function () {
         verifyClosed(t, it, method, function () {
-          db.open(function (err) {
-            t.ifError(err, 'no open() error')
-
+          db.open().then(function () {
             // Should still be closed
             verifyClosed(t, it, method, function () {
-              db.close(t.ifError.bind(t))
+              db.close().then(t.pass.bind(t))
             })
           })
         })
@@ -220,9 +199,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
     })
   }
 
-  test(`deferred ${mode}(): deferred and real iterators are detached on db.close()`, function (t) {
-    t.plan(4)
-
+  test(`deferred ${mode}(): deferred and real iterators are detached on db.close()`, async function (t) {
     class MockIterator extends RealCtor {}
 
     let real
@@ -236,36 +213,49 @@ for (const mode of ['iterator', 'keys', 'values']) {
     const it = db[publicMethod]()
     t.ok(it instanceof DeferredCtor)
 
-    db.close(function (err) {
-      t.ifError(err, 'no close() error')
+    const calls = []
+    const wrap = (obj, name) => {
+      const original = obj.close
 
-      db.open(function (err) {
-        t.ifError(err, 'no open() error')
+      obj.close = async function (...args) {
+        calls.push(name)
+        return original.apply(this, args)
+      }
+    }
 
-        it.close = real.close = it._close = real._close = function () {
-          t.fail('should not be called')
-        }
+    // First open(), to also create the real iterator.
+    await db.open()
 
-        db.close(t.ifError.bind(t))
-      })
-    })
+    wrap(it, 'deferred')
+    wrap(real, 'real')
+
+    await db.close()
+
+    // There may have been 2 real.close() calls: one by the db closing resources, and
+    // another by the deferred iterator that wraps real. Not relevant for this test.
+    t.same(calls.splice(0, calls.length).slice(0, 2), ['deferred', 'real'])
+
+    // Reopen. Resources should be detached at this point.
+    await db.open()
+    await db.close()
+
+    // So close() should not have been called again.
+    t.same(calls, [], 'no new calls')
   })
 
   test(`deferred ${mode}(): defers underlying close()`, function (t) {
-    t.plan(3)
+    t.plan(2)
 
     class MockIterator extends RealCtor {
-      _close (callback) {
+      async _close () {
         order.push('_close')
-        this.nextTick(callback)
       }
     }
 
     const order = []
     const db = mockLevel({
-      _open (options, callback) {
+      async _open (options) {
         order.push('_open')
-        this.nextTick(callback)
       },
       [privateMethod] (options) {
         order.push(privateMethod)
@@ -276,20 +266,20 @@ for (const mode of ['iterator', 'keys', 'values']) {
     const it = db[publicMethod]()
     t.ok(it instanceof DeferredCtor)
 
-    it.close(function (err) {
-      t.ifError(err, 'no close() error')
+    it.close().then(function () {
       t.same(order, ['_open', privateMethod, '_close'])
     })
   })
 
+  // TODO: async/await
   const verifyClosed = function (t, it, method, cb) {
     const requiredArgs = method === 'nextv' ? [10] : []
 
-    it[method](...requiredArgs, function (err) {
+    it[method](...requiredArgs).then(t.fail.bind(t, 'should not succeed'), function (err) {
       t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN', `correct error on first ${method}()`)
 
       // Should account for userland code that ignores errors
-      it[method](...requiredArgs, function (err) {
+      it[method](...requiredArgs).then(t.fail.bind(t, 'should not succeed'), function (err) {
         t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN', `correct error on second ${method}()`)
         cb()
       })

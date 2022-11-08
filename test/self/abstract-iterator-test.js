@@ -2,6 +2,7 @@
 
 const test = require('tape')
 const { AbstractLevel, AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('../..')
+const { AbortSignal } = require('../../lib/abort')
 
 const testCommon = require('../common')({
   test,
@@ -50,14 +51,15 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.next() extensibility`, async function (t) {
-    t.plan(3)
+    t.plan(4)
 
     class TestIterator extends Ctor {
-      _next (callback) {
+      async _next (options) {
         t.is(this, it, 'thisArg on _next() was correct')
         t.is(arguments.length, 1, 'got one argument')
-        t.is(typeof callback, 'function', 'got a callback function')
-        this.nextTick(callback)
+        const { signal, ...rest } = options
+        t.ok(signal instanceof AbortSignal)
+        t.same(rest, {})
       }
     }
 
@@ -68,35 +70,18 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
     await db.close()
   })
 
-  test(`${Ctor.name}.next() throws on invalid callback argument`, async function (t) {
-    t.plan(3 * 2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    for (const invalid of [{}, null, 'foo']) {
-      const it = new Ctor(db, {})
-
-      try {
-        it.next(invalid)
-      } catch (err) {
-        t.is(err.name, 'TypeError')
-        t.is(err.message, 'Callback must be a function')
-      }
-    }
-  })
-
   test(`${Ctor.name}.nextv() extensibility`, async function (t) {
     t.plan(5 * 2)
 
     class TestIterator extends Ctor {
-      _nextv (size, options, callback) {
+      async _nextv (size, options) {
         t.is(this, it, 'thisArg on _nextv() was correct')
-        t.is(arguments.length, 3, 'got 3 arguments')
+        t.is(arguments.length, 2, 'got 2 arguments')
         t.is(size, 100)
-        t.same(options, {}, 'empty options')
-        t.is(typeof callback, 'function', 'got a callback function')
-        this.nextTick(callback, null, [])
+        const { signal, ...rest } = options
+        t.ok(signal instanceof AbortSignal)
+        t.same(rest, {})
+        return []
       }
     }
 
@@ -109,13 +94,15 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.nextv() extensibility (options)`, async function (t) {
-    t.plan(2)
+    t.plan(3)
 
     class TestIterator extends Ctor {
-      _nextv (size, options, callback) {
+      async _nextv (size, options) {
         t.is(size, 100)
-        t.same(options, { foo: 123 }, 'got options')
-        this.nextTick(callback, null, [])
+        const { signal, ...rest } = options
+        t.ok(signal instanceof AbortSignal)
+        t.same(rest, { foo: 123 }, 'got userland options')
+        return []
       }
     }
 
@@ -123,25 +110,8 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
     await db.open()
     const it = new TestIterator(db, {})
     await it.nextv(100, { foo: 123 })
-    await db.close()
-  })
 
-  test(`${Ctor.name}.nextv() throws on invalid callback argument`, async function (t) {
-    t.plan(3 * 2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    for (const invalid of [{}, null, 'foo']) {
-      const it = new Ctor(db, {})
-
-      try {
-        it.nextv(100, {}, invalid)
-      } catch (err) {
-        t.is(err.name, 'TypeError')
-        t.is(err.message, 'Callback must be a function')
-      }
-    }
+    return db.close()
   })
 
   test(`${Ctor.name}.all() extensibility`, async function (t) {
@@ -149,12 +119,13 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
 
     for (const args of [[], [{}]]) {
       class TestIterator extends Ctor {
-        _all (options, callback) {
+        async _all (options) {
           t.is(this, it, 'thisArg on _all() was correct')
-          t.is(arguments.length, 2, 'got 2 arguments')
-          t.same(options, {}, 'empty options')
-          t.is(typeof callback, 'function', 'got a callback function')
-          this.nextTick(callback, null, [])
+          t.is(arguments.length, 1, 'got 1 argument')
+          const { signal, ...rest } = options
+          t.ok(signal instanceof AbortSignal)
+          t.same(rest, {}, '')
+          return []
         }
       }
 
@@ -167,12 +138,14 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.all() extensibility (options)`, async function (t) {
-    t.plan(1)
+    t.plan(2)
 
     class TestIterator extends Ctor {
-      _all (options, callback) {
-        t.same(options, { foo: 123 }, 'got options')
-        this.nextTick(callback, null, [])
+      async _all (options) {
+        const { signal, ...rest } = options
+        t.ok(signal instanceof AbortSignal)
+        t.same(rest, { foo: 123 }, 'got userland options')
+        return []
       }
     }
 
@@ -183,33 +156,29 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
     await db.close()
   })
 
-  test(`${Ctor.name}.all() throws on invalid callback argument`, async function (t) {
-    t.plan(3 * 2)
+  test(`${Ctor.name}.seek() throws if not implemented`, async function (t) {
+    t.plan(1)
 
     const db = testCommon.factory()
     await db.open()
+    const it = new Ctor(db, {})
 
-    for (const invalid of [{}, null, 'foo']) {
-      const it = new Ctor(db, {})
-
-      try {
-        it.all({}, invalid)
-      } catch (err) {
-        t.is(err.name, 'TypeError')
-        t.is(err.message, 'Callback must be a function')
-      }
+    try {
+      it.seek('123')
+    } catch (err) {
+      t.is(err.code, 'LEVEL_NOT_SUPPORTED')
     }
+
+    return db.close()
   })
 
   test(`${Ctor.name}.close() extensibility`, async function (t) {
-    t.plan(3)
+    t.plan(2)
 
     class TestIterator extends Ctor {
-      _close (callback) {
+      async _close () {
         t.is(this, it, 'thisArg on _close() was correct')
-        t.is(arguments.length, 1, 'got one argument')
-        t.is(typeof callback, 'function', 'got a callback function')
-        this.nextTick(callback)
+        t.is(arguments.length, 0, 'got 0 arguments')
       }
     }
 
@@ -218,24 +187,6 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
     const it = new TestIterator(db, {})
     await it.close()
     await db.close()
-  })
-
-  test(`${Ctor.name}.close() throws on invalid callback argument`, async function (t) {
-    t.plan(3 * 2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    for (const invalid of [{}, null, 'foo']) {
-      const it = new Ctor(db, {})
-
-      try {
-        it.close(invalid)
-      } catch (err) {
-        t.is(err.name, 'TypeError')
-        t.is(err.message, 'Callback must be a function')
-      }
-    }
   })
 }
 

@@ -6,9 +6,9 @@ const identity = (v) => v
 let db
 
 exports.setUp = function (test, testCommon) {
-  test('setUp db', function (t) {
+  test('iterator setup', async function (t) {
     db = testCommon.factory()
-    db.open(t.end.bind(t))
+    return db.open()
   })
 }
 
@@ -57,64 +57,48 @@ exports.args = function (test, testCommon) {
 
 exports.sequence = function (test, testCommon) {
   for (const mode of ['iterator', 'keys', 'values']) {
-    test(`${mode}().close() is idempotent`, function (t) {
+    test(`${mode}().close() is idempotent`, async function (t) {
       const iterator = db[mode]()
 
-      iterator.close(function () {
-        let async = false
+      await iterator.close()
+      await iterator.close()
 
-        iterator.close(function () {
-          t.ok(async, 'callback is asynchronous')
-          t.end()
-        })
-
-        async = true
-      })
+      return Promise.all([iterator.close(), iterator.close()])
     })
 
     for (const method of ['next', 'nextv', 'all']) {
       const requiredArgs = method === 'nextv' ? [1] : []
 
-      test(`${mode}().${method}() after close() yields error`, function (t) {
+      test(`${mode}().${method}() after close() yields error`, async function (t) {
+        t.plan(1)
+
         const iterator = db[mode]()
-        iterator.close(function (err) {
-          t.error(err)
+        await iterator.close()
 
-          let async = false
-
-          iterator[method](...requiredArgs, function (err2) {
-            t.ok(err2, 'returned error')
-            t.is(err2.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct message')
-            t.ok(async, 'callback is asynchronous')
-            t.end()
-          })
-
-          async = true
-        })
+        try {
+          await iterator[method](...requiredArgs)
+        } catch (err) {
+          t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN', 'correct message')
+        }
       })
 
       for (const otherMethod of ['next', 'nextv', 'all']) {
         const otherRequiredArgs = otherMethod === 'nextv' ? [1] : []
 
-        test(`${mode}().${method}() while busy with ${otherMethod}() yields error`, function (t) {
+        test(`${mode}().${method}() while busy with ${otherMethod}() yields error`, async function (t) {
+          t.plan(1)
+
           const iterator = db[mode]()
-          iterator[otherMethod](...otherRequiredArgs, function (err) {
-            t.error(err)
-            iterator.close(function (err) {
-              t.error(err)
-              t.end()
-            })
-          })
+          const promise = iterator[otherMethod](...otherRequiredArgs)
 
-          let async = false
-
-          iterator[method](...requiredArgs, function (err) {
-            t.ok(err, 'returned error')
+          try {
+            await iterator[method](...requiredArgs)
+          } catch (err) {
             t.is(err.code, 'LEVEL_ITERATOR_BUSY')
-            t.ok(async, 'callback is asynchronous')
-          })
+          }
 
-          async = true
+          await promise
+          return iterator.close()
         })
       }
     }
@@ -142,7 +126,7 @@ exports.sequence = function (test, testCommon) {
           // implementation can also choose to abort any pending call on close.
           let promise = it[method](...requiredArgs).then(() => {
             t.pass('Optionally succeeded')
-          }).catch((err) => {
+          }, (err) => {
             t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
           })
 
@@ -150,7 +134,7 @@ exports.sequence = function (test, testCommon) {
           promise = promise.then(() => {
             return it[method](...requiredArgs).then(() => {
               t.fail('Expected an error')
-            }).catch((err) => {
+            }, (err) => {
               t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
             })
           })
@@ -163,84 +147,60 @@ exports.sequence = function (test, testCommon) {
 }
 
 exports.iterator = function (test, testCommon) {
-  test('test simple iterator()', function (t) {
+  test('simple iterator().next()', async function (t) {
     const data = [
       { type: 'put', key: 'foobatch1', value: 'bar1' },
       { type: 'put', key: 'foobatch2', value: 'bar2' },
       { type: 'put', key: 'foobatch3', value: 'bar3' }
     ]
+
+    await db.batch(data)
+    const iterator = db.iterator()
+
     let idx = 0
+    let entry
 
-    db.batch(data, function (err) {
-      t.error(err)
-      const iterator = db.iterator()
-      const fn = function (err, key, value) {
-        t.error(err)
-        if (key && value) {
-          t.is(key, data[idx].key, 'correct key')
-          t.is(value, data[idx].value, 'correct value')
-          db.nextTick(next)
-          idx++
-        } else { // end
-          t.ok(err == null, 'err argument is nullish')
-          t.ok(typeof key === 'undefined', 'key argument is undefined')
-          t.ok(typeof value === 'undefined', 'value argument is undefined')
-          t.is(idx, data.length, 'correct number of entries')
-          iterator.close(function () {
-            t.end()
-          })
-        }
-      }
-      const next = function () {
-        iterator.next(fn)
-      }
+    while ((entry = await iterator.next()) !== undefined) {
+      t.is(entry[0], data[idx].key, 'correct key')
+      t.is(entry[1], data[idx++].value, 'correct value')
+    }
 
-      next()
-    })
+    t.is(idx, data.length, 'correct number of entries')
+    return iterator.close()
   })
 
   // NOTE: adapted from leveldown
-  test('key-only iterator', function (t) {
+  test('iterator().next() with values: false', async function (t) {
     const it = db.iterator({ values: false })
+    const entry = await it.next()
 
-    it.next(function (err, key, value) {
-      t.ifError(err, 'no next() error')
-      t.is(key, 'foobatch1')
-      t.is(value, undefined)
-      it.close(t.end.bind(t))
-    })
+    t.is(entry[0], 'foobatch1')
+    t.is(entry[1], undefined)
+
+    return it.close()
   })
 
   // NOTE: adapted from leveldown
-  test('value-only iterator', function (t) {
+  test('iterator().next() with keys: false', async function (t) {
     const it = db.iterator({ keys: false })
+    const entry = await it.next()
 
-    it.next(function (err, key, value) {
-      t.ifError(err, 'no next() error')
-      t.is(key, undefined)
-      t.is(value, 'bar1')
-      it.close(t.end.bind(t))
-    })
+    t.is(entry[0], undefined)
+    t.is(entry[1], 'bar1')
+
+    return it.close()
   })
 
-  test('db.keys().next()', function (t) {
+  test('keys().next()', async function (t) {
     const it = db.keys()
-
-    it.next(function (err, key) {
-      t.ifError(err, 'no next() error')
-      t.is(key, 'foobatch1')
-      it.close(t.end.bind(t))
-    })
+    t.is(await it.next(), 'foobatch1')
+    return it.close()
   })
 
-  test('db.values().next()', function (t) {
+  test('values().next()', async function (t) {
     const it = db.values()
-
-    it.next(function (err, value) {
-      t.ifError(err, 'no next() error')
-      t.is(value, 'bar1')
-      it.close(t.end.bind(t))
-    })
+    t.is(await it.next(), 'bar1')
+    return it.close()
   })
 
   for (const mode of ['iterator', 'keys', 'values']) {
@@ -405,35 +365,26 @@ exports.iterator = function (test, testCommon) {
   for (const keyEncoding of ['buffer', 'view']) {
     if (!testCommon.supports.encodings[keyEncoding]) continue
 
-    test(`test iterator() has byte order (${keyEncoding} encoding)`, function (t) {
+    test(`iterators have byte order (${keyEncoding} encoding)`, async function (t) {
       const db = testCommon.factory({ keyEncoding })
+      await db.open()
 
-      db.open(function (err) {
-        t.ifError(err, 'no open() error')
+      const ctor = keyEncoding === 'buffer' ? Buffer : Uint8Array
+      const bytes = [2, 11, 1]
+      const keys = bytes.map(b => ctor.from([b]))
+      const values = bytes.map(b => String(b))
 
-        const ctor = keyEncoding === 'buffer' ? Buffer : Uint8Array
-        const keys = [2, 11, 1].map(b => ctor.from([b]))
+      await db.batch(keys.map((key, i) => ({ type: 'put', key, value: values[i] })))
 
-        db.batch(keys.map((key) => ({ type: 'put', key, value: 'x' })), function (err) {
-          t.ifError(err, 'no batch() error')
+      t.same((await db.keys().all()).map(k => k[0]), [1, 2, 11], 'order of keys() is ok')
+      t.same((await db.iterator().all()).map(e => e[0][0]), [1, 2, 11], 'order of iterator() is ok')
+      t.same(await db.values().all(), ['1', '2', '11'], 'order of values() is ok')
 
-          db.keys().all(function (err, keys) {
-            t.ifError(err, 'no all() error')
-            t.same(keys.map(k => k[0]), [1, 2, 11], 'order is ok')
-
-            db.iterator().all(function (err, entries) {
-              t.ifError(err, 'no all() error')
-              t.same(entries.map(e => e[0][0]), [1, 2, 11], 'order is ok')
-
-              db.close(t.end.bind(t))
-            })
-          })
-        })
-      })
+      return db.close()
     })
 
     // NOTE: adapted from memdown and level-js
-    test(`test iterator() with byte range (${keyEncoding} encoding)`, async function (t) {
+    test(`iterator() with byte range (${keyEncoding} encoding)`, async function (t) {
       const db = testCommon.factory({ keyEncoding })
       await db.open()
 
@@ -510,7 +461,7 @@ exports.decode = function (test, testCommon) {
 
             if (deferred) {
               await db.close()
-              db.open(t.ifError.bind(t))
+              db.open().then(t.pass.bind(t))
             } else {
               t.pass('non-deferred')
             }
@@ -533,8 +484,8 @@ exports.decode = function (test, testCommon) {
 }
 
 exports.tearDown = function (test, testCommon) {
-  test('tearDown', function (t) {
-    db.close(t.end.bind(t))
+  test('iterator teardown', async function (t) {
+    return db.close()
   })
 }
 

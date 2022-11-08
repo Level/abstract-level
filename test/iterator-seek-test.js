@@ -154,99 +154,89 @@ exports.seek = function (test, testCommon) {
       }
     }
 
-    test(`${mode}().seek() respects range`, function (t) {
+    test(`${mode}().seek() respects range`, async function (t) {
       const db = testCommon.factory()
+      await db.open()
+      const ops = []
 
-      db.open(function (err) {
-        t.error(err, 'no error from open()')
+      for (let i = 0; i < 10; i++) {
+        ops.push({ type: 'put', key: String(i), value: String(i) })
+      }
 
-        // Can't use Array.fill() because IE
-        const ops = []
+      await db.batch(ops)
+      const promises = []
 
-        for (let i = 0; i < 10; i++) {
-          ops.push({ type: 'put', key: String(i), value: String(i) })
-        }
+      expect({ gt: '5' }, '4', undefined)
+      expect({ gt: '5' }, '5', undefined)
+      expect({ gt: '5' }, '6', '6')
 
-        db.batch(ops, function (err) {
-          t.error(err, 'no error from batch()')
+      expect({ gte: '5' }, '4', undefined)
+      expect({ gte: '5' }, '5', '5')
+      expect({ gte: '5' }, '6', '6')
 
-          let pending = 0
+      // The gte option should take precedence over gt.
+      expect({ gte: '5', gt: '7' }, '4', undefined)
+      expect({ gte: '5', gt: '7' }, '5', '5')
+      expect({ gte: '5', gt: '7' }, '6', '6')
+      expect({ gte: '5', gt: '3' }, '4', undefined)
+      expect({ gte: '5', gt: '3' }, '5', '5')
+      expect({ gte: '5', gt: '3' }, '6', '6')
 
-          expect({ gt: '5' }, '4', undefined)
-          expect({ gt: '5' }, '5', undefined)
-          expect({ gt: '5' }, '6', '6')
+      expect({ lt: '5' }, '4', '4')
+      expect({ lt: '5' }, '5', undefined)
+      expect({ lt: '5' }, '6', undefined)
 
-          expect({ gte: '5' }, '4', undefined)
-          expect({ gte: '5' }, '5', '5')
-          expect({ gte: '5' }, '6', '6')
+      expect({ lte: '5' }, '4', '4')
+      expect({ lte: '5' }, '5', '5')
+      expect({ lte: '5' }, '6', undefined)
 
-          // The gte option should take precedence over gt.
-          expect({ gte: '5', gt: '7' }, '4', undefined)
-          expect({ gte: '5', gt: '7' }, '5', '5')
-          expect({ gte: '5', gt: '7' }, '6', '6')
-          expect({ gte: '5', gt: '3' }, '4', undefined)
-          expect({ gte: '5', gt: '3' }, '5', '5')
-          expect({ gte: '5', gt: '3' }, '6', '6')
+      // The lte option should take precedence over lt.
+      expect({ lte: '5', lt: '3' }, '4', '4')
+      expect({ lte: '5', lt: '3' }, '5', '5')
+      expect({ lte: '5', lt: '3' }, '6', undefined)
+      expect({ lte: '5', lt: '7' }, '4', '4')
+      expect({ lte: '5', lt: '7' }, '5', '5')
+      expect({ lte: '5', lt: '7' }, '6', undefined)
 
-          expect({ lt: '5' }, '4', '4')
-          expect({ lt: '5' }, '5', undefined)
-          expect({ lt: '5' }, '6', undefined)
+      expect({ lt: '5', reverse: true }, '4', '4')
+      expect({ lt: '5', reverse: true }, '5', undefined)
+      expect({ lt: '5', reverse: true }, '6', undefined)
 
-          expect({ lte: '5' }, '4', '4')
-          expect({ lte: '5' }, '5', '5')
-          expect({ lte: '5' }, '6', undefined)
+      expect({ lte: '5', reverse: true }, '4', '4')
+      expect({ lte: '5', reverse: true }, '5', '5')
+      expect({ lte: '5', reverse: true }, '6', undefined)
 
-          // The lte option should take precedence over lt.
-          expect({ lte: '5', lt: '3' }, '4', '4')
-          expect({ lte: '5', lt: '3' }, '5', '5')
-          expect({ lte: '5', lt: '3' }, '6', undefined)
-          expect({ lte: '5', lt: '7' }, '4', '4')
-          expect({ lte: '5', lt: '7' }, '5', '5')
-          expect({ lte: '5', lt: '7' }, '6', undefined)
+      expect({ gt: '5', reverse: true }, '4', undefined)
+      expect({ gt: '5', reverse: true }, '5', undefined)
+      expect({ gt: '5', reverse: true }, '6', '6')
 
-          expect({ lt: '5', reverse: true }, '4', '4')
-          expect({ lt: '5', reverse: true }, '5', undefined)
-          expect({ lt: '5', reverse: true }, '6', undefined)
+      expect({ gte: '5', reverse: true }, '4', undefined)
+      expect({ gte: '5', reverse: true }, '5', '5')
+      expect({ gte: '5', reverse: true }, '6', '6')
 
-          expect({ lte: '5', reverse: true }, '4', '4')
-          expect({ lte: '5', reverse: true }, '5', '5')
-          expect({ lte: '5', reverse: true }, '6', undefined)
+      expect({ gt: '7', lt: '8' }, '7', undefined)
+      expect({ gte: '7', lt: '8' }, '7', '7')
+      expect({ gte: '7', lt: '8' }, '8', undefined)
+      expect({ gt: '7', lte: '8' }, '8', '8')
 
-          expect({ gt: '5', reverse: true }, '4', undefined)
-          expect({ gt: '5', reverse: true }, '5', undefined)
-          expect({ gt: '5', reverse: true }, '6', '6')
+      await Promise.all(promises)
+      return db.close()
 
-          expect({ gte: '5', reverse: true }, '4', undefined)
-          expect({ gte: '5', reverse: true }, '5', '5')
-          expect({ gte: '5', reverse: true }, '6', '6')
+      function expect (range, target, expected) {
+        promises.push(async function () {
+          const ite = db[mode](range)
+          ite.seek(target)
 
-          expect({ gt: '7', lt: '8' }, '7', undefined)
-          expect({ gte: '7', lt: '8' }, '7', '7')
-          expect({ gte: '7', lt: '8' }, '8', undefined)
-          expect({ gt: '7', lte: '8' }, '8', '8')
+          const item = await ite.next()
+          const json = JSON.stringify(range)
+          const msg = 'seek(' + target + ') on ' + json + ' yields ' + expected
 
-          function expect (range, target, expected) {
-            pending++
-            const ite = db[mode](range)
+          // Either a key or value depending on mode
+          t.is(mode === 'iterator' ? item[0] : item, expected, msg)
 
-            ite.seek(target)
-            ite.next(function (err, item) {
-              t.error(err, 'no error from next()')
-
-              const json = JSON.stringify(range)
-              const msg = 'seek(' + target + ') on ' + json + ' yields ' + expected
-
-              // Either a key or value depending on mode
-              t.is(item, expected, msg)
-
-              ite.close(function (err) {
-                t.error(err, 'no error from close()')
-                if (!--pending) db.close(t.end.bind(t))
-              })
-            })
-          }
+          return ite.close()
         })
-      })
+      }
     })
   }
 }

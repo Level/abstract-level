@@ -113,22 +113,15 @@ module.exports = function (test, testCommon) {
     }
   })
 
-  test('postopen hook function that fully closes the db results in error', async function (t) {
+  test('error from postopen hook function must be an error', async function (t) {
     t.plan(5)
 
     const db = testCommon.factory()
 
     db.hooks.postopen.add(async function (options) {
       t.is(db.status, 'open')
-      return db.close()
-    })
-
-    db.on('open', function () {
-      t.fail('should not open')
-    })
-
-    db.on('closed', function () {
-      t.pass('closed')
+      // eslint-disable-next-line prefer-promise-reject-errors
+      return Promise.reject(null)
     })
 
     try {
@@ -136,26 +129,28 @@ module.exports = function (test, testCommon) {
     } catch (err) {
       t.is(db.status, 'closed')
       t.is(err.code, 'LEVEL_HOOK_ERROR')
-      t.is(err.message, 'The postopen hook has closed the database')
+      t.is(err.cause.name, 'TypeError')
+      t.is(err.cause.message, 'Promise rejection reason must be an Error, received null')
     }
   })
 
-  test('postopen hook function that partially closes the db results in error', async function (t) {
+  test('error from postopen hook function must be an error, but it can be cross-realm', async function (t) {
     t.plan(5)
 
+    class FakeError {
+      get [Symbol.toStringTag] () {
+        return 'Error'
+      }
+    }
+
+    const fake = new FakeError()
     const db = testCommon.factory()
+
+    t.is(Object.prototype.toString.call(fake), '[object Error]')
 
     db.hooks.postopen.add(async function (options) {
       t.is(db.status, 'open')
-      db.close() // Don't await
-    })
-
-    db.on('open', function () {
-      t.fail('should not open')
-    })
-
-    db.on('closed', function () {
-      t.pass('closed')
+      return Promise.reject(fake)
     })
 
     try {
@@ -163,7 +158,72 @@ module.exports = function (test, testCommon) {
     } catch (err) {
       t.is(db.status, 'closed')
       t.is(err.code, 'LEVEL_HOOK_ERROR')
-      t.is(err.message, 'The postopen hook has closed the database')
+      t.is(err.cause, fake)
     }
   })
+
+  test('errors from both postopen hook function and resource lock the db', async function (t) {
+    t.plan(9)
+
+    const db = testCommon.factory()
+    const resource = db.iterator()
+
+    resource.close = async function () {
+      throw new Error('error from resource')
+    }
+
+    db.hooks.postopen.add(async function (options) {
+      t.is(db.status, 'open')
+      throw new Error('error from hook')
+    })
+
+    try {
+      await db.open()
+    } catch (err) {
+      t.is(db.status, 'closed')
+      t.is(err.code, 'LEVEL_HOOK_ERROR')
+      t.is(err.cause.name, 'CombinedError')
+      t.is(err.cause.message, 'error from hook; error from resource')
+    }
+
+    try {
+      await db.open()
+    } catch (err) {
+      t.is(db.status, 'closed')
+      t.is(err.code, 'LEVEL_STATUS_LOCKED')
+    }
+
+    try {
+      await db.close()
+    } catch (err) {
+      t.is(db.status, 'closed')
+      t.is(err.code, 'LEVEL_STATUS_LOCKED')
+    }
+  })
+
+  for (const method of ['open', 'close']) {
+    test(`postopen hook function that attempts to call ${method}() results in error`, async function (t) {
+      t.plan(5)
+
+      const db = testCommon.factory()
+
+      db.hooks.postopen.add(async function (options) {
+        t.is(db.status, 'open')
+        return db[method]()
+      })
+
+      db.on('open', function () {
+        t.fail('should not open')
+      })
+
+      try {
+        await db.open()
+      } catch (err) {
+        t.is(db.status, 'closed')
+        t.is(err.code, 'LEVEL_HOOK_ERROR')
+        t.is(err.cause.code, 'LEVEL_STATUS_LOCKED')
+        t.is(err.cause.message, 'Database status is locked')
+      }
+    })
+  }
 }

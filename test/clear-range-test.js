@@ -16,45 +16,33 @@ const data = (function () {
 
 exports.range = function (test, testCommon) {
   function rangeTest (name, opts, expected) {
-    test('db#clear() with ' + name, function (t) {
-      prepare(t, function (db) {
-        db.clear(opts, function (err) {
-          t.ifError(err, 'no clear error')
-          verify(t, db, expected)
-        })
-      })
+    test('clear() range with ' + name, async function (t) {
+      const db = await prepare()
+
+      await db.clear(opts)
+      await verify(t, db, expected)
+
+      return db.close()
     })
   }
 
-  function prepare (t, callback) {
+  async function prepare (t) {
     const db = testCommon.factory()
 
-    db.open(function (err) {
-      t.ifError(err, 'no open error')
+    await db.open()
+    await db.batch(data.map(function ({ key, value }) {
+      return { type: 'put', key, value }
+    }))
 
-      db.batch(data.map(function (d) {
-        return {
-          type: 'put',
-          key: d.key,
-          value: d.value
-        }
-      }), function (err) {
-        t.ifError(err, 'no batch error')
-        callback(db)
-      })
-    })
+    return db
   }
 
-  function verify (t, db, expected) {
+  async function verify (t, db, expected) {
     const it = db.iterator({ keyEncoding: 'utf8', valueEncoding: 'utf8' })
+    const entries = await it.all()
 
-    it.all(function (err, entries) {
-      t.ifError(err, 'no all() error')
-      t.is(entries.length, expected.length, 'correct number of entries')
-      t.same(entries, expected.map(kv => [kv.key, kv.value]))
-
-      db.close(t.end.bind(t))
-    })
+    t.is(entries.length, expected.length, 'correct number of entries')
+    t.same(entries, expected.map(kv => [kv.key, kv.value]))
   }
 
   function exclude (data, start, end, expectedLength) {
@@ -73,7 +61,7 @@ exports.range = function (test, testCommon) {
     return arr
   }
 
-  rangeTest('full range', {}, [])
+  rangeTest('no options', {}, [])
 
   // Reversing has no effect without limit
   rangeTest('reverse=true', {
@@ -163,7 +151,7 @@ exports.range = function (test, testCommon) {
   }, exclude(data, 30, 70))
 
   // The gte and lte options should take precedence over gt and lt respectively.
-  rangeTest('test iterator with gte=30 and lte=70 and gt=40 and lt=60', {
+  rangeTest('gte=30 and lte=70 and gt=40 and lt=60', {
     gte: '30',
     lte: '70',
     gt: '40',
@@ -171,7 +159,7 @@ exports.range = function (test, testCommon) {
   }, exclude(data, 30, 70))
 
   // Also test the other way around: if gt and lt were to select a bigger range.
-  rangeTest('test iterator with gte=30 and lte=70 and gt=20 and lt=80', {
+  rangeTest('gte=30 and lte=70 and gt=20 and lt=80', {
     gte: '30',
     lte: '70',
     gt: '20',

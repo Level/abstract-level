@@ -17,11 +17,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _get (key, options, callback) {
+      async _get (key, options) {
         t.is(key, '8')
         t.is(options.keyEncoding, 'utf8')
         t.is(options.valueEncoding, 'utf8')
-        this.nextTick(callback, null, 'foo')
+        return 'foo'
       }
     }, utf8Manifest)
 
@@ -34,11 +34,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _get (key, options, callback) {
+      async _get (key, options) {
         t.is(key, '[1,"2"]')
         t.is(options.keyEncoding, 'utf8')
         t.is(options.valueEncoding, 'utf8')
-        this.nextTick(callback, null, '123')
+        return '123'
       }
     }, utf8Manifest)
 
@@ -51,10 +51,10 @@ for (const deferred of [false, true]) {
     t.plan(3)
 
     const db = mockLevel({
-      _get (key, options, callback) {
+      async _get (key, options) {
         t.same(key, 'key')
         t.same(options, { keyEncoding: 'utf8', valueEncoding: 'buffer' })
-        this.nextTick(callback, null, Buffer.alloc(1))
+        return Buffer.alloc(1)
       }
     }, dualManifest, {
       keyEncoding: 'utf8',
@@ -70,10 +70,10 @@ for (const deferred of [false, true]) {
     t.plan(3)
 
     const db = mockLevel({
-      _get (key, options, callback) {
+      async _get (key, options) {
         t.same(key, Buffer.from('key'))
         t.same(options, { keyEncoding: 'buffer', valueEncoding: 'utf8' })
-        this.nextTick(callback, null, 'x')
+        return 'x'
       }
     }, dualManifest, {
       keyEncoding: 'buffer',
@@ -89,12 +89,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _put (key, value, options, callback) {
+      async _put (key, value, options) {
         t.is(key, '8')
         t.is(value, '4')
         t.is(options.keyEncoding, 'utf8')
         t.is(options.valueEncoding, 'utf8')
-        this.nextTick(callback)
       }
     }, utf8Manifest)
 
@@ -107,12 +106,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _put (key, value, options, callback) {
+      async _put (key, value, options) {
         t.is(key, '[1,"2"]')
         t.is(value, '{"x":3}')
         t.is(options.keyEncoding, 'utf8')
         t.is(options.valueEncoding, 'utf8')
-        this.nextTick(callback)
       }
     }, utf8Manifest)
 
@@ -125,10 +123,9 @@ for (const deferred of [false, true]) {
     t.plan(2)
 
     const db = mockLevel({
-      _del (key, options, callback) {
+      async _del (key, options) {
         t.is(key, '2')
         t.is(options.keyEncoding, 'utf8')
-        this.nextTick(callback)
       }
     }, utf8Manifest)
 
@@ -141,10 +138,9 @@ for (const deferred of [false, true]) {
     t.plan(2)
 
     const db = mockLevel({
-      _del (key, options, callback) {
+      async _del (key, options) {
         t.is(key, '[1,"2"]')
         t.is(options.keyEncoding, 'utf8')
-        this.nextTick(callback)
       }
     }, utf8Manifest)
 
@@ -156,11 +152,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _getMany (keys, options, callback) {
+      async _getMany (keys, options) {
         t.same(keys, ['8', '29'])
         t.is(options.keyEncoding, 'utf8')
         t.is(options.valueEncoding, 'utf8')
-        this.nextTick(callback, null, ['foo', 'bar'])
+        return ['foo', 'bar']
       }
     }, utf8Manifest)
 
@@ -172,11 +168,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _getMany (keys, options, callback) {
+      async _getMany (keys, options) {
         t.same(keys, ['[1,"2"]', '"x"'])
         t.is(options.keyEncoding, 'utf8')
         t.is(options.valueEncoding, 'utf8')
-        this.nextTick(callback, null, ['123', '"hi"'])
+        return ['123', '"hi"']
       }
     }, utf8Manifest)
 
@@ -188,10 +184,10 @@ for (const deferred of [false, true]) {
     t.plan(3)
 
     const db = mockLevel({
-      _getMany (keys, options, callback) {
+      async _getMany (keys, options) {
         t.same(keys, ['key'])
         t.same(options, { keyEncoding: 'utf8', valueEncoding: 'buffer' })
-        this.nextTick(callback, null, [Buffer.alloc(1)])
+        return [Buffer.alloc(1)]
       }
     }, dualManifest, {
       keyEncoding: 'utf8',
@@ -206,10 +202,10 @@ for (const deferred of [false, true]) {
     t.plan(3)
 
     const db = mockLevel({
-      _getMany (keys, options, callback) {
+      async _getMany (keys, options) {
         t.same(keys, [Buffer.from('key')])
         t.same(options, { keyEncoding: 'buffer', valueEncoding: 'utf8' })
-        this.nextTick(callback, null, ['x'])
+        return ['x']
       }
     }, dualManifest, {
       keyEncoding: 'buffer',
@@ -228,13 +224,12 @@ for (const deferred of [false, true]) {
 
     if (deferred) {
       db = mockLevel({
-        _batch (array, options, callback) {
+        async _batch (array, options) {
           t.same(array, [
             { type: 'put', key: '1', value: '2', keyEncoding: 'utf8', valueEncoding: 'utf8' },
             { type: 'del', key: '3', keyEncoding: 'utf8' }
           ])
           t.same(options, {})
-          this.nextTick(callback)
         }
       }, utf8Manifest)
     } else {
@@ -272,13 +267,12 @@ for (const deferred of [false, true]) {
 
     if (deferred) {
       db = mockLevel({
-        _batch (array, options, callback) {
+        async _batch (array, options) {
           t.same(array, [
             { type: 'put', key: '"1"', value: '{"x":[2]}', keyEncoding: 'utf8', valueEncoding: 'utf8' },
             { type: 'del', key: '"3"', keyEncoding: 'utf8' }
           ])
           t.same(options, {})
-          this.nextTick(callback)
         }
       }, utf8Manifest)
     } else {
@@ -310,9 +304,8 @@ for (const deferred of [false, true]) {
     t.plan(1)
 
     const db = mockLevel({
-      _clear: function (options, callback) {
+      async _clear (options) {
         t.same(options, { keyEncoding: 'utf8', reverse: false, limit: -1 })
-        this.nextTick(callback)
       }
     }, utf8Manifest)
 
@@ -324,9 +317,8 @@ for (const deferred of [false, true]) {
     t.plan(1)
 
     const db = mockLevel({
-      _clear: function (options, callback) {
+      async _clear (options) {
         t.same(options, { keyEncoding: 'utf8', gt: '"a"', reverse: false, limit: -1 })
-        this.nextTick(callback)
       }
     }, utf8Manifest)
 
@@ -347,13 +339,12 @@ for (const deferred of [false, true]) {
     }
 
     const db = mockLevel({
-      _clear: function (options, callback) {
+      async _clear (options) {
         t.is(options.gt, 'encoded_1')
         t.is(options.gte, 'encoded_2')
         t.is(options.lt, 'encoded_3')
         t.is(options.lte, 'encoded_4')
         t.is(options.foo, 5)
-        this.nextTick(callback)
       }
     }, utf8Manifest, { keyEncoding })
 
@@ -366,17 +357,16 @@ for (const deferred of [false, true]) {
     t.plan(12)
 
     const db1 = mockLevel({
-      _clear: function (options, callback) {
+      async _clear (options) {
         t.is(options.gt, '\x00', 'encoded null')
         t.is(options.gte, '\x00', 'encoded null')
         t.is(options.lt, '\x00', 'encoded null')
         t.is(options.lte, '\x00', 'encoded null')
-        this.nextTick(callback)
       }
     }, utf8Manifest, { keyEncoding: nullishEncoding, valueEncoding: nullishEncoding })
 
     const db2 = mockLevel({
-      _clear: function (options, callback) {
+      async _clear (options) {
         t.is(hasOwnProperty.call(options, 'gt'), true)
         t.is(hasOwnProperty.call(options, 'gte'), true)
         t.is(hasOwnProperty.call(options, 'lt'), true)
@@ -386,8 +376,6 @@ for (const deferred of [false, true]) {
         t.is(options.gte, '\xff', 'encoded undefined')
         t.is(options.lt, '\xff', 'encoded undefined')
         t.is(options.lte, '\xff', 'encoded undefined')
-
-        this.nextTick(callback)
       }
     }, utf8Manifest, { keyEncoding: nullishEncoding, valueEncoding: nullishEncoding })
 
@@ -417,12 +405,11 @@ for (const deferred of [false, true]) {
     t.plan(4)
 
     const db = mockLevel({
-      _clear: function (options, callback) {
+      async _clear (options) {
         t.is(hasOwnProperty.call(options, 'gt'), false)
         t.is(hasOwnProperty.call(options, 'gte'), false)
         t.is(hasOwnProperty.call(options, 'lt'), false)
         t.is(hasOwnProperty.call(options, 'lte'), false)
-        this.nextTick(callback)
       }
     })
 

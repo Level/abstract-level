@@ -4,6 +4,7 @@ const test = require('tape')
 const { Buffer } = require('buffer')
 const { AbstractLevel } = require('../..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('../..')
+const { AbortSignal } = require('../../lib/abort')
 const { mockLevel, mockIterator, nullishEncoding } = require('../util')
 
 const identity = (v) => v
@@ -83,13 +84,13 @@ for (const deferred of [false, true]) {
         let yielded = 0
 
         class MockIterator extends Ctor {
-          _next (callback) {
+          async _next (options) {
             calls++
 
             if (mode === 'iterator' || def) {
-              this.nextTick(callback, null, 'a', 'a')
+              return ['a', 'a']
             } else {
-              this.nextTick(callback, null, 'a')
+              return 'a'
             }
           }
         }
@@ -121,13 +122,13 @@ for (const deferred of [false, true]) {
         let yielded = 0
 
         class MockIterator extends Ctor {
-          _nextv (size, options, callback) {
+          async _nextv (size, options) {
             calls++
 
             if (mode === 'iterator' || def) {
-              this.nextTick(callback, null, [['a', 'a']])
+              return [['a', 'a']]
             } else {
-              this.nextTick(callback, null, ['a'])
+              return ['a']
             }
           }
         }
@@ -157,13 +158,13 @@ for (const deferred of [false, true]) {
 
         let nextCount = 0
         class MockIterator extends Ctor {
-          _next (callback) {
+          async _next (options) {
             if (++nextCount > 10) {
               throw new Error('Potential infinite loop')
             } else if (mode === 'iterator' || def) {
-              this.nextTick(callback, null, 'a', 'a')
+              return ['a', 'a']
             } else {
-              this.nextTick(callback, null, 'a')
+              return 'a'
             }
           }
 
@@ -177,7 +178,7 @@ for (const deferred of [false, true]) {
 
         const it = db[publicMethod]({ limit })
 
-        // Use next() because all() auto-closes and thus can't be used twice atm
+        // Use next() because all() auto-closes and thus can't be used twice
         for (let i = 0; i < limit; i++) await it.next()
 
         t.same(await it.all(), [])
@@ -192,11 +193,11 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _nextv (size, options, callback) {
+        async _nextv (size, options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, Array(size).fill(['a', 'a']))
+            return Array(size).fill(['a', 'a'])
           } else {
-            this.nextTick(callback, null, Array(size).fill('a'))
+            return Array(size).fill('a')
           }
         }
       }
@@ -219,27 +220,27 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, 'a', 'a')
+            return ['a', 'a']
           } else {
-            this.nextTick(callback, null, 'a')
+            return 'a'
           }
         }
 
-        _nextv (size, options, callback) {
+        async _nextv (size, options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, [['a', 'a'], ['b', 'b']])
+            return [['a', 'a'], ['b', 'b']]
           } else {
-            this.nextTick(callback, null, ['a', 'b'])
+            return ['a', 'b']
           }
         }
 
-        _all (options, callback) {
+        async _all (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, [['c', 'c'], ['d', 'd'], ['e', 'e']])
+            return [['c', 'c'], ['d', 'd'], ['e', 'e']]
           } else {
-            this.nextTick(callback, null, ['c', 'd', 'e'])
+            return ['c', 'd', 'e']
           }
         }
       }
@@ -272,13 +273,13 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, '281', Buffer.from('a'))
+            return ['281', Buffer.from('a')]
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, '281')
+            return '281'
           } else {
-            this.nextTick(callback, null, Buffer.from('a'))
+            return Buffer.from('a')
           }
         }
       }
@@ -304,13 +305,13 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, Buffer.from('a'), Buffer.from('b'))
+            return [Buffer.from('a'), Buffer.from('b')]
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, Buffer.from('a'))
+            return Buffer.from('a')
           } else {
-            this.nextTick(callback, null, Buffer.from('b'))
+            return Buffer.from('b')
           }
         }
       }
@@ -341,13 +342,13 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, 'a', 'b')
+            return ['a', 'b']
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, 'a')
+            return 'a'
           } else {
-            this.nextTick(callback, null, 'b')
+            return 'b'
           }
         }
       }
@@ -556,13 +557,13 @@ for (const deferred of [false, true]) {
 
       let pos = 0
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, 'k' + pos, 'v' + (pos++))
+            return ['k' + pos, 'v' + (pos++)]
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, 'k' + (pos++))
+            return 'k' + (pos++)
           } else {
-            this.nextTick(callback, null, 'v' + (pos++))
+            return 'v' + (pos++)
           }
         }
       }
@@ -599,9 +600,9 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           t.pass('called')
-          this.nextTick(callback, new Error('test'))
+          throw new Error('test')
         }
       }
 
@@ -616,7 +617,7 @@ for (const deferred of [false, true]) {
     })
 
     test(`${mode}() has default all() (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
-      t.plan(8)
+      t.plan(11)
 
       class MockLevel extends AbstractLevel {
         [privateMethod] (options) {
@@ -625,26 +626,29 @@ for (const deferred of [false, true]) {
       }
 
       let pos = 0
+      let closes = 0
       class MockIterator extends Ctor {
-        _nextv (size, options, callback) {
+        async _nextv (size, options) {
           t.is(size, 1000)
-          t.same(options, {})
+
+          const { signal, ...rest } = options
+          t.ok(signal instanceof AbortSignal)
+          t.same(rest, {})
 
           if (pos === 4) {
-            this.nextTick(callback, null, [])
+            return []
           } else if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, [[String(pos++), 'a'], [String(pos++), 'b']])
+            return [[String(pos++), 'a'], [String(pos++), 'b']]
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, [String(pos++), String(pos++)])
+            return [String(pos++), String(pos++)]
           } else {
             pos += 2
-            this.nextTick(callback, null, ['a', 'b'])
+            return ['a', 'b']
           }
         }
 
-        _close (callback) {
-          t.pass('closed')
-          this.nextTick(callback)
+        async _close () {
+          t.is(++closes, 1)
         }
       }
 
@@ -669,9 +673,9 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _nextv (size, options, callback) {
+        async _nextv (size, options) {
           t.pass('called')
-          this.nextTick(callback, new Error('test'))
+          throw new Error('test')
         }
       }
 
@@ -686,7 +690,7 @@ for (const deferred of [false, true]) {
     })
 
     test(`${mode}() custom all() (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
-      t.plan(3)
+      t.plan(4)
 
       class MockLevel extends AbstractLevel {
         [privateMethod] (options) {
@@ -695,21 +699,22 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _all (options, callback) {
-          t.same(options, {})
+        async _all (options) {
+          const { signal, ...rest } = options
+          t.ok(signal instanceof AbortSignal)
+          t.same(rest, {})
 
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, [['k0', 'v0'], ['k1', 'v1']])
+            return [['k0', 'v0'], ['k1', 'v1']]
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, ['k0', 'k1'])
+            return ['k0', 'k1']
           } else {
-            this.nextTick(callback, null, ['v0', 'v1'])
+            return ['v0', 'v1']
           }
         }
 
-        _close (callback) {
+        async _close () {
           t.pass('closed')
-          this.nextTick(callback)
         }
       }
 
@@ -732,14 +737,13 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _all (options, callback) {
+        async _all (options) {
           t.pass('_all called')
-          this.nextTick(callback, new Error('test'))
+          throw new Error('test')
         }
 
-        _close (callback) {
+        async _close () {
           t.pass('closed')
-          this.nextTick(callback)
         }
       }
 
@@ -773,8 +777,8 @@ for (const deferred of [false, true]) {
         t.is(options.keys, false)
 
         return mockIterator(this, options, {
-          _next (callback) {
-            this.nextTick(callback, null, '', 'value')
+          async _next (options) {
+            return ['', 'value']
           }
         })
       }
@@ -804,8 +808,8 @@ for (const deferred of [false, true]) {
         t.is(options.values, false)
 
         return mockIterator(this, options, {
-          _next (callback) {
-            callback(null, 'key', '')
+          async _next (options) {
+            return ['key', '']
           }
         })
       }

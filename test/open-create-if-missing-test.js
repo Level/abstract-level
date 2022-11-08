@@ -1,32 +1,36 @@
 'use strict'
 
 exports.createIfMissing = function (test, testCommon) {
-  test('test database open createIfMissing:false', function (t) {
+  test('open() with createIfMissing: false', async function (t) {
+    t.plan(2)
+
     const db = testCommon.factory()
-    let async = false
 
-    db.open({ createIfMissing: false }, function (err) {
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
-      t.ok(err && /does not exist/.test(err.cause && err.cause.message), 'error is about dir not existing')
-      t.ok(async, 'callback is asynchronous')
-      t.end()
-    })
+    try {
+      await db.open({ createIfMissing: false })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.ok(/does not exist/.test(err.cause.message), 'error is about dir not existing')
+    }
 
-    async = true
+    // Should be a noop
+    return db.close()
   })
 
-  test('test database open createIfMissing:false via constructor', function (t) {
+  test('open() with createIfMissing: false via constructor', async function (t) {
+    t.plan(2)
+
     const db = testCommon.factory({ createIfMissing: false })
-    let async = false
 
-    db.open(function (err) {
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
-      t.ok(err && /does not exist/.test(err.cause && err.cause.message), 'error is about dir not existing')
-      t.ok(async, 'callback is asynchronous')
-      t.end()
-    })
+    try {
+      await db.open()
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.ok(/does not exist/.test(err.cause.message), 'error is about dir not existing')
+    }
 
-    async = true
+    // Should be a noop
+    return db.close()
   })
 }
 

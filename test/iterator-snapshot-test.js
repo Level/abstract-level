@@ -1,79 +1,36 @@
 'use strict'
 
 exports.snapshot = function (test, testCommon) {
-  function make (run) {
-    return function (t) {
-      const db = testCommon.factory()
+  const make = (run) => async function (t) {
+    const db = testCommon.factory()
+    await db.open()
+    await db.put('z', 'from snapshot')
 
-      db.open(function (err) {
-        t.ifError(err, 'no open error')
+    // For this test it is important that we don't read eagerly.
+    // NOTE: highWaterMarkBytes is not an abstract option, but
+    // it is supported by classic-level and others. Also set the
+    // old & equivalent leveldown highWaterMark option for compat.
+    const it = db.iterator({ highWaterMarkBytes: 0, highWaterMark: 0 })
 
-        db.put('z', 'from snapshot', function (err) {
-          t.ifError(err, 'no put error')
+    await run(t, db, it)
+    await it.close()
 
-          // For this test it is important that we don't read eagerly.
-          // NOTE: highWaterMarkBytes is not an abstract option, but
-          // it is supported by classic-level and others. Also set the
-          // old & equivalent leveldown highWaterMark option for compat.
-          const it = db.iterator({ highWaterMarkBytes: 0, highWaterMark: 0 })
-
-          run(t, db, it, function end (err) {
-            t.ifError(err, 'no run error')
-
-            it.close(function (err) {
-              t.ifError(err, 'no iterator close error')
-              db.close(t.end.bind(t))
-            })
-          })
-        })
-      })
-    }
+    return db.close()
   }
 
-  test('delete key after snapshotting', make(function (t, db, it, end) {
-    db.del('z', function (err) {
-      t.ifError(err, 'no del error')
-
-      it.next(function (err, key, value) {
-        t.ifError(err, 'no next error')
-        t.ok(key, 'got a key')
-        t.is(key.toString(), 'z', 'correct key')
-        t.is(value.toString(), 'from snapshot', 'correct value')
-
-        end()
-      })
-    })
+  test('delete key after snapshotting', make(async function (t, db, it) {
+    await db.del('z')
+    t.same(await it.next(), ['z', 'from snapshot'], 'correct entry')
   }))
 
-  test('overwrite key after snapshotting', make(function (t, db, it, end) {
-    db.put('z', 'not from snapshot', function (err) {
-      t.ifError(err, 'no put error')
-
-      it.next(function (err, key, value) {
-        t.ifError(err, 'no next error')
-        t.ok(key, 'got a key')
-        t.is(key.toString(), 'z', 'correct key')
-        t.is(value.toString(), 'from snapshot', 'correct value')
-
-        end()
-      })
-    })
+  test('overwrite key after snapshotting', make(async function (t, db, it) {
+    await db.put('z', 'not from snapshot')
+    t.same(await it.next(), ['z', 'from snapshot'], 'correct entry')
   }))
 
-  test('add key after snapshotting that sorts first', make(function (t, db, it, end) {
-    db.put('a', 'not from snapshot', function (err) {
-      t.ifError(err, 'no put error')
-
-      it.next(function (err, key, value) {
-        t.ifError(err, 'no next error')
-
-        t.ok(key, 'got a key')
-        t.is(key.toString(), 'z', 'correct key')
-        t.is(value.toString(), 'from snapshot', 'correct value')
-
-        end()
-      })
-    })
+  test('add key after snapshotting that sorts first', make(async function (t, db, it) {
+    await db.put('a', 'not from snapshot')
+    t.same(await it.next(), ['z', 'from snapshot'], 'correct entry')
   }))
 
   // NOTE: adapted from memdown

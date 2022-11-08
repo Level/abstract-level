@@ -3,8 +3,8 @@
 // NOTE: copied from levelup
 exports.all = function (test, testCommon) {
   for (const deferred of [false, true]) {
-    test(`json encoding: simple-object values (deferred: ${deferred})`, function (t) {
-      run(t, deferred, [
+    test(`json encoding: simple-object values (deferred: ${deferred})`, async function (t) {
+      return run(t, deferred, [
         { key: '0', value: 0 },
         { key: '1', value: 1 },
         { key: '2', value: 'a string' },
@@ -13,8 +13,8 @@ exports.all = function (test, testCommon) {
       ])
     })
 
-    test(`json encoding: simple-object keys (deferred: ${deferred})`, function (t) {
-      run(t, deferred, [
+    test(`json encoding: simple-object keys (deferred: ${deferred})`, async function (t) {
+      return run(t, deferred, [
         { value: 'string', key: 'a string' },
         { value: '0', key: 0 },
         { value: '1', key: 1 },
@@ -23,8 +23,8 @@ exports.all = function (test, testCommon) {
       ])
     })
 
-    test(`json encoding: complex-object values (deferred: ${deferred})`, function (t) {
-      run(t, deferred, [{
+    test(`json encoding: complex-object values (deferred: ${deferred})`, async function (t) {
+      return run(t, deferred, [{
         key: '0',
         value: {
           foo: 'bar',
@@ -34,8 +34,8 @@ exports.all = function (test, testCommon) {
       }])
     })
 
-    test(`json encoding: complex-object keys (deferred: ${deferred})`, function (t) {
-      run(t, deferred, [{
+    test(`json encoding: complex-object keys (deferred: ${deferred})`, async function (t) {
+      return run(t, deferred, [{
         value: '0',
         key: {
           foo: 'bar',
@@ -46,43 +46,24 @@ exports.all = function (test, testCommon) {
     })
   }
 
-  function run (t, deferred, entries) {
+  async function run (t, deferred, entries) {
     const db = testCommon.factory({ keyEncoding: 'json', valueEncoding: 'json' })
     const operations = entries.map(entry => ({ type: 'put', ...entry }))
-    const init = deferred ? (fn) => fn() : db.open.bind(db)
 
-    init(function (err) {
-      t.ifError(err, 'no init() error')
+    if (!deferred) await db.open()
 
-      db.batch(operations, function (err) {
-        t.ifError(err, 'no batch() error')
+    await db.batch(operations)
+    await Promise.all([...entries.map(testGet), testIterator()])
 
-        let pending = entries.length + 1
-        const next = () => {
-          if (--pending === 0) db.close(t.end.bind(t))
-        }
+    return db.close()
 
-        testGet(next)
-        testIterator(next)
-      })
-    })
-
-    function testGet (next) {
-      for (const entry of entries) {
-        db.get(entry.key, function (err, value) {
-          t.ifError(err, 'no get() error')
-          t.same(value, entry.value)
-          next()
-        })
-      }
+    async function testGet (entry) {
+      t.same(await db.get(entry.key), entry.value)
     }
 
-    function testIterator (next) {
-      db.iterator().all(function (err, result) {
-        t.ifError(err, 'no all() error')
-        t.same(result, entries.map(kv => [kv.key, kv.value]))
-        next()
-      })
+    async function testIterator () {
+      const result = await db.iterator().all()
+      t.same(result, entries.map(kv => [kv.key, kv.value]))
     }
   }
 }

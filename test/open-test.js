@@ -1,269 +1,199 @@
 'use strict'
 
-const { assertAsync } = require('./util')
-
 exports.open = function (test, testCommon) {
-  test('test database open, no options', function (t) {
+  test('open() and close(), no options', async function (t) {
     const db = testCommon.factory()
-
     t.is(db.status, 'opening')
 
-    // default createIfMissing=true, errorIfExists=false
-    db.open(function (err) {
-      t.error(err)
-      t.is(db.status, 'open')
-
-      db.close(function () {
-        t.is(db.status, 'closed')
-        t.end()
-      })
-    })
-
+    const promise1 = db.open()
     t.is(db.status, 'opening')
+    await promise1
+
+    t.is(db.status, 'open')
+
+    const promise2 = db.close()
+    t.is(db.status, 'closing')
+    await promise2
+    t.is(db.status, 'closed')
   })
 
-  test('test database open, no options, with promise', function (t) {
+  test('open() and close(), with empty options', async function (t) {
+    const db = testCommon.factory()
+    await db.open({})
+    return db.close()
+  })
+
+  test('open(), close() and open()', async function (t) {
     const db = testCommon.factory()
 
-    t.is(db.status, 'opening')
+    await db.open()
+    t.is(db.status, 'open')
 
-    // default createIfMissing=true, errorIfExists=false
-    db.open().then(function () {
-      t.is(db.status, 'open')
-      db.close(t.end.bind(t))
-    }).catch(t.fail.bind(t))
+    await db.close()
+    t.is(db.status, 'closed')
 
-    t.is(db.status, 'opening')
+    await db.open()
+    t.is(db.status, 'open')
+
+    return db.close()
   })
 
-  test('test database open, options and callback', function (t) {
-    const db = testCommon.factory()
-
-    // default createIfMissing=true, errorIfExists=false
-    db.open({}, function (err) {
-      t.error(err)
-      db.close(function () {
-        t.end()
-      })
-    })
-  })
-
-  test('test database open, options with promise', function (t) {
-    const db = testCommon.factory()
-
-    // default createIfMissing=true, errorIfExists=false
-    db.open({}).then(function () {
-      db.close(t.end.bind(t))
-    })
-  })
-
-  test('test database open, close and open', function (t) {
-    const db = testCommon.factory()
-
-    db.open(function (err) {
-      t.error(err)
-
-      db.close(function (err) {
-        t.error(err)
-        t.is(db.status, 'closed')
-
-        db.open(function (err) {
-          t.error(err)
-          t.is(db.status, 'open')
-
-          db.close(t.end.bind(t))
-        })
-      })
-    })
-  })
-
-  test('test database open, close and open with promise', function (t) {
-    const db = testCommon.factory()
-
-    db.open().then(function () {
-      db.close(function (err) {
-        t.error(err)
-        db.open().then(function () {
-          db.close(function () {
-            t.end()
-          })
-        }).catch(t.fail.bind(t))
-      })
-    }).catch(t.fail.bind(t))
-  })
-
-  test('test database open and close in same tick', assertAsync.ctx(function (t) {
-    t.plan(10)
+  test('open() and close() in same tick', function (t) {
+    t.plan(5)
 
     const db = testCommon.factory()
     const order = []
 
-    db.open(assertAsync(function (err) {
+    db.open().then(function () {
       order.push('A')
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN', 'got open() error')
-      t.is(db.status, 'closed', 'is closed')
-    }))
+      t.is(db.status, 'open', 'is open')
+    })
 
     t.is(db.status, 'opening', 'is opening')
 
     // This wins from the open() call
-    db.close(assertAsync(function (err) {
+    db.close().then(function () {
       order.push('B')
-      t.same(order, ['A', 'closed event', 'B'], 'order is correct')
-      t.ifError(err, 'no close() error')
+      t.same(order, ['open event', 'A', 'closed event', 'B'], 'order is correct')
       t.is(db.status, 'closed', 'is closed')
-    }))
+    })
 
     // But open() is still in control
     t.is(db.status, 'opening', 'is still opening')
 
-    // Should not emit 'open', because close() wins
-    db.on('open', t.fail.bind(t))
-    db.on('closed', assertAsync(() => { order.push('closed event') }))
-  }))
+    db.on('open', () => { order.push('open event') })
+    db.on('closed', () => { order.push('closed event') })
+  })
 
-  test('test database open, close and open in same tick', assertAsync.ctx(function (t) {
-    t.plan(14)
+  test('open(), close() and open() in same tick', function (t) {
+    t.plan(8)
 
     const db = testCommon.factory()
     const order = []
 
-    db.open(assertAsync(function (err) {
+    db.open().then(function () {
       order.push('A')
-      t.ifError(err, 'no open() error (1)')
       t.is(db.status, 'open', 'is open')
-    }))
+    })
 
     t.is(db.status, 'opening', 'is opening')
 
     // This wins from the open() call
-    db.close(assertAsync(function (err) {
+    db.close().then(function () {
       order.push('B')
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_CLOSED')
-      t.is(db.status, 'open', 'is open')
-    }))
+      t.is(db.status, 'closed', 'is closed')
+    })
 
     t.is(db.status, 'opening', 'is still opening')
 
     // This wins from the close() call
-    db.open(assertAsync(function (err) {
+    db.open().then(function () {
       order.push('C')
-      t.same(order, ['A', 'B', 'open event', 'C'], 'callback order is the same as call order')
-      t.ifError(err, 'no open() error (2)')
+      t.same(order, ['open event', 'A', 'closed event', 'B', 'open event', 'C'], 'callback order is the same as call order')
       t.is(db.status, 'open', 'is open')
-    }))
 
-    // Should not emit 'closed', because open() wins
-    db.on('closed', t.fail.bind(t))
-    db.on('open', assertAsync(() => { order.push('open event') }))
+      db.close().then(() => t.pass('done'))
+    })
+
+    db.on('closed', () => { order.push('closed event') })
+    db.on('open', () => { order.push('open event') })
 
     t.is(db.status, 'opening', 'is still opening')
-  }))
-
-  test('test database open if already open (sequential)', function (t) {
-    t.plan(7)
-
-    const db = testCommon.factory()
-
-    db.open(assertAsync(function (err) {
-      t.ifError(err, 'no open() error (1)')
-      t.is(db.status, 'open', 'is open')
-
-      db.open(assertAsync(function (err) {
-        t.ifError(err, 'no open() error (2)')
-        t.is(db.status, 'open', 'is open')
-      }))
-
-      t.is(db.status, 'open', 'not reopening')
-      db.on('open', t.fail.bind(t))
-      assertAsync.end(t)
-    }))
-
-    assertAsync.end(t)
   })
 
-  test('test database open if already opening (parallel)', assertAsync.ctx(function (t) {
-    t.plan(7)
+  test('open() if already open (sequential)', async function (t) {
+    t.plan(3)
 
     const db = testCommon.factory()
 
-    db.open(assertAsync(function (err) {
-      t.ifError(err, 'no open() error (1)')
-      t.is(db.status, 'open')
-    }))
+    await db.open()
+    t.is(db.status, 'open', 'is open')
 
-    db.open(assertAsync(function (err) {
-      t.ifError(err, 'no open() error (2)')
+    const promise = db.open()
+    t.is(db.status, 'open', 'not reopening')
+    db.on('open', t.fail.bind(t))
+
+    await promise
+    t.is(db.status, 'open', 'is open')
+    return db.close()
+  })
+
+  test('open() if already opening (parallel)', function (t) {
+    t.plan(4)
+
+    const db = testCommon.factory()
+    let called = false
+
+    db.open().then(function () {
+      called = true
       t.is(db.status, 'open')
-      db.close(t.end.bind(t))
-    }))
+    })
+
+    db.open().then(function () {
+      t.is(db.status, 'open')
+      t.ok(called)
+      db.close(() => t.pass('done'))
+    })
 
     t.is(db.status, 'opening')
-  }))
-
-  test('test database close if already closed', function (t) {
-    t.plan(8)
-
-    const db = testCommon.factory()
-
-    db.open(function (err) {
-      t.ifError(err, 'no open() error')
-
-      db.close(assertAsync(function (err) {
-        t.ifError(err, 'no close() error (1)')
-        t.is(db.status, 'closed', 'is closed')
-
-        db.close(assertAsync(function (err) {
-          t.ifError(err, 'no close() error (2)')
-          t.is(db.status, 'closed', 'is closed')
-        }))
-
-        t.is(db.status, 'closed', 'is closed', 'not reclosing')
-        db.on('closed', t.fail.bind(t))
-        assertAsync.end(t)
-      }))
-
-      assertAsync.end(t)
-    })
   })
 
-  test('test database close if new', assertAsync.ctx(function (t) {
-    t.plan(5)
+  test('close() if already closed', async function (t) {
+    t.plan(3)
 
     const db = testCommon.factory()
-    const expectedStatus = db.supports.deferredOpen ? 'opening' : 'closed'
 
-    t.is(db.status, expectedStatus, 'status ok')
+    await db.open()
+    await db.close()
 
-    db.close(assertAsync(function (err) {
-      t.ifError(err, 'no close() error')
+    t.is(db.status, 'closed', 'is closed')
+    const promise = db.close()
+    t.is(db.status, 'closed', 'is closed', 'not reclosing')
+    db.on('closed', t.fail.bind(t))
+    await promise
+    t.is(db.status, 'closed', 'still closed')
+  })
+
+  test('close() if new', function (t) {
+    t.plan(4)
+
+    const db = testCommon.factory()
+    t.is(db.status, 'opening', 'status ok')
+
+    db.close().then(function () {
       t.is(db.status, 'closed', 'status ok')
-    }))
+    })
 
-    t.is(db.status, expectedStatus, 'status unchanged')
+    // This behaves differently in abstract-level v1: status remains 'opening' because
+    // the db let's opening finish (or start, really) and only then closes the db.
+    t.is(db.status, 'closing', 'status ok')
 
     if (!db.supports.deferredOpen) {
+      t.pass('skip')
       db.on('closed', t.fail.bind(t, 'should not emit closed'))
+    } else {
+      db.on('closed', t.pass.bind(t, 'got closed event'))
     }
-  }))
+  })
 
-  test('test database close on open event', function (t) {
-    t.plan(5)
+  test('close() on open event', function (t) {
+    t.plan(4)
 
     const db = testCommon.factory()
     const order = []
 
-    db.open(function (err) {
+    db.open().then(function () {
       order.push('A')
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN', 'got open() error')
-      t.is(db.status, 'closed', 'is closed')
+      t.is(db.status, 'open', 'is open')
     })
 
     db.on('open', function () {
+      order.push('open event')
+
       // This wins from the (still in progress) open() call
-      db.close(function (err) {
+      db.close().then(function (err) {
         order.push('B')
-        t.same(order, ['A', 'closed event', 'B'], 'order is correct')
+        t.same(order, ['open event', 'A', 'closed event', 'B'], 'order is correct')
         t.ifError(err, 'no close() error')
         t.is(db.status, 'closed', 'is closed')
       })
@@ -272,7 +202,7 @@ exports.open = function (test, testCommon) {
     db.on('closed', () => { order.push('closed event') })
   })
 
-  test('test passive open()', async function (t) {
+  test('passive open()', async function (t) {
     t.plan(1)
     const db = testCommon.factory()
     await db.open({ passive: true }) // OK, already opening
@@ -285,7 +215,7 @@ exports.open = function (test, testCommon) {
     return db.close()
   })
 
-  test('test passive open(): ignored if set in constructor options', async function (t) {
+  test('passive option is ignored if set in constructor options', async function (t) {
     const db = testCommon.factory({ passive: true })
     await new Promise((resolve) => db.once('open', resolve))
     return db.close()

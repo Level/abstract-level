@@ -37,8 +37,4 @@ export {
   AbstractSublevelOptions
 } from './types/abstract-sublevel'
 
-export {
-  NodeCallback
-} from './types/interfaces'
-
 export * as Transcoder from 'level-transcoder'
