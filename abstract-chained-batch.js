@@ -1,18 +1,17 @@
 'use strict'
 
-const { fromCallback } = require('catering')
+const combineErrors = require('maybe-combine-errors')
 const ModuleError = require('module-error')
-const { getCallback, getOptions, emptyOptions } = require('./lib/common')
+const { getOptions, emptyOptions, noop } = require('./lib/common')
 const { prefixDescendantKey } = require('./lib/prefixes')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 
-const kPromise = Symbol('promise')
 const kStatus = Symbol('status')
 const kPublicOperations = Symbol('publicOperations')
 const kLegacyOperations = Symbol('legacyOperations')
 const kPrivateOperations = Symbol('privateOperations')
-const kFinishClose = Symbol('finishClose')
-const kCloseCallbacks = Symbol('closeCallbacks')
+const kCallClose = Symbol('callClose')
+const kClosePromise = Symbol('closePromise')
 const kLength = Symbol('length')
 const kPrewriteRun = Symbol('prewriteRun')
 const kPrewriteBatch = Symbol('prewriteBatch')
@@ -39,9 +38,8 @@ class AbstractChainedBatch {
     this[kLegacyOperations] = enableWriteEvent || enablePrewriteHook ? null : []
 
     this[kLength] = 0
-    this[kCloseCallbacks] = []
     this[kStatus] = 'open'
-    this[kFinishClose] = this[kFinishClose].bind(this)
+    this[kClosePromise] = null
     this[kAddMode] = getOptions(options, emptyOptions).add === true
 
     if (enablePrewriteHook) {
@@ -61,7 +59,6 @@ class AbstractChainedBatch {
 
     this.db = db
     this.db.attachResource(this)
-    this.nextTick = db.nextTick
   }
 
   get length () {
@@ -267,104 +264,101 @@ class AbstractChainedBatch {
 
   _clear () {}
 
-  write (options, callback) {
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
+  async write (options) {
     options = getOptions(options)
 
     if (this[kStatus] !== 'open') {
-      this.nextTick(callback, new ModuleError('Batch is not open: cannot call write() after write() or close()', {
+      throw new ModuleError('Batch is not open: cannot call write() after write() or close()', {
         code: 'LEVEL_BATCH_NOT_OPEN'
-      }))
+      })
     } else if (this[kLength] === 0) {
-      this.close(callback)
+      return this.close()
     } else {
       this[kStatus] = 'writing'
 
-      // Process operations added by prewrite hook functions
-      if (this[kPrewriteData] !== null) {
-        const publicOperations = this[kPrewriteData][kPublicOperations]
-        const privateOperations = this[kPrewriteData][kPrivateOperations]
-        const length = this[kPrewriteData].length
-
-        for (let i = 0; i < length; i++) {
-          const op = privateOperations[i]
-
-          // We can _add(), _put() or _del() even though status is now 'writing' because
-          // status isn't exposed to the private API, so there's no difference in state
-          // from that perspective, unless an implementation overrides the public write()
-          // method at its own risk.
-          if (this[kAddMode]) {
-            this._add(op)
-          } else if (op.type === 'put') {
-            this._put(op.key, op.value, op)
-          } else {
-            this._del(op.key, op)
-          }
+      // Prepare promise in case write() is called in the mean time
+      let close
+      this[kClosePromise] = new Promise((resolve, reject) => {
+        close = () => {
+          this[kCallClose]().then(resolve, reject)
         }
-
-        if (publicOperations !== null && length !== 0) {
-          this[kPublicOperations] = this[kPublicOperations].concat(publicOperations)
-        }
-      }
-
-      this._write(options, (err) => {
-        this[kStatus] = 'closing'
-        this[kCloseCallbacks].push(() => callback(err))
-
-        // Emit after setting 'closing' status, because event may trigger a
-        // db close which in turn triggers (idempotently) closing this batch.
-        if (!err) {
-          if (this[kPublicOperations] !== null) {
-            this.db.emit('write', this[kPublicOperations])
-          } else if (this[kLegacyOperations] !== null) {
-            this.db.emit('batch', this[kLegacyOperations])
-          }
-        }
-
-        this._close(this[kFinishClose])
       })
-    }
 
-    return callback[kPromise]
-  }
+      try {
+        // Process operations added by prewrite hook functions
+        if (this[kPrewriteData] !== null) {
+          const publicOperations = this[kPrewriteData][kPublicOperations]
+          const privateOperations = this[kPrewriteData][kPrivateOperations]
+          const length = this[kPrewriteData].length
 
-  _write (options, callback) {}
+          for (let i = 0; i < length; i++) {
+            const op = privateOperations[i]
 
-  close (callback) {
-    callback = fromCallback(callback, kPromise)
+            // We can _add(), _put() or _del() even though status is now 'writing' because
+            // status isn't exposed to the private API, so there's no difference in state
+            // from that perspective, unless an implementation overrides the public write()
+            // method at its own risk.
+            if (this[kAddMode]) {
+              this._add(op)
+            } else if (op.type === 'put') {
+              this._put(op.key, op.value, op)
+            } else {
+              this._del(op.key, op)
+            }
+          }
 
-    if (this[kStatus] === 'closing') {
-      this[kCloseCallbacks].push(callback)
-    } else if (this[kStatus] === 'closed') {
-      this.nextTick(callback)
-    } else {
-      this[kCloseCallbacks].push(callback)
+          if (publicOperations !== null && length !== 0) {
+            this[kPublicOperations] = this[kPublicOperations].concat(publicOperations)
+          }
+        }
 
-      if (this[kStatus] !== 'writing') {
-        this[kStatus] = 'closing'
-        this._close(this[kFinishClose])
+        await this._write(options)
+      } catch (err) {
+        close()
+
+        try {
+          await this[kClosePromise]
+        } catch (closeErr) {
+          // eslint-disable-next-line no-ex-assign
+          err = combineErrors([err, closeErr])
+        }
+
+        throw err
       }
+
+      close()
+
+      // Emit after initiating the closing, because event may trigger a
+      // db close which in turn triggers (idempotently) closing this batch.
+      if (this[kPublicOperations] !== null) {
+        this.db.emit('write', this[kPublicOperations])
+      } else if (this[kLegacyOperations] !== null) {
+        this.db.emit('batch', this[kLegacyOperations])
+      }
+
+      return this[kClosePromise]
     }
-
-    return callback[kPromise]
   }
 
-  _close (callback) {
-    this.nextTick(callback)
+  async _write (options) {}
+
+  async close () {
+    if (this[kClosePromise] !== null) {
+      // First caller of close() or write() is responsible for error
+      return this[kClosePromise].catch(noop)
+    } else {
+      this[kClosePromise] = this[kCallClose]()
+      return this[kClosePromise]
+    }
   }
 
-  [kFinishClose] () {
-    this[kStatus] = 'closed'
+  async [kCallClose] () {
+    this[kStatus] = 'closing'
+    await this._close()
     this.db.detachResource(this)
-
-    const callbacks = this[kCloseCallbacks]
-    this[kCloseCallbacks] = []
-
-    for (const cb of callbacks) {
-      cb()
-    }
   }
+
+  async _close () {}
 }
 
 class PrewriteData {

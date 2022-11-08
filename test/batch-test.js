@@ -1,222 +1,141 @@
 'use strict'
 
 const { Buffer } = require('buffer')
-const { assertAsync } = require('./util')
 const { illegalKeys, illegalValues } = require('./util')
 
 let db
 
 exports.setUp = function (test, testCommon) {
-  test('setUp db', function (t) {
+  test('batch([]) setup', async function (t) {
     db = testCommon.factory()
-    db.open(t.end.bind(t))
+    return db.open()
   })
 }
 
 exports.args = function (test, testCommon) {
-  test('test batch() with missing `value`', assertAsync.ctx(function (t) {
-    t.plan(3)
-
-    db.batch([{ type: 'put', key: 'foo1' }], assertAsync(function (err) {
-      t.is(err && err.code, 'LEVEL_INVALID_VALUE', 'correct error code (callback)')
-    }))
+  test('batch([]) with missing value fails', function (t) {
+    t.plan(1)
 
     db.batch([{ type: 'put', key: 'foo1' }]).catch((err) => {
-      t.is(err.code, 'LEVEL_INVALID_VALUE', 'correct error code (promise)')
+      t.is(err.code, 'LEVEL_INVALID_VALUE', 'correct error code')
     })
-  }))
+  })
 
-  test('test batch() with illegal values', assertAsync.ctx(function (t) {
-    t.plan(illegalValues.length * 6)
+  test('batch([]) with illegal values fails', function (t) {
+    t.plan(illegalValues.length * 2)
 
     for (const { name, value } of illegalValues) {
-      db.batch([{ type: 'put', key: 'foo1', value }], assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
-        t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.is(err && err.code, 'LEVEL_INVALID_VALUE', 'correct error code (callback)')
-      }))
-
       db.batch([{ type: 'put', key: 'foo1', value }]).catch(function (err) {
-        t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.is(err.code, 'LEVEL_INVALID_VALUE', name + ' - correct error code (promise)')
+        t.ok(err instanceof Error, name + ' - is Error')
+        t.is(err.code, 'LEVEL_INVALID_VALUE', name + ' - correct error code')
       })
     }
-  }))
+  })
 
-  test('test batch() with missing `key`', assertAsync.ctx(function (t) {
-    t.plan(3)
-
-    db.batch([{ type: 'put', value: 'foo1' }], assertAsync(function (err) {
-      t.is(err && err.code, 'LEVEL_INVALID_KEY', 'correct error code (callback)')
-    }))
+  test('batch([]) with missing key fails', function (t) {
+    t.plan(1)
 
     db.batch([{ type: 'put', value: 'foo1' }]).catch(function (err) {
-      t.is(err.code, 'LEVEL_INVALID_KEY', 'correct error code (promise)')
+      t.is(err.code, 'LEVEL_INVALID_KEY', 'correct error code')
     })
-  }))
+  })
 
-  test('test batch() with illegal keys', assertAsync.ctx(function (t) {
-    t.plan(illegalKeys.length * 6)
+  test('batch([]) with illegal keys fails', function (t) {
+    t.plan(illegalKeys.length * 2)
 
     for (const { name, key } of illegalKeys) {
-      db.batch([{ type: 'put', key, value: 'foo1' }], assertAsync(function (err) {
-        t.ok(err, name + ' - has error (callback)')
-        t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.is(err && err.code, 'LEVEL_INVALID_KEY', 'correct error code (callback)')
-      }))
-
       db.batch([{ type: 'put', key, value: 'foo1' }]).catch(function (err) {
-        t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (promise)')
+        t.ok(err instanceof Error, name + ' - is Error')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code')
       })
     }
-  }))
+  })
 
-  test('test batch() with missing or incorrect type', assertAsync.ctx(function (t) {
-    t.plan(10)
-
-    db.batch([{ key: 'key', value: 'value' }], assertAsync(function (err) {
-      t.is(err && err.name, 'TypeError')
-      t.is(err && err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (callback)')
-    }))
-
-    db.batch([{ key: 'key', value: 'value', type: 'foo' }], assertAsync(function (err) {
-      t.is(err && err.name, 'TypeError')
-      t.is(err && err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (callback)')
-    }))
+  test('batch([]) with missing or incorrect type fails', function (t) {
+    t.plan(4)
 
     db.batch([{ key: 'key', value: 'value' }]).catch(function (err) {
       t.is(err.name, 'TypeError')
-      t.is(err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (promise)')
+      t.is(err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message')
     })
 
     db.batch([{ key: 'key', value: 'value', type: 'foo' }]).catch(function (err) {
       t.is(err.name, 'TypeError')
-      t.is(err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message (promise)')
+      t.is(err.message, "A batch operation must have a type property that is 'put' or 'del'", 'correct error message')
     })
-  }))
+  })
 
-  test('test batch() with missing or nullish operations', assertAsync.ctx(function (t) {
-    t.plan(13)
-
-    db.batch(assertAsync(function (err) {
-      t.is(err && err.name, 'TypeError')
-      t.is(err && err.message, "The first argument 'operations' must be an array", 'correct error message (callback)')
-    }))
+  test('batch([]) with missing or nullish operations fails', function (t) {
+    t.plan(2 * 2)
 
     for (const array of [null, undefined]) {
-      db.batch(array, assertAsync(function (err) {
-        t.is(err && err.name, 'TypeError')
-        t.is(err && err.message, "The first argument 'operations' must be an array", 'correct error message (callback)')
-      }))
-
       db.batch(array).catch(function (err) {
         t.is(err.name, 'TypeError')
-        t.is(err.message, "The first argument 'operations' must be an array", 'correct error message (promise)')
+        t.is(err.message, "The first argument 'operations' must be an array", 'correct error message')
       })
     }
-  }))
+  })
 
-  test('test batch() with null options', function (t) {
-    t.plan(2)
-
-    db.batch([], null, function (err) {
-      t.error(err)
-    })
-
-    db.batch([], null).then(function () {
-      t.pass('resolved')
-    }).catch(t.fail.bind(t))
+  test('batch([]) with empty operations array and empty options', async function (t) {
+    await db.batch([])
+    await db.batch([], null)
+    await db.batch([], undefined)
+    await db.batch([], {})
   })
 
   ;[null, undefined, 1, true].forEach(function (operation) {
     const type = operation === null ? 'null' : typeof operation
 
-    test('test batch() with ' + type + ' operation', assertAsync.ctx(function (t) {
-      t.plan(3)
+    test(`batch([]) with ${type} operation fails`, function (t) {
+      t.plan(1)
 
-      db.batch([operation], assertAsync(function (err) {
+      db.batch([operation]).catch(function (err) {
         // We can either explicitly check the type of the op and throw a TypeError,
         // or skip that for performance reasons in which case the next thing checked
         // will be op.key or op.type. Doesn't matter, because we've documented that
         // TypeErrors and such are not part of the semver contract.
-        t.ok(err && (err.name === 'TypeError' || err.code === 'LEVEL_INVALID_KEY'))
-      }))
-
-      db.batch([operation]).catch(function (err) {
         t.ok(err.name === 'TypeError' || err.code === 'LEVEL_INVALID_KEY')
-      })
-    }))
-  })
-
-  test('test batch() with empty array', assertAsync.ctx(function (t) {
-    t.plan(3)
-
-    db.batch([], assertAsync(function (err) {
-      t.error(err, 'no error from batch()')
-    }))
-
-    db.batch([]).then(function () {
-      t.pass('resolved')
-    }).catch(t.fail.bind(t))
-  }))
-}
-
-exports.batch = function (test, testCommon) {
-  test('test simple batch()', function (t) {
-    db.batch([{ type: 'put', key: 'foo', value: 'bar' }], function (err) {
-      t.error(err)
-
-      db.get('foo', function (err, value) {
-        t.error(err)
-        t.is(value, 'bar')
-        t.end()
       })
     })
   })
+}
 
-  test('test simple batch() with promise', async function (t) {
+exports.batch = function (test, testCommon) {
+  test('simple batch([])', async function (t) {
     const db = testCommon.factory()
-
     await db.open()
+    await db.batch([{ type: 'del', key: 'non-existent' }]) // should not error
+    t.is(await db.get('foo'), undefined, 'not found')
     await db.batch([{ type: 'put', key: 'foo', value: 'bar' }])
-
-    t.is(await db.get('foo', { valueEncoding: 'utf8' }), 'bar')
+    t.is(await db.get('foo'), 'bar')
+    await db.batch([{ type: 'del', key: 'foo' }])
+    t.is(await db.get('foo'), undefined, 'not found')
     return db.close()
   })
 
-  test('test multiple batch()', function (t) {
-    db.batch([
+  test('batch([]) with multiple operations', async function (t) {
+    t.plan(3)
+
+    await db.batch([
       { type: 'put', key: 'foobatch1', value: 'bar1' },
       { type: 'put', key: 'foobatch2', value: 'bar2' },
       { type: 'put', key: 'foobatch3', value: 'bar3' },
       { type: 'del', key: 'foobatch2' }
-    ], function (err) {
-      t.error(err)
+    ])
 
-      let r = 0
-      const done = function () {
-        if (++r === 3) { t.end() }
-      }
-
-      db.get('foobatch1', function (err, value) {
-        t.error(err)
+    const promises = [
+      db.get('foobatch1').then(function (value) {
         t.is(value, 'bar1')
-        done()
-      })
-
-      db.get('foobatch2', function (err, value) {
-        t.error(err, 'no error')
+      }),
+      db.get('foobatch2').then(function (value) {
         t.is(value, undefined, 'not found')
-        done()
-      })
-
-      db.get('foobatch3', function (err, value) {
-        t.error(err)
+      }),
+      db.get('foobatch3').then(function (value) {
         t.is(value, 'bar3')
-        done()
       })
-    })
+    ]
+
+    return Promise.all(promises)
   })
 
   for (const encoding of ['utf8', 'buffer', 'view']) {
@@ -262,35 +181,26 @@ exports.batch = function (test, testCommon) {
 }
 
 exports.atomic = function (test, testCommon) {
-  test('test batch() is atomic', function (t) {
-    t.plan(6)
+  test('batch([]) is atomic', async function (t) {
+    t.plan(3)
 
-    let async = false
+    try {
+      await db.batch([
+        { type: 'put', key: 'foobah1', value: 'bar1' },
+        { type: 'put', value: 'bar2' },
+        { type: 'put', key: 'foobah3', value: 'bar3' }
+      ])
+    } catch (err) {
+      t.is(err.code, 'LEVEL_INVALID_KEY', 'should error and not commit anything')
+    }
 
-    db.batch([
-      { type: 'put', key: 'foobah1', value: 'bar1' },
-      { type: 'put', value: 'bar2' },
-      { type: 'put', key: 'foobah3', value: 'bar3' }
-    ], function (err) {
-      t.ok(err, 'should error')
-      t.ok(async, 'callback is asynchronous')
-
-      db.get('foobah1', function (err, value) {
-        t.error(err, 'no error')
-        t.is(value, undefined, 'should not be found')
-      })
-      db.get('foobah3', function (err, value) {
-        t.error(err, 'no error')
-        t.is(value, undefined, 'should not be found')
-      })
-    })
-
-    async = true
+    t.is(await db.get('foobah1'), undefined, 'not found')
+    t.is(await db.get('foobah3'), undefined, 'not found')
   })
 }
 
 exports.events = function (test, testCommon) {
-  test('test batch([]) (array-form) emits batch event', async function (t) {
+  test('batch([]) emits batch event', async function (t) {
     t.plan(2)
 
     const db = testCommon.factory()
@@ -303,13 +213,13 @@ exports.events = function (test, testCommon) {
     })
 
     await db.batch([{ type: 'put', key: 456, value: 99, custom: 123 }])
-    await db.close()
+    return db.close()
   })
 }
 
 exports.tearDown = function (test, testCommon) {
-  test('tearDown', function (t) {
-    db.close(t.end.bind(t))
+  test('batch([]) teardown', async function (t) {
+    return db.close()
   })
 }
 

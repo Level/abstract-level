@@ -18,35 +18,19 @@ module.exports = function (test, testCommon) {
     db.emit(kEvent, 'foo')
   })
 
-  test('testCommon.factory() returns a unique database', function (t) {
+  test('testCommon.factory() returns a unique database', async function (t) {
     const db1 = testCommon.factory()
     const db2 = testCommon.factory()
 
     t.isNot(db1, db2, 'unique instances')
 
-    function close () {
-      db1.close(function (err) {
-        t.error(err, 'no error while closing db1')
-        db2.close(function (err) {
-          t.error(err, 'no error while closing db2')
-          t.end()
-        })
-      })
-    }
+    await db1.open()
+    await db2.open()
+    await db1.put('key', 'value')
 
-    db1.open(function (err) {
-      t.error(err, 'no error while opening db1')
-      db2.open(function (err) {
-        t.error(err, 'no error while opening db2')
-        db1.put('key', 'value', function (err) {
-          t.error(err, 'put key in db1')
-          db2.get('key', function (err, value) {
-            t.error(err, 'no error')
-            t.is(value, undefined, 'db2 should be empty')
-            close()
-          })
-        })
-      })
-    })
+    const value = await db2.get('key')
+    t.is(value, undefined, 'db2 should be empty')
+
+    return Promise.all([db1.close(), db2.close()])
   })
 }

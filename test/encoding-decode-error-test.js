@@ -6,13 +6,15 @@ let keySequence = 0
 const testKey = () => 'test' + (++keySequence)
 
 exports.all = function (test, testCommon) {
-  test('setup', async function (t) {
+  test('decode error setup', async function (t) {
     db = testCommon.factory()
     return db.open()
   })
 
   // NOTE: adapted from encoding-down
-  test('get() and getMany() forward decode error', function (t) {
+  test('decode error is wrapped by get() and getMany()', async function (t) {
+    t.plan(4)
+
     const key = testKey()
     const valueEncoding = {
       encode: (v) => v,
@@ -20,45 +22,46 @@ exports.all = function (test, testCommon) {
       format: 'utf8'
     }
 
-    db.put(key, 'bar', { valueEncoding }, function (err) {
-      t.ifError(err, 'no put() error')
+    await db.put(key, 'bar', { valueEncoding })
 
-      db.get(key, { valueEncoding }, function (err, value) {
-        t.is(err && err.code, 'LEVEL_DECODE_ERROR')
-        t.is(err && err.cause && err.cause.message, 'decode error xyz')
-        t.is(value, undefined)
+    try {
+      await db.get(key, { valueEncoding })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DECODE_ERROR')
+      t.is(err.cause.message, 'decode error xyz')
+    }
 
-        db.getMany(['other-key', key], { valueEncoding }, function (err, values) {
-          t.is(err && err.code, 'LEVEL_DECODE_ERROR')
-          t.is(err && err.cause && err.cause.message, 'decode error xyz')
-          t.is(values, undefined)
-          t.end()
-        })
-      })
-    })
+    try {
+      await db.getMany(['other-key', key], { valueEncoding })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DECODE_ERROR')
+      t.is(err.cause.message, 'decode error xyz')
+    }
   })
 
   // NOTE: adapted from encoding-down
-  test('get() and getMany() yield encoding error if stored value is invalid', function (t) {
+  test('get() and getMany() yield decode error if stored value is invalid', async function (t) {
+    t.plan(4)
+
     const key = testKey()
+    await db.put(key, 'this {} is [] not : json', { valueEncoding: 'utf8' })
 
-    db.put(key, 'this {} is [] not : json', { valueEncoding: 'utf8' }, function (err) {
-      t.ifError(err, 'no put() error')
+    try {
+      await db.get(key, { valueEncoding: 'json' })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DECODE_ERROR')
+      t.is(err.cause.name, 'SyntaxError') // From JSON.parse()
+    }
 
-      db.get(key, { valueEncoding: 'json' }, function (err) {
-        t.is(err && err.code, 'LEVEL_DECODE_ERROR')
-        t.is(err && err.cause.name, 'SyntaxError') // From JSON.parse()
-
-        db.getMany(['other-key', key], { valueEncoding: 'json' }, function (err) {
-          t.is(err && err.code, 'LEVEL_DECODE_ERROR')
-          t.is(err && err.cause.name, 'SyntaxError') // From JSON.parse()
-          t.end()
-        })
-      })
-    })
+    try {
+      await db.getMany(['other-key', key], { valueEncoding: 'json' })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DECODE_ERROR')
+      t.is(err.cause.name, 'SyntaxError') // From JSON.parse()
+    }
   })
 
-  test('teardown', async function (t) {
+  test('decode error teardown', async function (t) {
     return db.close()
   })
 }

@@ -1,6 +1,5 @@
 import * as Transcoder from 'level-transcoder'
 import { AbstractSublevel } from './abstract-sublevel'
-import { NodeCallback } from './interfaces'
 
 export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
   constructor (db: TDatabase)
@@ -46,8 +45,6 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    */
   write (): Promise<void>
   write (options: AbstractChainedBatchWriteOptions): Promise<void>
-  write (callback: NodeCallback<void>): void
-  write (options: AbstractChainedBatchWriteOptions, callback: NodeCallback<void>): void
 
   /**
    * Free up underlying resources. This should be done even if the chained batch has
@@ -56,7 +53,6 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    * committing it.
    */
   close (): Promise<void>
-  close (callback: NodeCallback<void>): void
 }
 
 /**

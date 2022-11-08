@@ -17,32 +17,22 @@ const data = (function () {
 }())
 
 exports.setUp = function (test, testCommon) {
-  test('setUp db', function (t) {
+  test('iterator() range setup', async function (t) {
     db = testCommon.factory()
-    db.open(function () {
-      db.batch(data.map(function (d) {
-        return {
-          type: 'put',
-          key: d.key,
-          value: d.value
-        }
-      }), t.end.bind(t))
-    })
+    await db.open()
+    return db.batch(data.map(function ({ key, value }) {
+      return { type: 'put', key, value }
+    }))
   })
 }
 
 exports.range = function (test, testCommon) {
   function rangeTest (name, opts, expected) {
-    opts.keyEncoding = 'utf8'
-    opts.valueEncoding = 'utf8'
+    test('iterator() range with ' + name, async function (t) {
+      const entries = await db.iterator(opts).all()
 
-    test(name, function (t) {
-      db.iterator(opts).all(function (err, entries) {
-        t.error(err)
-        t.is(entries.length, expected.length, 'correct number of entries')
-        t.same(entries, expected.map(o => [o.key, o.value]))
-        t.end()
-      })
+      t.is(entries.length, expected.length, 'correct number of entries')
+      t.same(entries, expected.map(o => [o.key, o.value]))
     })
 
     // Test the documented promise that in reverse mode,
@@ -58,96 +48,96 @@ exports.range = function (test, testCommon) {
     }
   }
 
-  rangeTest('test full data collection', {}, data)
+  rangeTest('no options', {}, data)
 
-  rangeTest('test iterator with reverse=true', {
+  rangeTest('reverse=true', {
     reverse: true
   }, data.slice().reverse())
 
-  rangeTest('test iterator with gte=00', {
+  rangeTest('gte=00', {
     gte: '00'
   }, data)
 
-  rangeTest('test iterator with gte=50', {
+  rangeTest('gte=50', {
     gte: '50'
   }, data.slice(50))
 
-  rangeTest('test iterator with lte=50 and reverse=true', {
+  rangeTest('lte=50 and reverse=true', {
     lte: '50',
     reverse: true
   }, data.slice().reverse().slice(49))
 
-  rangeTest('test iterator with gte=49.5 (midway)', {
+  rangeTest('gte=49.5 (midway)', {
     gte: '49.5'
   }, data.slice(50))
 
-  rangeTest('test iterator with gte=49999 (midway)', {
+  rangeTest('gte=49999 (midway)', {
     gte: '49999'
   }, data.slice(50))
 
-  rangeTest('test iterator with lte=49.5 (midway) and reverse=true', {
+  rangeTest('lte=49.5 (midway) and reverse=true', {
     lte: '49.5',
     reverse: true
   }, data.slice().reverse().slice(50))
 
-  rangeTest('test iterator with lt=49.5 (midway) and reverse=true', {
+  rangeTest('lt=49.5 (midway) and reverse=true', {
     lt: '49.5',
     reverse: true
   }, data.slice().reverse().slice(50))
 
-  rangeTest('test iterator with lt=50 and reverse=true', {
+  rangeTest('lt=50 and reverse=true', {
     lt: '50',
     reverse: true
   }, data.slice().reverse().slice(50))
 
-  rangeTest('test iterator with lte=50', {
+  rangeTest('lte=50', {
     lte: '50'
   }, data.slice(0, 51))
 
-  rangeTest('test iterator with lte=50.5 (midway)', {
+  rangeTest('lte=50.5 (midway)', {
     lte: '50.5'
   }, data.slice(0, 51))
 
-  rangeTest('test iterator with lte=50555 (midway)', {
+  rangeTest('lte=50555 (midway)', {
     lte: '50555'
   }, data.slice(0, 51))
 
-  rangeTest('test iterator with lt=50555 (midway)', {
+  rangeTest('lt=50555 (midway)', {
     lt: '50555'
   }, data.slice(0, 51))
 
-  rangeTest('test iterator with gte=50.5 (midway) and reverse=true', {
+  rangeTest('gte=50.5 (midway) and reverse=true', {
     gte: '50.5',
     reverse: true
   }, data.slice().reverse().slice(0, 49))
 
-  rangeTest('test iterator with gt=50.5 (midway) and reverse=true', {
+  rangeTest('gt=50.5 (midway) and reverse=true', {
     gt: '50.5',
     reverse: true
   }, data.slice().reverse().slice(0, 49))
 
-  rangeTest('test iterator with gt=50 and reverse=true', {
+  rangeTest('gt=50 and reverse=true', {
     gt: '50',
     reverse: true
   }, data.slice().reverse().slice(0, 49))
 
   // first key is actually '00' so it should avoid it
-  rangeTest('test iterator with lte=0', {
+  rangeTest('lte=0', {
     lte: '0'
   }, [])
 
   // first key is actually '00' so it should avoid it
-  rangeTest('test iterator with lt=0', {
+  rangeTest('lt=0', {
     lt: '0'
   }, [])
 
-  rangeTest('test iterator with gte=30 and lte=70', {
+  rangeTest('gte=30 and lte=70', {
     gte: '30',
     lte: '70'
   }, data.slice(30, 71))
 
   // The gte and lte options should take precedence over gt and lt respectively.
-  rangeTest('test iterator with gte=30 and lte=70 and gt=40 and lt=60', {
+  rangeTest('gte=30 and lte=70 and gt=40 and lt=60', {
     gte: '30',
     lte: '70',
     gt: '40',
@@ -155,109 +145,109 @@ exports.range = function (test, testCommon) {
   }, data.slice(30, 71))
 
   // Also test the other way around: if gt and lt were to select a bigger range.
-  rangeTest('test iterator with gte=30 and lte=70 and gt=20 and lt=80', {
+  rangeTest('gte=30 and lte=70 and gt=20 and lt=80', {
     gte: '30',
     lte: '70',
     gt: '20',
     lt: '80'
   }, data.slice(30, 71))
 
-  rangeTest('test iterator with gt=29 and lt=71', {
+  rangeTest('gt=29 and lt=71', {
     gt: '29',
     lt: '71'
   }, data.slice(30, 71))
 
-  rangeTest('test iterator with gte=30 and lte=70 and reverse=true', {
+  rangeTest('gte=30 and lte=70 and reverse=true', {
     lte: '70',
     gte: '30',
     reverse: true
   }, data.slice().reverse().slice(29, 70))
 
-  rangeTest('test iterator with gt=29 and lt=71 and reverse=true', {
+  rangeTest('gt=29 and lt=71 and reverse=true', {
     lt: '71',
     gt: '29',
     reverse: true
   }, data.slice().reverse().slice(29, 70))
 
-  rangeTest('test iterator with limit=20', {
+  rangeTest('limit=20', {
     limit: 20
   }, data.slice(0, 20))
 
-  rangeTest('test iterator with limit=20 and gte=20', {
+  rangeTest('limit=20 and gte=20', {
     limit: 20,
     gte: '20'
   }, data.slice(20, 40))
 
-  rangeTest('test iterator with limit=20 and reverse=true', {
+  rangeTest('limit=20 and reverse=true', {
     limit: 20,
     reverse: true
   }, data.slice().reverse().slice(0, 20))
 
-  rangeTest('test iterator with limit=20 and lte=79 and reverse=true', {
+  rangeTest('limit=20 and lte=79 and reverse=true', {
     limit: 20,
     lte: '79',
     reverse: true
   }, data.slice().reverse().slice(20, 40))
 
-  // the default limit value from levelup is -1
-  rangeTest('test iterator with limit=-1 should iterate over whole database', {
+  // the default limit value is -1
+  rangeTest('limit=-1 (all)', {
     limit: -1
   }, data)
 
-  rangeTest('test iterator with limit=0 should not iterate over anything', {
+  rangeTest('limit=0 (empty)', {
     limit: 0
   }, [])
 
-  rangeTest('test iterator with lte after limit', {
+  rangeTest('lte after limit', {
     limit: 20,
     lte: '50'
   }, data.slice(0, 20))
 
-  rangeTest('test iterator with lte before limit', {
+  rangeTest('lte before limit', {
     limit: 50,
     lte: '19'
   }, data.slice(0, 20))
 
-  rangeTest('test iterator with gte after database end', {
+  rangeTest('gte after database end', {
     gte: '9a'
   }, [])
 
-  rangeTest('test iterator with gt after database end', {
+  rangeTest('gt after database end', {
     gt: '9a'
   }, [])
 
-  rangeTest('test iterator with lte after database end and reverse=true', {
+  rangeTest('lte after database end and reverse=true', {
     lte: '9a',
     reverse: true
   }, data.slice().reverse())
 
-  rangeTest('test iterator with lt after database end', {
+  rangeTest('lt after database end', {
     lt: 'a'
   }, data.slice())
 
-  rangeTest('test iterator with lt at database end', {
+  rangeTest('lt at database end', {
     lt: data[data.length - 1].key
   }, data.slice(0, -1))
 
-  rangeTest('test iterator with lte at database end', {
+  rangeTest('lte at database end', {
     lte: data[data.length - 1].key
   }, data.slice())
 
-  rangeTest('test iterator with lt before database end', {
+  rangeTest('lt before database end', {
     lt: data[data.length - 2].key
   }, data.slice(0, -2))
 
-  rangeTest('test iterator with lte before database end', {
+  rangeTest('lte before database end', {
     lte: data[data.length - 2].key
   }, data.slice(0, -1))
 
-  rangeTest('test iterator with lte and gte after database and reverse=true', {
+  rangeTest('lte and gte after database and reverse=true', {
     lte: '9b',
     gte: '9a',
     reverse: true
   }, [])
 
-  rangeTest('test iterator with lt and gt after database and reverse=true', {
+  rangeTest('lt and gt after database and reverse=true', {
     lt: '9b',
     gt: '9a',
     reverse: true
@@ -275,8 +265,8 @@ exports.range = function (test, testCommon) {
 }
 
 exports.tearDown = function (test, testCommon) {
-  test('tearDown', function (t) {
-    db.close(t.end.bind(t))
+  test('iterator() range teardown', async function (t) {
+    return db.close()
   })
 }
 

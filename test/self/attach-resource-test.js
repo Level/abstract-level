@@ -2,10 +2,9 @@
 
 const test = require('tape')
 const { mockLevel } = require('../util')
-const nextTick = require('../../lib/next-tick')
 
-test('resource must be an object with a close() method', function (t) {
-  t.plan(5)
+test('resource must be an object with a close() method', async function (t) {
+  t.plan(4)
 
   const db = mockLevel()
 
@@ -17,59 +16,59 @@ test('resource must be an object with a close() method', function (t) {
     }
   }
 
-  db.close(t.ifError.bind(t))
+  return db.close()
 })
 
 test('resource is closed on failed open', function (t) {
   t.plan(2)
 
   const db = mockLevel({
-    _open: function (options, callback) {
+    async _open (options) {
       t.pass('opened')
-      this.nextTick(callback, new Error('_open error'))
+      throw new Error('_open error')
     }
   })
 
   const resource = {
-    close: function (cb) {
+    async close () {
       // Note: resource shouldn't care about db.status
-      t.pass('closed')
-      nextTick(cb)
+      t.is(arguments.length, 0)
     }
   }
 
   db.attachResource(resource)
 })
 
-test('resource is closed on db.close()', function (t) {
-  t.plan(2)
+for (const open of [true, false]) {
+  test(`resource is closed on db.close() (explicit open: ${open})`, async function (t) {
+    t.plan(1)
 
-  const db = mockLevel()
+    const db = mockLevel()
 
-  const resource = {
-    close: function (cb) {
-      // Note: resource shouldn't care about db.status
-      t.pass('closed')
-      nextTick(cb)
+    const resource = {
+      async close () {
+        // Note: resource shouldn't care about db.status
+        t.pass('closed')
+      }
     }
-  }
 
-  db.attachResource(resource)
-  db.close(t.ifError.bind(t))
-})
+    if (open) await db.open()
+    db.attachResource(resource)
+    return db.close()
+  })
 
-test('resource is not closed on db.close() if detached', function (t) {
-  t.plan(1)
+  test(`resource is not closed on db.close() if detached (explicit open: ${open})`, async function (t) {
+    const db = mockLevel()
 
-  const db = mockLevel()
-
-  const resource = {
-    close: function (cb) {
-      t.fail('should not be called')
+    const resource = {
+      async close () {
+        t.fail('should not be called')
+      }
     }
-  }
 
-  db.attachResource(resource)
-  db.detachResource(resource)
-  db.close(t.ifError.bind(t))
-})
+    if (open) await db.open()
+    db.attachResource(resource)
+    db.detachResource(resource)
+    return db.close()
+  })
+}

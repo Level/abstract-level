@@ -5,41 +5,34 @@ const { mockLevel, mockIterator } = require('../util')
 
 // NOTE: copied from deferred-leveldown
 test('deferred operations are called in order', function (t) {
-  t.plan(15)
+  t.plan(3)
 
   const calls = []
   const db = mockLevel({
-    _put: function (key, value, options, callback) {
-      this.nextTick(callback)
+    async _put (key, value, options) {
       calls.push({ type: 'put', key, value, options })
     },
-    _get: function (key, options, callback) {
-      this.nextTick(callback)
+    async _get (key, options) {
       calls.push({ type: 'get', key, options })
     },
-    _del: function (key, options, callback) {
-      this.nextTick(callback)
+    async _del (key, options) {
       calls.push({ type: 'del', key, options })
     },
-    _batch: function (arr, options, callback) {
-      this.nextTick(callback)
+    async _batch (arr, options) {
       calls.push({ type: 'batch', keys: arr.map(op => op.key).join(',') })
     },
-    _clear: function (options, callback) {
-      this.nextTick(callback)
+    async _clear (options) {
       calls.push({ ...options, type: 'clear' })
     },
     _iterator (options) {
       calls.push({ type: 'iterator' })
       return mockIterator(this, options, {
-        _next (callback) {
-          this.nextTick(callback)
+        async _next (options) {
           calls.push({ type: 'iterator.next' })
         }
       })
     },
-    _open: function (options, callback) {
-      this.nextTick(callback)
+    async _open (options) {
       t.is(calls.length, 0, 'not yet called')
     }
   }, {
@@ -52,8 +45,7 @@ test('deferred operations are called in order', function (t) {
     valueEncoding: 'utf8'
   })
 
-  db.open(function (err) {
-    t.ifError(err, 'no open() error')
+  db.open().then(function () {
     t.same(calls, [
       { type: 'put', key: '001', value: 'bar1', options: { keyEncoding: 'utf8', valueEncoding: 'utf8' } },
       { type: 'get', key: '002', options: { keyEncoding: 'utf8', valueEncoding: 'utf8' } },
@@ -70,24 +62,25 @@ test('deferred operations are called in order', function (t) {
     ], 'calls correctly behaved')
   })
 
-  db.put('001', 'bar1', t.ifError.bind(t))
-  db.get('002', t.ifError.bind(t))
-  db.clear(t.ifError.bind(t))
-  db.put('010', 'bar2', t.ifError.bind(t))
-  db.get('011', { keyEncoding: 'buffer' }, t.ifError.bind(t))
-  db.del('020', { customOption: 123 }, t.ifError.bind(t))
-  db.del('021', t.ifError.bind(t))
+  // We have dangling promises here, but it's a self test, so no worries.
+  db.put('001', 'bar1')
+  db.get('002')
+  db.clear()
+  db.put('010', 'bar2')
+  db.get('011', { keyEncoding: 'buffer' })
+  db.del('020', { customOption: 123 })
+  db.del('021')
   db.batch([
     { type: 'put', key: '040', value: 'a' },
     { type: 'put', key: '041', value: 'b' }
-  ], t.ifError.bind(t))
+  ])
   const it = db.iterator()
   db.batch()
     .put('050', 'c')
     .put('051', 'd')
-    .write(t.ifError.bind(t))
-  it.next(t.ifError.bind(t))
-  db.clear({ gt: '060' }, t.ifError.bind(t))
+    .write()
+  it.next()
+  db.clear({ gt: '060' })
 
   t.is(calls.length, 0, 'not yet called')
 })

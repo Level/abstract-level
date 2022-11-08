@@ -3,8 +3,6 @@
 const { AbstractLevel, AbstractChainedBatch } = require('..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('..')
 
-const spies = []
-
 exports.illegalKeys = [
   { name: 'null key', key: null },
   { name: 'undefined key', key: undefined }
@@ -15,63 +13,13 @@ exports.illegalValues = [
   { name: 'undefined value', value: undefined }
 ]
 
-/**
- * Wrap a callback to check that it's called asynchronously. Must be
- * combined with a `ctx()`, `with()` or `end()` call.
- *
- * @param {function} cb Callback to check.
- * @param {string} name Optional callback name to use in assertion messages.
- * @returns {function} Wrapped callback.
- */
-exports.assertAsync = function (cb, name) {
-  const spy = {
-    called: false,
-    name: name || cb.name || 'anonymous'
+// Utility to ensure we're not fooled by `await 123`. Instead do `await assertPromise(123)`
+exports.assertPromise = function (p) {
+  if (typeof p !== 'object' || p === null || typeof p.then !== 'function') {
+    throw new TypeError('Expected a promise')
   }
 
-  spies.push(spy)
-
-  return function (...args) {
-    spy.called = true
-    return cb.apply(this, args)
-  }
-}
-
-/**
- * Verify that callbacks wrapped with `assertAsync()` were not yet called.
- * @param {import('tape').Test} t Tape test object.
- */
-exports.assertAsync.end = function (t) {
-  for (const { called, name } of spies.splice(0, spies.length)) {
-    t.is(called, false, `callback (${name}) is asynchronous`)
-  }
-}
-
-/**
- * Wrap a test function to verify `assertAsync()` spies at the end.
- * @param {import('tape').TestCase} test Test function to be passed to `tape()`.
- * @returns {import('tape').TestCase} Wrapped test function.
- */
-exports.assertAsync.ctx = function (test) {
-  return function (...args) {
-    const ret = test.call(this, ...args)
-    exports.assertAsync.end(args[0])
-    return ret
-  }
-}
-
-/**
- * Wrap an arbitrary callback to verify `assertAsync()` spies at the end.
- * @param {import('tape').Test} t Tape test object.
- * @param {function} cb Callback to wrap.
- * @returns {function} Wrapped callback.
- */
-exports.assertAsync.with = function (t, cb) {
-  return function (...args) {
-    const ret = cb.call(this, ...args)
-    exports.assertAsync.end(t)
-    return ret
-  }
+  return p
 }
 
 exports.mockLevel = function (methods, ...args) {
@@ -119,36 +67,30 @@ class MinimalLevel extends AbstractLevel {
     this[kEntries] = new Map()
   }
 
-  _put (key, value, options, callback) {
+  async _put (key, value, options) {
     this[kEntries].set(key, value)
-    this.nextTick(callback)
   }
 
-  _get (key, options, callback) {
+  async _get (key, options) {
     // Is undefined if not found
-    const value = this[kEntries].get(key)
-    this.nextTick(callback, null, value)
+    return this[kEntries].get(key)
   }
 
-  _getMany (keys, options, callback) {
-    const values = keys.map(k => this[kEntries].get(k))
-    this.nextTick(callback, null, values)
+  async _getMany (keys, options) {
+    return keys.map(k => this[kEntries].get(k))
   }
 
-  _del (key, options, callback) {
+  async _del (key, options) {
     this[kEntries].delete(key)
-    this.nextTick(callback)
   }
 
-  _clear (options, callback) {
+  async _clear (options) {
     for (const [k] of sliceEntries(this[kEntries], options, true)) {
       this[kEntries].delete(k)
     }
-
-    this.nextTick(callback)
   }
 
-  _batch (operations, options, callback) {
+  async _batch (operations, options) {
     const entries = new Map(this[kEntries])
 
     for (const op of operations) {
@@ -157,7 +99,6 @@ class MinimalLevel extends AbstractLevel {
     }
 
     this[kEntries] = entries
-    this.nextTick(callback)
   }
 
   _iterator (options) {
@@ -203,24 +144,23 @@ class MinimalValueIterator extends AbstractValueIterator {
 for (const Ctor of [MinimalIterator, MinimalKeyIterator, MinimalValueIterator]) {
   const mapEntry = Ctor === MinimalIterator ? e => e : Ctor === MinimalKeyIterator ? e => e[0] : e => e[1]
 
-  Ctor.prototype._next = function (callback) {
+  Ctor.prototype._next = async function (options) {
     const entry = this[kEntries][this[kPosition]++]
-    if (entry === undefined) return this.nextTick(callback)
-    if (Ctor === MinimalIterator) this.nextTick(callback, null, entry[0], entry[1])
-    else this.nextTick(callback, null, mapEntry(entry))
+    if (entry === undefined) return undefined
+    return mapEntry(entry)
   }
 
-  Ctor.prototype._nextv = function (size, options, callback) {
+  Ctor.prototype._nextv = async function (size, options) {
     const entries = this[kEntries].slice(this[kPosition], this[kPosition] + size)
     this[kPosition] += entries.length
-    this.nextTick(callback, null, entries.map(mapEntry))
+    return entries.map(mapEntry)
   }
 
-  Ctor.prototype._all = function (options, callback) {
+  Ctor.prototype._all = async function (options) {
     const end = this.limit - this.count + this[kPosition]
     const entries = this[kEntries].slice(this[kPosition], end)
     this[kPosition] = this[kEntries].length
-    this.nextTick(callback, null, entries.map(mapEntry))
+    return entries.map(mapEntry)
   }
 
   Ctor.prototype._seek = function (target, options) {

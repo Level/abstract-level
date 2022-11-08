@@ -5,17 +5,10 @@ const input = [{ key: '1', value: '1' }, { key: '2', value: '2' }]
 let db
 
 exports.setup = function (test, testCommon) {
-  test('setup', function (t) {
-    t.plan(2)
-
+  test('async iterator setup', async function (t) {
     db = testCommon.factory()
-    db.open(function (err) {
-      t.ifError(err, 'no open() error')
-
-      db.batch(input.map(entry => ({ ...entry, type: 'put' })), function (err) {
-        t.ifError(err, 'no batch() error')
-      })
-    })
+    await db.open()
+    return db.batch(input.map(entry => ({ ...entry, type: 'put' })))
   })
 }
 
@@ -126,13 +119,9 @@ exports.asyncIterator = function (test, testCommon) {
   }
 }
 
-exports.teardown = function (test, testCommon) {
-  test('teardown', function (t) {
-    t.plan(1)
-
-    db.close(function (err) {
-      t.ifError(err, 'no close() error')
-    })
+exports.teardown = async function (test, testCommon) {
+  test('async iterator teardown', async function (t) {
+    return db.close()
   })
 }
 

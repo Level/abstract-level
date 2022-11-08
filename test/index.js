@@ -10,7 +10,6 @@ function suite (options) {
   require('./factory-test')(test, testCommon)
   require('./manifest-test')(test, testCommon)
   require('./open-test').all(test, testCommon)
-  require('./close-test').all(test, testCommon)
 
   if (testCommon.supports.createIfMissing) {
     require('./open-create-if-missing-test').all(test, testCommon)

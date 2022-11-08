@@ -7,7 +7,7 @@ exports.all = function (test, testCommon) {
   if (!testCommon.supports.encodings.buffer) return
 
   // NOTE: adapted from levelup
-  test('test put() and get() with buffer value and buffer valueEncoding', async function (t) {
+  test('put() and get() with buffer value and buffer valueEncoding', async function (t) {
     const db = testCommon.factory()
     await db.open()
     await db.put('test', testBuffer(), { valueEncoding: 'buffer' })
@@ -16,7 +16,7 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: adapted from levelup
-  test('test put() and get() with buffer value and buffer valueEncoding in factory', async function (t) {
+  test('put() and get() with buffer value and buffer valueEncoding in factory', async function (t) {
     const db = testCommon.factory({ valueEncoding: 'buffer' })
     await db.open()
     await db.put('test', testBuffer())
@@ -25,7 +25,7 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: adapted from levelup
-  test('test put() and get() with buffer key and buffer keyEncoding', async function (t) {
+  test('put() and get() with buffer key and buffer keyEncoding', async function (t) {
     const db = testCommon.factory()
     await db.open()
     await db.put(testBuffer(), 'test', { keyEncoding: 'buffer' })
@@ -34,7 +34,7 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: adapted from levelup
-  test('test put() and get() with buffer key and utf8 keyEncoding', async function (t) {
+  test('put() and get() with buffer key and utf8 keyEncoding', async function (t) {
     const db = testCommon.factory()
     await db.open()
     await db.put(Buffer.from('foo🐄'), 'test', { keyEncoding: 'utf8' })
@@ -43,7 +43,7 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: adapted from levelup
-  test('test put() and get() with string value and buffer valueEncoding', async function (t) {
+  test('put() and get() with string value and buffer valueEncoding', async function (t) {
     const db = testCommon.factory()
     await db.open()
     await db.put('test', 'foo🐄', { valueEncoding: 'buffer' })
@@ -214,38 +214,23 @@ exports.all = function (test, testCommon) {
 
   for (const keyEncoding of ['buffer', 'view']) {
     // NOTE: adapted from memdown
-    test(`storage is byte-aware (${keyEncoding} encoding)`, function (t) {
+    test(`storage is byte-aware (${keyEncoding} encoding)`, async function (t) {
       const db = testCommon.factory({ keyEncoding })
+      await db.open()
 
-      db.open(function (err) {
-        t.ifError(err, 'no open error')
+      const one = Buffer.from('80', 'hex')
+      const two = Buffer.from('c0', 'hex')
 
-        const one = Buffer.from('80', 'hex')
-        const two = Buffer.from('c0', 'hex')
+      t.ok(two.toString() === one.toString(), 'would be equal when not byte-aware')
+      t.ok(two.compare(one) > 0, 'but greater when byte-aware')
 
-        t.ok(two.toString() === one.toString(), 'would be equal when not byte-aware')
-        t.ok(two.compare(one) > 0, 'but greater when byte-aware')
+      await db.put(one, 'one')
+      t.is(await db.get(one), 'one', 'value one ok')
 
-        db.put(one, 'one', function (err) {
-          t.ifError(err, 'no put() error')
+      await db.put(two, 'two')
+      t.is(await db.get(one), 'one', 'value one did not change')
 
-          db.get(one, function (err, value) {
-            t.ifError(err, 'no get() error')
-            t.is(value, 'one', 'value one ok')
-
-            db.put(two, 'two', function (err) {
-              t.ifError(err, 'no put() error')
-
-              db.get(one, function (err, value) {
-                t.ifError(err, 'no get() error')
-                t.is(value, 'one', 'value one did not change')
-
-                db.close(t.end.bind(t))
-              })
-            })
-          })
-        })
-      })
+      return db.close()
     })
   }
 }

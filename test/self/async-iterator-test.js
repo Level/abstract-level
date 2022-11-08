@@ -45,16 +45,15 @@ for (const mode of ['iterator', 'keys', 'values']) {
       const output = []
 
       const db = withIterator({
-        _next (callback) {
-          const { key, value } = input[n++] || []
-          this.nextTick(callback, null, key, value)
+        async _next () {
+          const entry = input[n++]
+          return entry ? [entry.key, entry.value] : undefined
         },
 
-        _close (callback) {
-          this.nextTick(function () {
-            closed = true
-            callback()
-          })
+        async _close () {
+          // Wait a tick
+          await undefined
+          closed = true
         }
       })
 
@@ -77,16 +76,16 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.plan(4)
 
       const db = withIterator({
-        _next (callback) {
-          this.nextTick(callback, null, n.toString(), n.toString())
+        async _next () {
           if (n++ > 10) throw new Error('Infinite loop')
+          return [n.toString(), n.toString()]
         },
 
-        _close (callback) {
-          this.nextTick(function () {
-            closed = true
-            callback(new Error('close error'))
-          })
+        async _close () {
+          // Wait a tick
+          await undefined
+          closed = true
+          throw new Error('close error')
         }
       })
 
@@ -112,16 +111,15 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.plan(5)
 
       const db = withIterator({
-        _next (callback) {
+        async _next (callback) {
           t.pass('nexted')
-          this.nextTick(callback, new Error('iterator error'))
+          throw new Error('iterator error')
         },
 
-        _close (callback) {
-          this.nextTick(function () {
-            closed = true
-            callback()
-          })
+        async _close (callback) {
+          // Wait a tick
+          await undefined
+          closed = true
         }
       })
 
@@ -146,16 +144,15 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.plan(4)
 
       const db = withIterator({
-        _next (callback) {
-          this.nextTick(callback, null, n.toString(), n.toString())
+        async _next () {
           if (n++ > 10) throw new Error('Infinite loop')
+          return [n.toString(), n.toString()]
         },
 
-        _close (callback) {
-          this.nextTick(function () {
-            closed = true
-            callback()
-          })
+        async _close () {
+          // Wait a tick
+          await undefined
+          closed = true
         }
       })
 
@@ -179,16 +176,15 @@ for (const mode of ['iterator', 'keys', 'values']) {
       t.plan(4)
 
       const db = withIterator({
-        _next (callback) {
-          this.nextTick(callback, null, n.toString(), n.toString())
+        async _next () {
           if (n++ > 10) throw new Error('Infinite loop')
+          return [n.toString(), n.toString()]
         },
 
-        _close (callback) {
-          this.nextTick(function () {
-            closed = true
-            callback()
-          })
+        async _close (callback) {
+          // Wait a tick
+          await undefined
+          closed = true
         }
       })
 

@@ -13,7 +13,7 @@ import {
   AbstractValueIteratorOptions
 } from './abstract-iterator'
 
-import { NodeCallback, RangeOptions } from './interfaces'
+import { RangeOptions } from './interfaces'
 
 /**
  * Abstract class for a lexicographically sorted key-value database.
@@ -53,7 +53,7 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * - `'opening'` - waiting for the database to be opened
    * - `'open'` - successfully opened the database
    * - `'closing'` - waiting for the database to be closed
-   * - `'closed'` - successfully closed the database.
+   * - `'closed'` - database is closed.
    */
   get status (): 'opening' | 'open' | 'closing' | 'closed'
 
@@ -62,54 +62,36 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    */
   open (): Promise<void>
   open (options: AbstractOpenOptions): Promise<void>
-  open (callback: NodeCallback<void>): void
-  open (options: AbstractOpenOptions, callback: NodeCallback<void>): void
 
   /**
    * Close the database.
    */
   close (): Promise<void>
-  close (callback: NodeCallback<void>): void
 
   /**
    * Get a value from the database by {@link key}.
    */
   get (key: KDefault): Promise<VDefault>
-  get (key: KDefault, callback: NodeCallback<VDefault>): void
 
   get<K = KDefault, V = VDefault> (
     key: K,
     options: AbstractGetOptions<K, V>
   ): Promise<V>
 
-  get<K = KDefault, V = VDefault> (
-    key: K,
-    options: AbstractGetOptions<K, V>,
-    callback: NodeCallback<V>
-  ): void
-
   /**
    * Get multiple values from the database by an array of {@link keys}.
    */
   getMany (keys: KDefault[]): Promise<VDefault[]>
-  getMany (keys: KDefault[], callback: NodeCallback<VDefault[]>): void
 
   getMany<K = KDefault, V = VDefault> (
     keys: K[],
     options: AbstractGetManyOptions<K, V>
   ): Promise<V[]>
 
-  getMany<K = KDefault, V = VDefault> (
-    keys: K[],
-    options: AbstractGetManyOptions<K, V>,
-    callback: NodeCallback<V[]>
-  ): void
-
   /**
    * Add a new entry or overwrite an existing entry.
    */
   put (key: KDefault, value: VDefault): Promise<void>
-  put (key: KDefault, value: VDefault, callback: NodeCallback<void>): void
 
   put<K = KDefault, V = VDefault> (
     key: K,
@@ -117,29 +99,15 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
     options: AbstractPutOptions<K, V>
   ): Promise<void>
 
-  put<K = KDefault, V = VDefault> (
-    key: K,
-    value: V,
-    options: AbstractPutOptions<K, V>,
-    callback: NodeCallback<void>
-  ): void
-
   /**
    * Delete an entry by {@link key}.
    */
   del (key: KDefault): Promise<void>
-  del (key: KDefault, callback: NodeCallback<void>): void
 
   del<K = KDefault> (
     key: K,
     options: AbstractDelOptions<K>
   ): Promise<void>
-
-  del<K = KDefault> (
-    key: K,
-    options: AbstractDelOptions<K>,
-    callback: NodeCallback<void>
-  ): void
 
   /**
    * Perform multiple _put_ and/or _del_ operations in bulk.
@@ -148,21 +116,10 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
     operations: Array<AbstractBatchOperation<typeof this, KDefault, VDefault>>
   ): Promise<void>
 
-  batch (
-    operations: Array<AbstractBatchOperation<typeof this, KDefault, VDefault>>,
-    callback: NodeCallback<void>
-  ): void
-
   batch<K = KDefault, V = VDefault> (
     operations: Array<AbstractBatchOperation<typeof this, K, V>>,
     options: AbstractBatchOptions<K, V>
   ): Promise<void>
-
-  batch<K = KDefault, V = VDefault> (
-    operations: Array<AbstractBatchOperation<typeof this, K, V>>,
-    options: AbstractBatchOptions<K, V>,
-    callback: NodeCallback<void>
-  ): void
 
   batch (): AbstractChainedBatch<typeof this, KDefault, VDefault>
 
@@ -212,9 +169,7 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Delete all entries or a range.
    */
   clear (): Promise<void>
-  clear (callback: NodeCallback<void>): void
   clear<K = KDefault> (options: AbstractClearOptions<K>): Promise<void>
-  clear<K = KDefault> (options: AbstractClearOptions<K>, callback: NodeCallback<void>): void
 
   /**
    * Create a sublevel.
@@ -287,11 +242,10 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   defer (fn: Function): void
 
   /**
-   * Schedule the function {@link fn} to be called in a next tick of the JavaScript
-   * event loop, using a microtask scheduler. It will be called with the provided
-   * {@link args}.
+   * Call the function {@link fn} at a later time when {@link status} changes to
+   * `'open'` or `'closed'`.
    */
-  nextTick (fn: Function, ...args: any[]): void
+  deferAsync<T> (fn: () => Promise<T>): Promise<T>
 }
 
 export { AbstractLevel }

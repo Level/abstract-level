@@ -4,46 +4,21 @@ const { Buffer } = require('buffer')
 
 let db
 
-function makeTest (test, type, key, value, expectedResult) {
-  const hasExpectedResult = arguments.length === 5
-  test('test put()/get()/del() with ' + type, function (t) {
-    db.put(key, value, function (err) {
-      t.error(err)
-      db.get(key, function (err, _value) {
-        t.error(err, 'no error, has key/value for `' + type + '`')
+function makeTest (test, type, key, value, expectedValue) {
+  const stringValue = arguments.length === 5 ? expectedValue : value.toString()
 
-        let result = _value
-
-        if (hasExpectedResult) {
-          t.equal(result.toString(), expectedResult)
-        } else {
-          if (result != null) { result = _value.toString() }
-          if (value != null) { value = value.toString() }
-          t.equals(result, value)
-        }
-        db.del(key, function (err) {
-          t.error(err, 'no error, deleted key/value for `' + type + '`')
-
-          let async = false
-
-          db.get(key, function (err, value) {
-            t.error(err, 'no error')
-            t.is(value, undefined, 'not found')
-            t.ok(async, 'callback is asynchronous')
-            t.end()
-          })
-
-          async = true
-        })
-      })
-    })
+  test('put(), get(), del() with ' + type, async function (t) {
+    await db.put(key, value)
+    t.is((await db.get(key)).toString(), stringValue)
+    await db.del(key)
+    t.is(await db.get(key), undefined, 'not found')
   })
 }
 
 exports.setUp = function (test, testCommon) {
-  test('setUp db', function (t) {
+  test('put(), get(), del() setup', async function (t) {
     db = testCommon.factory()
-    db.open(t.end.bind(t))
+    return db.open()
   })
 }
 
@@ -98,8 +73,8 @@ exports.nonErrorValues = function (test, testCommon) {
 }
 
 exports.tearDown = function (test, testCommon) {
-  test('tearDown', function (t) {
-    db.close(t.end.bind(t))
+  test('put(), get(), del() teardown', async function (t) {
+    return db.close()
   })
 }
 
