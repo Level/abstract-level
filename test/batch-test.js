@@ -1,7 +1,7 @@
 'use strict'
 
 const { Buffer } = require('buffer')
-const { verifyNotFoundError, assertAsync } = require('./util')
+const { assertAsync } = require('./util')
 const { illegalKeys, illegalValues } = require('./util')
 
 let db
@@ -206,9 +206,8 @@ exports.batch = function (test, testCommon) {
       })
 
       db.get('foobatch2', function (err, value) {
-        t.ok(err, 'entry not found')
-        t.ok(typeof value === 'undefined', 'value is undefined')
-        t.ok(verifyNotFoundError(err), 'NotFound error')
+        t.error(err, 'no error')
+        t.is(value, undefined, 'not found')
         done()
       })
 
@@ -264,7 +263,7 @@ exports.batch = function (test, testCommon) {
 
 exports.atomic = function (test, testCommon) {
   test('test batch() is atomic', function (t) {
-    t.plan(4)
+    t.plan(6)
 
     let async = false
 
@@ -276,11 +275,13 @@ exports.atomic = function (test, testCommon) {
       t.ok(err, 'should error')
       t.ok(async, 'callback is asynchronous')
 
-      db.get('foobah1', function (err) {
-        t.ok(err, 'should not be found')
+      db.get('foobah1', function (err, value) {
+        t.error(err, 'no error')
+        t.is(value, undefined, 'should not be found')
       })
-      db.get('foobah3', function (err) {
-        t.ok(err, 'should not be found')
+      db.get('foobah3', function (err, value) {
+        t.error(err, 'no error')
+        t.is(value, undefined, 'should not be found')
       })
     })
 

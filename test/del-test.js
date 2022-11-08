@@ -1,6 +1,6 @@
 'use strict'
 
-const { verifyNotFoundError, illegalKeys, assertAsync } = require('./util')
+const { illegalKeys, assertAsync } = require('./util')
 
 let db
 
@@ -36,9 +36,8 @@ exports.del = function (test, testCommon) {
       db.del('foo', function (err) {
         t.error(err)
         db.get('foo', function (err, value) {
-          t.ok(err, 'entry properly deleted')
-          t.ok(typeof value === 'undefined', 'value is undefined')
-          t.ok(verifyNotFoundError(err), 'NotFound error')
+          t.error(err, 'no error')
+          t.is(value, undefined, 'not found')
           t.end()
         })
       })
@@ -51,9 +50,8 @@ exports.del = function (test, testCommon) {
       db.del('foo').then(function (err) {
         t.error(err)
         db.get('foo', function (err, value) {
-          t.ok(err, 'entry properly deleted')
-          t.ok(typeof value === 'undefined', 'value is undefined')
-          t.ok(verifyNotFoundError(err), 'NotFound error')
+          t.error(err, 'no error')
+          t.is(value, undefined, 'not found')
           t.end()
         })
       }).catch(t.fail.bind(t))

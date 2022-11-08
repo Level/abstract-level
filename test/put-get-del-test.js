@@ -1,6 +1,5 @@
 'use strict'
 
-const { verifyNotFoundError } = require('./util')
 const { Buffer } = require('buffer')
 
 let db
@@ -28,9 +27,8 @@ function makeTest (test, type, key, value, expectedResult) {
           let async = false
 
           db.get(key, function (err, value) {
-            t.ok(err, 'entry properly deleted')
-            t.ok(verifyNotFoundError(err), 'correct error')
-            t.is(value, undefined, 'value is undefined')
+            t.error(err, 'no error')
+            t.is(value, undefined, 'not found')
             t.ok(async, 'callback is asynchronous')
             t.end()
           })

@@ -368,14 +368,12 @@ class AbstractLevel extends EventEmitter {
 
     this._get(this.prefixKey(keyEncoding.encode(key), keyFormat, true), options, (err, value) => {
       if (err) {
-        // Normalize not found error for backwards compatibility with abstract-leveldown and level(up)
-        if (err.code === 'LEVEL_NOT_FOUND' || err.notFound || /NotFound/i.test(err)) {
-          if (!err.code) err.code = 'LEVEL_NOT_FOUND' // Preferred way going forward
-          if (!err.notFound) err.notFound = true // Same as level-errors
-          if (!err.status) err.status = 404 // Same as level-errors
-        }
-
         return callback(err)
+      }
+
+      // Entry was not found
+      if (value === undefined) {
+        return callback()
       }
 
       try {
@@ -394,7 +392,7 @@ class AbstractLevel extends EventEmitter {
   }
 
   _get (key, options, callback) {
-    this.nextTick(callback, new Error('NotFound'))
+    this.nextTick(callback, null, undefined)
   }
 
   getMany (keys, options, callback) {
