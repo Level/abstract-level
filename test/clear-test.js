@@ -4,28 +4,25 @@ const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
 
 exports.args = function (test, testCommon) {
-  test('test clear() with legacy range options', function (t) {
-    t.plan(4)
+  test('clear() with legacy range options', async function (t) {
+    t.plan(2)
 
     const db = testCommon.factory()
+    await db.open()
 
-    db.open(function (err) {
-      t.ifError(err)
+    try {
+      await db.clear({ start: 'foo' })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_LEGACY')
+    }
 
-      try {
-        db.clear({ start: 'foo' }, t.fail.bind(t))
-      } catch (err) {
-        t.is(err.code, 'LEVEL_LEGACY')
-      }
+    try {
+      await db.clear({ end: 'foo' })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_LEGACY')
+    }
 
-      try {
-        db.clear({ end: 'foo' }).catch(t.fail.bind(t))
-      } catch (err) {
-        t.is(err.code, 'LEVEL_LEGACY')
-      }
-
-      db.close(t.ifError.bind(t))
-    })
+    return db.close()
   })
 }
 
@@ -41,74 +38,25 @@ exports.clear = function (test, testCommon) {
   }
 
   function makeTest (type, keys) {
-    test('test simple clear() on ' + type + ' keys', function (t) {
-      t.plan(8)
-
+    test('simple clear() on ' + type + ' keys', async function (t) {
       const db = testCommon.factory()
       const ops = keys.map(function (key) {
-        return { type: 'put', key: key, value: 'foo', keyEncoding: isBuffer(key) ? 'buffer' : 'utf8' }
+        return {
+          type: 'put',
+          key: key,
+          value: 'foo',
+          keyEncoding: isBuffer(key) ? 'buffer' : 'utf8'
+        }
       })
 
-      db.open(function (err) {
-        t.ifError(err, 'no open error')
+      await db.open()
+      await db.batch(ops)
+      t.is((await db.iterator().all()).length, keys.length, 'has entries')
 
-        db.batch(ops, function (err) {
-          t.ifError(err, 'no batch error')
+      await db.clear()
+      t.is((await db.iterator().all()).length, 0, 'has no entries')
 
-          db.iterator().all(function (err, entries) {
-            t.ifError(err, 'no all() error')
-            t.is(entries.length, keys.length, 'has entries')
-
-            db.clear(function (err) {
-              t.ifError(err, 'no clear error')
-
-              db.iterator().all(function (err, entries) {
-                t.ifError(err, 'no all() error')
-                t.is(entries.length, 0, 'has no entries')
-
-                db.close(function (err) {
-                  t.ifError(err, 'no close error')
-                })
-              })
-            })
-          })
-        })
-      })
-    })
-
-    test('test simple clear() on ' + type + ' keys, with promise', function (t) {
-      t.plan(8)
-
-      const db = testCommon.factory()
-      const ops = keys.map(function (key) {
-        return { type: 'put', key: key, value: 'foo', keyEncoding: isBuffer(key) ? 'buffer' : 'utf8' }
-      })
-
-      db.open(function (err) {
-        t.ifError(err, 'no open error')
-
-        db.batch(ops, function (err) {
-          t.ifError(err, 'no batch error')
-
-          db.iterator().all(function (err, entries) {
-            t.ifError(err, 'no all() error')
-            t.is(entries.length, keys.length, 'has entries')
-
-            db.clear().then(function () {
-              t.ifError(err, 'no clear error')
-
-              db.iterator().all(function (err, entries) {
-                t.ifError(err, 'no all() error')
-                t.is(entries.length, 0, 'has no entries')
-
-                db.close(function (err) {
-                  t.ifError(err, 'no close error')
-                })
-              })
-            }).catch(t.fail.bind(t))
-          })
-        })
-      })
+      return db.close()
     })
   }
 
@@ -124,14 +72,17 @@ exports.clear = function (test, testCommon) {
           { type: 'put', key: '"b"', value: 'b' }
         ])
 
+        let promise
+
         if (deferred) {
           await db.close()
           t.is(db.status, 'closed')
-          db.open(t.ifError.bind(t))
+          promise = db.open()
           t.is(db.status, 'opening')
         }
 
         await db.clear({ gte, keyEncoding })
+        await promise
 
         const keys = await db.keys().all()
         t.same(keys, ['"a"'], 'got expected keys')
@@ -156,7 +107,7 @@ exports.events = function (test, testCommon) {
     })
 
     await db.clear({ gt: 567, custom: 123 })
-    await db.close()
+    return db.close()
   })
 
   test('test clear() without options emits clear event', async function (t) {
@@ -172,7 +123,7 @@ exports.events = function (test, testCommon) {
     })
 
     await db.clear()
-    await db.close()
+    return db.close()
   })
 }
 

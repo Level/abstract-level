@@ -1,26 +1,22 @@
 'use strict'
 
 exports.errorIfExists = function (test, testCommon) {
-  test('test database open errorIfExists:true', function (t) {
+  test('open() with errorIfExists: true', async function (t) {
+    t.plan(2)
+
     const db = testCommon.factory()
+    await db.open()
+    await db.close()
 
-    db.open(function (err) {
-      t.error(err)
-      db.close(function (err) {
-        t.error(err)
+    try {
+      await db.open({ createIfMissing: false, errorIfExists: true })
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.ok(/exists/.test(err.cause.message), 'error is about already existing')
+    }
 
-        let async = false
-
-        db.open({ createIfMissing: false, errorIfExists: true }, function (err) {
-          t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
-          t.ok(err && /exists/.test(err.cause && err.cause.message), 'error is about already existing')
-          t.ok(async, 'callback is asynchronous')
-          t.end()
-        })
-
-        async = true
-      })
-    })
+    // Should be a noop
+    return db.close()
   })
 }
 

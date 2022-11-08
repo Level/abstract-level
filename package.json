@@ -4,9 +4,6 @@
   "description": "Abstract class for a lexicographically sorted key-value database",
   "license": "MIT",
   "main": "index.js",
-  "browser": {
-    "./lib/next-tick.js": "./lib/next-tick-browser.js"
-  },
   "types": "./index.d.ts",
   "scripts": {
     "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | faucet) && nyc report",
@@ -27,13 +24,11 @@
   ],
   "dependencies": {
     "buffer": "^6.0.3",
-    "catering": "^2.1.0",
     "is-buffer": "^2.0.5",
-    "level-supports": "^4.0.0",
+    "level-supports": "^5.0.0",
     "level-transcoder": "^1.0.1",
     "maybe-combine-errors": "^1.0.0",
-    "module-error": "^1.0.1",
-    "queue-microtask": "^1.2.3"
+    "module-error": "^1.0.1"
   },
   "devDependencies": {
     "@types/node": "^18.0.0",

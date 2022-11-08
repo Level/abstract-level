@@ -1,5 +1,5 @@
 import * as Transcoder from 'level-transcoder'
-import { RangeOptions, NodeCallback } from './interfaces'
+import { RangeOptions } from './interfaces'
 
 export interface AbstractIteratorOptions<K, V> extends RangeOptions<K> {
   /**
@@ -78,7 +78,6 @@ declare class CommonIterator<TDatabase, T> {
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    */
   close (): Promise<void>
-  close (callback: NodeCallback<void>): void
 }
 
 export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase, [K, V]> {
@@ -91,7 +90,6 @@ export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase,
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    */
   next (): Promise<[K, V] | undefined>
-  next (callback: NextCallback<K, V>): void
 
   /**
    * Advance repeatedly and get at most {@link size} amount of entries in a single call.
@@ -100,10 +98,7 @@ export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase,
    *
    * @param size Get at most this many entries. Has a soft minimum of 1.
    * @param options Options (none at the moment, reserved for future use).
-   * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  nextv (size: number, options: {}, callback: NodeCallback<Array<[K, V]>>): void
-  nextv (size: number, callback: NodeCallback<Array<[K, V]>>): void
   nextv (size: number, options: {}): Promise<Array<[K, V]>>
   nextv (size: number): Promise<Array<[K, V]>>
 
@@ -115,10 +110,7 @@ export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase,
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    *
    * @param options Options (none at the moment, reserved for future use).
-   * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  all (options: {}, callback: NodeCallback<Array<[K, V]>>): void
-  all (callback: NodeCallback<Array<[K, V]>>): void
   all (options: {}): Promise<Array<[K, V]>>
   all (): Promise<Array<[K, V]>>
 
@@ -143,7 +135,6 @@ export class AbstractKeyIterator<TDatabase, K> extends CommonIterator<TDatabase,
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    */
   next (): Promise<K | undefined>
-  next (callback: NodeCallback<K>): void
 
   /**
    * Advance repeatedly and get at most {@link size} amount of keys in a single call. Can
@@ -152,10 +143,7 @@ export class AbstractKeyIterator<TDatabase, K> extends CommonIterator<TDatabase,
    *
    * @param size Get at most this many keys. Has a soft minimum of 1.
    * @param options Options (none at the moment, reserved for future use).
-   * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  nextv (size: number, options: {}, callback: NodeCallback<[K]>): void
-  nextv (size: number, callback: NodeCallback<[K]>): void
   nextv (size: number, options: {}): Promise<[K]>
   nextv (size: number): Promise<[K]>
 
@@ -167,10 +155,7 @@ export class AbstractKeyIterator<TDatabase, K> extends CommonIterator<TDatabase,
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    *
    * @param options Options (none at the moment, reserved for future use).
-   * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  all (options: {}, callback: NodeCallback<[K]>): void
-  all (callback: NodeCallback<[K]>): void
   all (options: {}): Promise<[K]>
   all (): Promise<[K]>
 
@@ -195,7 +180,6 @@ export class AbstractValueIterator<TDatabase, K, V> extends CommonIterator<TData
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    */
   next (): Promise<V | undefined>
-  next (callback: NodeCallback<V>): void
 
   /**
    * Advance repeatedly and get at most {@link size} amount of values in a single call.
@@ -204,10 +188,7 @@ export class AbstractValueIterator<TDatabase, K, V> extends CommonIterator<TData
    *
    * @param size Get at most this many values. Has a soft minimum of 1.
    * @param options Options (none at the moment, reserved for future use).
-   * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  nextv (size: number, options: {}, callback: NodeCallback<[V]>): void
-  nextv (size: number, callback: NodeCallback<[V]>): void
   nextv (size: number, options: {}): Promise<[V]>
   nextv (size: number): Promise<[V]>
 
@@ -219,10 +200,7 @@ export class AbstractValueIterator<TDatabase, K, V> extends CommonIterator<TData
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    *
    * @param options Options (none at the moment, reserved for future use).
-   * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  all (options: {}, callback: NodeCallback<[V]>): void
-  all (callback: NodeCallback<[V]>): void
   all (options: {}): Promise<[V]>
   all (): Promise<[V]>
 

@@ -7,6 +7,15 @@ This document describes breaking changes and how to upgrade. For a complete list
 <details><summary>Click to expand</summary>
 
 - [Upcoming](#upcoming)
+  - [1. Public API](#1-public-api)
+    - [1.1. Callbacks have been removed](#11-callbacks-have-been-removed)
+    - [1.2. Not found](#12-not-found)
+    - [1.3. Not ready](#13-not-ready)
+    - [1.4. Hooks](#14-hooks)
+  - [2. Private API](#2-private-api)
+    - [2.1. Promises all the way](#21-promises-all-the-way)
+    - [2.2. Ticks](#22-ticks)
+    - [2.3. A new way to abort iterator work](#23-a-new-way-to-abort-iterator-work)
 - [1.0.0](#100)
   - [1. API parity with `levelup`](#1-api-parity-with-levelup)
     - [1.1. New: promises](#11-new-promises)
@@ -34,14 +43,105 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 ## Upcoming
 
-The next major release adds [hooks](./README.md#hooks). To achieve hooks, two low-impact breaking changes have been made to nested sublevels. Nested sublevels, no matter their depth, were previously all connected to the same parent database rather than forming a tree. In the following example, the `colorIndex` sublevel would previously forward its operations directly to `db`:
+_This is a work in progress upgrade guide for the upcoming 2.0.0 release._
+
+The guide for this release consists of two sections. One for the public API, relevant to all consumers of `abstract-level` and implementations thereof (`level`, `classic-level`, `memory-level` et cetera) and another for the private API that only implementors should have to read.
+
+### 1. Public API
+
+#### 1.1. Callbacks have been removed
+
+All methods that previously (also) accepted a callback now only support promises. If you were already using promises then nothing changed, except for subtle timing differences and improved performance. If you were not yet using promises, migrating should be relatively straightforward because nearly all callbacks had just two arguments (an error and a result) thus making promise function signatures predictable. The only method that had a callback with more than two arguments was `iterator.next()`. If you previously did:
+
+```js
+iterator.next(function (err, key, value) {
+  // ..
+})
+```
+
+You must now do:
+
+```js
+const [ key, value ] = await iterator.next()
+```
+
+Or switch to async iterators:
+
+```js
+for await (const [key, value] of iterator) {
+  // ..
+}
+```
+
+The deprecated `iterator.end()` alias of `iterator.close()` has been removed.
+
+#### 1.2. Not found
+
+The `db.get()` method now yields `undefined` instead of an error for non-existing entries. If you previously did:
+
+```js
+try {
+  await db.get('example')
+} catch (err) {
+  if (err.code === 'LEVEL_NOT_FOUND') {
+    console.log('Not found')
+  }
+}
+```
+
+You must now do:
+
+```js
+const value = await db.get('example')
+
+if (value === undefined) {
+  console.log('Not found')
+}
+```
+
+The same applies to equivalent and older `if (err.notFound)` code in the style of levelup.
+
+#### 1.3. Not ready
+
+The `ready` alias of the `open` event has been removed. If you previously did:
+
+```js
+db.once('ready', function () {
+  // ..
+})
+```
+
+You must now do:
+
+```js
+db.once('open', function () {
+  // ..
+})
+```
+
+Although old code that uses these events would likely be better off using `db.open()` because synchronous events don't mix well with `async/await`. You could instead do:
+
+```js
+await db.open({ passive: true })
+await db.get('example')
+```
+
+Or simply:
+
+```js
+await db.get('example')
+```
+
+#### 1.4. Hooks
+
+This release adds [hooks](./README.md#hooks). To achieve this feature, two low-impact breaking changes have been made to nested sublevels. Nested sublevels, no matter their depth, were previously all connected to the same parent database rather than forming a tree. In the following example, the `colorIndex` sublevel would previously forward its operations directly to `db`:
 
 ```js
 const indexes = db.sublevel('idx')
 const colorIndex = indexes.sublevel('colors')
 ```
 
-It will now forward its operations to `indexes`, which in turn forwards them to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels. This decreased performance is the **first breaking change** and mainly affects sublevels nested at a depth of more than 2.
+It will now forward its operations to `indexes`, which in turn forwards them to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels. This decreased performance is the first breaking change and mainly affects sublevels nested at a depth of more than 2.
 
 To optionally negate it, a new feature has been added to `db.sublevel(name)`: it now also accepts a `name` that is an array. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
 
@@ -49,7 +149,7 @@ To optionally negate it, a new feature has been added to `db.sublevel(name)`: it
 const colorIndex = db.sublevel(['idx', 'colors'])
 ```
 
-The **second breaking change** is that if a `sublevel` is provided as an option to `db.batch()`, that sublevel must now be a descendant of `db`:
+The second breaking change is that if a `sublevel` is provided as an option to `db.batch()`, that sublevel must now be a descendant of `db`:
 
 ```js
 const colorIndex = indexes.sublevel('colors')
@@ -64,6 +164,52 @@ indexes.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
 // OK
 db.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
 ```
+
+### 2. Private API
+
+#### 2.1. Promises all the way
+
+All private methods that previously took a callback now use a promise. For example, the function signature `_get(key, options, callback)` has changed to `async _get(key, options)`. Same as in the public API, the new function signatures are predictable and the only method that requires special attention is `iterator._next()`. Which in addition now also takes an `options` argument. For details, please see the updated [README](./README.md#private-api-for-implementors).
+
+#### 2.2. Ticks
+
+Internal use of `process.nextTick` has been replaced with [`queueMicrotask`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) (which was already used in browsers) and the [polyfill](https://github.com/feross/queue-microtask) for `queueMicrotask` (for older browsers) has been removed. The `db.nextTick` utility has been removed as well. These utilities are typically not even needed anymore, thanks to the use of promises. If you previously did:
+
+```js
+class ExampleLevel extends AbstractLevel {
+  _get (key, options, callback) {
+    process.nextTick(callback, null, 'abc')
+  }
+
+  customMethod () {
+    this.nextTick(() => {
+      // ..
+    })
+  }
+}
+```
+
+You must now do:
+
+```js
+class ExampleLevel extends AbstractLevel {
+  async _get (key, options) {
+    return 'abc'
+  }
+
+  customMethod () {
+    queueMicrotask(() => {
+      // ..
+    })
+  }
+}
+```
+
+#### 2.3. A new way to abort iterator work
+
+_This section is incomplete._
+
+Closing an iterator now aborts work, if supported by implementation. The undocumented `abortOnClose` option of iterators (added as a workaround for `many-level`) has been removed in favor of AbortSignal.
 
 ## 1.0.0
 

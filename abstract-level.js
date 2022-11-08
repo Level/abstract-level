@@ -3,7 +3,6 @@
 const { supports } = require('level-supports')
 const { Transcoder } = require('level-transcoder')
 const { EventEmitter } = require('events')
-const { fromCallback, fromPromise } = require('catering')
 const ModuleError = require('module-error')
 const combineErrors = require('maybe-combine-errors')
 const { AbstractIterator } = require('./abstract-iterator')
@@ -13,12 +12,10 @@ const { DefaultChainedBatch } = require('./lib/default-chained-batch')
 const { DatabaseHooks } = require('./lib/hooks')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 const { EventMonitor } = require('./lib/event-monitor')
-const { getCallback, getOptions, noop, emptyOptions } = require('./lib/common')
+const { getOptions, noop, emptyOptions } = require('./lib/common')
 const { prefixDescendantKey } = require('./lib/prefixes')
 const rangeOptions = require('./lib/range-options')
 
-const kPromise = Symbol('promise')
-const kLanded = Symbol('landed')
 const kResources = Symbol('resources')
 const kCloseResources = Symbol('closeResources')
 const kOperations = Symbol('operations')
@@ -26,11 +23,14 @@ const kUndefer = Symbol('undefer')
 const kDeferOpen = Symbol('deferOpen')
 const kOptions = Symbol('options')
 const kStatus = Symbol('status')
+const kStatusChange = Symbol('statusChange')
+const kStatusLocked = Symbol('statusLocked')
 const kDefaultOptions = Symbol('defaultOptions')
 const kTranscoder = Symbol('transcoder')
 const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const kEventMonitor = Symbol('eventMonitor')
+const kArrayBatch = Symbol('arrayBatch')
 
 class AbstractLevel extends EventEmitter {
   constructor (manifest, options) {
@@ -48,30 +48,16 @@ class AbstractLevel extends EventEmitter {
     this[kDeferOpen] = true
     this[kOptions] = forward
     this[kStatus] = 'opening'
+    this[kStatusChange] = null
+    this[kStatusLocked] = false
 
     this.hooks = new DatabaseHooks()
-
     this.supports = supports(manifest, {
-      status: true,
-      promises: true,
-      clear: true,
-      getMany: true,
       deferredOpen: true,
 
       // TODO (next major): add seek
       snapshots: manifest.snapshots !== false,
       permanence: manifest.permanence !== false,
-
-      // TODO: remove from level-supports because it's always supported
-      keyIterator: true,
-      valueIterator: true,
-      iteratorNextv: true,
-      iteratorAll: true,
-
-      // TODO: add to level-supports
-      // We don't have to make this an object (e.g. db.supports.hooks.prewrite) because
-      // that information is already available in e.g. db.hooks.prewrite != null.
-      hooks: true,
 
       encodings: manifest.encodings || {},
       events: Object.assign({}, manifest.events, {
@@ -126,9 +112,9 @@ class AbstractLevel extends EventEmitter {
 
     // Before we start opening, let subclass finish its constructor
     // and allow events and postopen hook functions to be added.
-    this.nextTick(() => {
+    queueMicrotask(() => {
       if (this[kDeferOpen]) {
-        this.open({ passive: false }, noop)
+        this.open({ passive: false }).catch(noop)
       }
     })
   }
@@ -149,207 +135,191 @@ class AbstractLevel extends EventEmitter {
     return this[kTranscoder].encoding(encoding != null ? encoding : this[kValueEncoding])
   }
 
-  open (options, callback) {
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
-
+  async open (options) {
     options = { ...this[kOptions], ...getOptions(options) }
 
     options.createIfMissing = options.createIfMissing !== false
     options.errorIfExists = !!options.errorIfExists
 
-    const maybeOpened = (err) => {
-      if (this[kStatus] === 'closing' || this[kStatus] === 'opening') {
-        // Wait until pending state changes are done
-        this.once(kLanded, err ? () => maybeOpened(err) : maybeOpened)
-      } else if (this[kStatus] !== 'open') {
-        callback(new ModuleError('Database is not open', {
-          code: 'LEVEL_DATABASE_NOT_OPEN',
-          cause: err
-        }))
-      } else {
-        callback()
-      }
+    // TODO: document why we do this
+    const postopen = this.hooks.postopen.noop ? null : this.hooks.postopen.run
+    const passive = options.passive
+
+    if (passive && this[kDeferOpen]) {
+      // Wait a tick until constructor calls open() non-passively
+      await undefined
     }
 
-    if (options.passive) {
-      if (this[kStatus] === 'opening') {
-        this.once(kLanded, maybeOpened)
-      } else {
-        this.nextTick(maybeOpened)
-      }
+    // Wait for pending changes and check that opening is allowed
+    assertUnlocked(this)
+    while (this[kStatusChange] !== null) await this[kStatusChange].catch(noop)
+    assertUnlocked(this)
+
+    if (passive) {
+      if (this[kStatus] !== 'open') throw new NotOpenError()
     } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
       this[kDeferOpen] = false
       this[kStatus] = 'opening'
       this.emit('opening')
 
-      this._open(options, (err) => {
-        if (err) {
+      this[kStatusChange] = (async () => {
+        try {
+          await this._open(options)
+        } catch (err) {
           this[kStatus] = 'closed'
 
-          // Resources must be safe to close in any db state
-          this[kCloseResources](() => {
-            this.emit(kLanded)
-            maybeOpened(err)
-          })
-
+          // Must happen before we close resources, in case their close() is waiting
+          // on a deferred operation which in turn is waiting on db.open().
           this[kUndefer]()
-          return
+
+          try {
+            await this[kCloseResources]()
+          } catch (resourceErr) {
+            // eslint-disable-next-line no-ex-assign
+            err = combineErrors([err, resourceErr])
+          }
+
+          throw new NotOpenError(err)
         }
 
         this[kStatus] = 'open'
 
-        // Skip postopen hook if it has 0 hook functions
-        // TODO (not urgent): freeze postopen.run before we start opening
-        if (this.hooks.postopen.noop) {
-          return finishOpen()
-        }
+        if (postopen !== null) {
+          let hookErr
 
-        // Run postopen hook and convert promise to callback
-        fromPromise(this.hooks.postopen.run(options), (hookErr) => {
-          // Cancel opening if a hook function threw or closed the database
-          if (hookErr || this[kStatus] !== 'open') {
-            return this.close((closeErr) => {
-              if (hookErr) {
-                callback(new ModuleError('The postopen hook failed on open()', {
-                  code: 'LEVEL_HOOK_ERROR',
-                  cause: combineErrors([hookErr, closeErr])
-                }))
-              } else {
-                // Means the hook function is responsible for handling closeErr
-                callback(new ModuleError('The postopen hook has closed the database', {
-                  code: 'LEVEL_HOOK_ERROR'
-                }))
-              }
-            })
+          try {
+            // Prevent deadlock
+            this[kStatusLocked] = true
+            await postopen(options)
+          } catch (err) {
+            hookErr = convertRejection(err)
+          } finally {
+            this[kStatusLocked] = false
           }
 
-          finishOpen()
-        })
-      })
+          // Revert
+          if (hookErr) {
+            this[kStatus] = 'closing'
+            this[kUndefer]()
 
-      const finishOpen = () => {
+            try {
+              await this[kCloseResources]()
+              await this._close()
+            } catch (closeErr) {
+              // There's no safe state to return to. Can't return to 'open' because
+              // postopen hook failed. Can't return to 'closed' (with the ability to
+              // reopen) because the underlying database is potentially still open.
+              this[kStatusLocked] = true
+              hookErr = combineErrors([hookErr, closeErr])
+            }
+
+            this[kStatus] = 'closed'
+
+            throw new ModuleError('The postopen hook failed on open()', {
+              code: 'LEVEL_HOOK_ERROR',
+              cause: hookErr
+            })
+          }
+        }
+
         this[kUndefer]()
-        this.emit(kLanded)
+        this.emit('open')
+      })()
 
-        // Only emit public event if pending state changes are done
-        if (this[kStatus] === 'open') this.emit('open')
-
-        maybeOpened()
+      try {
+        await this[kStatusChange]
+      } finally {
+        this[kStatusChange] = null
       }
-    } else if (this[kStatus] === 'open') {
-      this.nextTick(maybeOpened)
-    } else {
-      this.once(kLanded, () => this.open(options, callback))
+    } else if (this[kStatus] !== 'open') {
+      // Should not happen
+      /* istanbul ignore next */
+      throw new NotOpenError()
     }
-
-    return callback[kPromise]
   }
 
-  _open (options, callback) {
-    this.nextTick(callback)
-  }
+  async _open (options) {}
 
-  close (callback) {
-    callback = fromCallback(callback, kPromise)
+  async close () {
+    // Wait for pending changes and check that closing is allowed
+    assertUnlocked(this)
+    while (this[kStatusChange] !== null) await this[kStatusChange].catch(noop)
+    assertUnlocked(this)
 
-    const maybeClosed = (err) => {
-      if (this[kStatus] === 'opening' || this[kStatus] === 'closing') {
-        // Wait until pending state changes are done
-        this.once(kLanded, err ? maybeClosed(err) : maybeClosed)
-      } else if (this[kStatus] !== 'closed') {
-        callback(new ModuleError('Database is not closed', {
-          code: 'LEVEL_DATABASE_NOT_CLOSED',
-          cause: err
-        }))
-      } else {
-        callback()
-      }
-    }
+    if (this[kStatus] === 'open' || this[kDeferOpen]) {
+      // If close() was called after constructor, we didn't open yet
+      const fromInitial = this[kDeferOpen]
 
-    if (this[kStatus] === 'open') {
+      this[kDeferOpen] = false
       this[kStatus] = 'closing'
       this.emit('closing')
 
-      const cancel = (err) => {
-        this[kStatus] = 'open'
-        this[kUndefer]()
-        this.emit(kLanded)
-        maybeClosed(err)
-      }
-
-      this[kCloseResources](() => {
-        this._close((err) => {
-          if (err) return cancel(err)
-
-          this[kStatus] = 'closed'
+      this[kStatusChange] = (async () => {
+        try {
+          await this[kCloseResources]()
+          if (!fromInitial) await this._close()
+        } catch (err) {
+          this[kStatus] = 'open'
           this[kUndefer]()
-          this.emit(kLanded)
+          throw new NotClosedError(err)
+        }
 
-          // Only emit public event if pending state changes are done
-          if (this[kStatus] === 'closed') this.emit('closed')
+        this[kStatus] = 'closed'
+        this[kUndefer]()
+        this.emit('closed')
+      })()
 
-          maybeClosed()
-        })
-      })
-    } else if (this[kStatus] === 'closed') {
-      this.nextTick(maybeClosed)
-    } else {
-      this.once(kLanded, () => this.close(callback))
+      try {
+        await this[kStatusChange]
+      } finally {
+        this[kStatusChange] = null
+      }
+    } else if (this[kStatus] !== 'closed') {
+      // Should not happen
+      /* istanbul ignore next */
+      throw new NotClosedError()
     }
-
-    return callback[kPromise]
   }
 
-  [kCloseResources] (callback) {
+  async [kCloseResources] () {
     if (this[kResources].size === 0) {
-      return this.nextTick(callback)
-    }
-
-    let pending = this[kResources].size
-    let sync = true
-
-    const next = () => {
-      if (--pending === 0) {
-        // We don't have tests for generic resources, so dezalgo
-        if (sync) this.nextTick(callback)
-        else callback()
-      }
+      return
     }
 
     // In parallel so that all resources know they are closed
-    for (const resource of this[kResources]) {
-      resource.close(next)
-    }
+    const resources = Array.from(this[kResources])
+    const promises = resources.map(closeResource)
 
-    sync = false
-    this[kResources].clear()
+    return Promise.allSettled(promises).then(async (results) => {
+      const errors = []
+
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].status === 'fulfilled') {
+          this[kResources].delete(resources[i])
+        } else {
+          errors.push(convertRejection(results[i].reason))
+        }
+      }
+
+      if (errors.length > 0) {
+        throw combineErrors(errors)
+      }
+    })
   }
 
-  _close (callback) {
-    this.nextTick(callback)
-  }
+  async _close () {}
 
-  get (key, options, callback) {
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
+  async get (key, options) {
     options = getOptions(options, this[kDefaultOptions].entry)
 
     if (this[kStatus] === 'opening') {
-      this.defer(() => this.get(key, options, callback))
-      return callback[kPromise]
+      return this.deferAsync(() => this.get(key, options))
     }
 
-    if (maybeError(this, callback)) {
-      return callback[kPromise]
-    }
+    assertOpen(this)
 
     const err = this._checkKey(key)
-
-    if (err) {
-      this.nextTick(callback, err)
-      return callback[kPromise]
-    }
+    if (err) throw err
 
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const valueEncoding = this.valueEncoding(options.valueEncoding)
@@ -362,57 +332,38 @@ class AbstractLevel extends EventEmitter {
       options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
 
-    this._get(this.prefixKey(keyEncoding.encode(key), keyFormat, true), options, (err, value) => {
-      if (err) {
-        return callback(err)
-      }
+    const encodedKey = keyEncoding.encode(key)
+    const value = await this._get(this.prefixKey(encodedKey, keyFormat, true), options)
 
-      // Entry was not found
-      if (value === undefined) {
-        return callback()
-      }
-
-      try {
-        value = valueEncoding.decode(value)
-      } catch (err) {
-        return callback(new ModuleError('Could not decode value', {
-          code: 'LEVEL_DECODE_ERROR',
-          cause: err
-        }))
-      }
-
-      callback(null, value)
-    })
-
-    return callback[kPromise]
+    try {
+      return value === undefined ? value : valueEncoding.decode(value)
+    } catch (err) {
+      throw new ModuleError('Could not decode value', {
+        code: 'LEVEL_DECODE_ERROR',
+        cause: err
+      })
+    }
   }
 
-  _get (key, options, callback) {
-    this.nextTick(callback, null, undefined)
+  async _get (key, options) {
+    return undefined
   }
 
-  getMany (keys, options, callback) {
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
+  async getMany (keys, options) {
     options = getOptions(options, this[kDefaultOptions].entry)
 
     if (this[kStatus] === 'opening') {
-      this.defer(() => this.getMany(keys, options, callback))
-      return callback[kPromise]
+      return this.deferAsync(() => this.getMany(keys, options))
     }
 
-    if (maybeError(this, callback)) {
-      return callback[kPromise]
-    }
+    assertOpen(this)
 
     if (!Array.isArray(keys)) {
-      this.nextTick(callback, new TypeError("The first argument 'keys' must be an array"))
-      return callback[kPromise]
+      throw new TypeError("The first argument 'keys' must be an array")
     }
 
     if (keys.length === 0) {
-      this.nextTick(callback, null, [])
-      return callback[kPromise]
+      return []
     }
 
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -430,68 +381,51 @@ class AbstractLevel extends EventEmitter {
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]
       const err = this._checkKey(key)
-
-      if (err) {
-        this.nextTick(callback, err)
-        return callback[kPromise]
-      }
+      if (err) throw err
 
       mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
     }
 
-    this._getMany(mappedKeys, options, (err, values) => {
-      if (err) return callback(err)
+    const values = await this._getMany(mappedKeys, options)
 
-      try {
-        for (let i = 0; i < values.length; i++) {
-          if (values[i] !== undefined) {
-            values[i] = valueEncoding.decode(values[i])
-          }
+    try {
+      for (let i = 0; i < values.length; i++) {
+        if (values[i] !== undefined) {
+          values[i] = valueEncoding.decode(values[i])
         }
-      } catch (err) {
-        return callback(new ModuleError(`Could not decode one or more of ${values.length} value(s)`, {
-          code: 'LEVEL_DECODE_ERROR',
-          cause: err
-        }))
       }
+    } catch (err) {
+      throw new ModuleError(`Could not decode one or more of ${values.length} value(s)`, {
+        code: 'LEVEL_DECODE_ERROR',
+        cause: err
+      })
+    }
 
-      callback(null, values)
-    })
-
-    return callback[kPromise]
+    return values
   }
 
-  _getMany (keys, options, callback) {
-    this.nextTick(callback, null, new Array(keys.length).fill(undefined))
+  async _getMany (keys, options) {
+    return new Array(keys.length).fill(undefined)
   }
 
-  put (key, value, options, callback) {
+  async put (key, value, options) {
     if (!this.hooks.prewrite.noop) {
       // Forward to batch() which will run the hook
       // Note: technically means that put() supports the sublevel option in this case,
       // but it generally doesn't per documentation (which makes sense). Same for del().
-      return this.batch([{ type: 'put', key, value }], options, callback)
+      return this.batch([{ type: 'put', key, value }], options)
     }
 
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
     options = getOptions(options, this[kDefaultOptions].entry)
 
     if (this[kStatus] === 'opening') {
-      this.defer(() => this.put(key, value, options, callback))
-      return callback[kPromise]
+      return this.deferAsync(() => this.put(key, value, options))
     }
 
-    if (maybeError(this, callback)) {
-      return callback[kPromise]
-    }
+    assertOpen(this)
 
     const err = this._checkKey(key) || this._checkValue(value)
-
-    if (err) {
-      this.nextTick(callback, err)
-      return callback[kPromise]
-    }
+    if (err) throw err
 
     // Encode data for private API
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -513,61 +447,44 @@ class AbstractLevel extends EventEmitter {
     const prefixedKey = this.prefixKey(encodedKey, keyFormat, true)
     const encodedValue = valueEncoding.encode(value)
 
-    this._put(prefixedKey, encodedValue, options, (err) => {
-      if (err) return callback(err)
+    await this._put(prefixedKey, encodedValue, options)
 
-      if (enableWriteEvent) {
-        const op = Object.assign({}, original, {
-          type: 'put',
-          key,
-          value,
-          keyEncoding,
-          valueEncoding,
-          encodedKey,
-          encodedValue
-        })
+    if (enableWriteEvent) {
+      const op = Object.assign({}, original, {
+        type: 'put',
+        key,
+        value,
+        keyEncoding,
+        valueEncoding,
+        encodedKey,
+        encodedValue
+      })
 
-        this.emit('write', [op])
-      } else {
-        // TODO (semver-major): remove
-        this.emit('put', key, value)
-      }
-
-      callback()
-    })
-
-    return callback[kPromise]
+      this.emit('write', [op])
+    } else {
+      // TODO (semver-major): remove
+      this.emit('put', key, value)
+    }
   }
 
-  _put (key, value, options, callback) {
-    this.nextTick(callback)
-  }
+  async _put (key, value, options) {}
 
-  del (key, options, callback) {
+  async del (key, options) {
     if (!this.hooks.prewrite.noop) {
       // Forward to batch() which will run the hook
-      return this.batch([{ type: 'del', key }], options, callback)
+      return this.batch([{ type: 'del', key }], options)
     }
 
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
     options = getOptions(options, this[kDefaultOptions].key)
 
     if (this[kStatus] === 'opening') {
-      this.defer(() => this.del(key, options, callback))
-      return callback[kPromise]
+      return this.deferAsync(() => this.del(key, options))
     }
 
-    if (maybeError(this, callback)) {
-      return callback[kPromise]
-    }
+    assertOpen(this)
 
     const err = this._checkKey(key)
-
-    if (err) {
-      this.nextTick(callback, err)
-      return callback[kPromise]
-    }
+    if (err) throw err
 
     // Encode data for private API
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -585,71 +502,54 @@ class AbstractLevel extends EventEmitter {
     const encodedKey = keyEncoding.encode(key)
     const prefixedKey = this.prefixKey(encodedKey, keyFormat, true)
 
-    this._del(prefixedKey, options, (err) => {
-      if (err) return callback(err)
+    await this._del(prefixedKey, options)
 
-      if (enableWriteEvent) {
-        const op = Object.assign({}, original, {
-          type: 'del',
-          key,
-          keyEncoding,
-          encodedKey
-        })
+    if (enableWriteEvent) {
+      const op = Object.assign({}, original, {
+        type: 'del',
+        key,
+        keyEncoding,
+        encodedKey
+      })
 
-        this.emit('write', [op])
-      } else {
-        // TODO (semver-major): remove
-        this.emit('del', key)
-      }
-
-      callback()
-    })
-
-    return callback[kPromise]
+      this.emit('write', [op])
+    } else {
+      // TODO (semver-major): remove
+      this.emit('del', key)
+    }
   }
 
-  _del (key, options, callback) {
-    this.nextTick(callback)
-  }
+  async _del (key, options) {}
 
   // TODO (future): add way for implementations to declare which options are for the
   // whole batch rather than defaults for individual operations. E.g. the sync option
   // of classic-level, that should not be copied to individual operations.
-  batch (operations, options, callback) {
+  batch (operations, options) {
     if (!arguments.length) {
       if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
-      if (this[kStatus] !== 'open') {
-        throw new ModuleError('Database is not open', {
-          code: 'LEVEL_DATABASE_NOT_OPEN'
-        })
-      }
+      assertOpen(this)
       return this._chainedBatch()
     }
 
-    if (typeof operations === 'function') callback = operations
-    else callback = getCallback(options, callback)
-
-    callback = fromCallback(callback, kPromise)
     options = getOptions(options, this[kDefaultOptions].empty)
+    return this[kArrayBatch](operations, options)
+  }
 
+  // Wrapped for async error handling
+  async [kArrayBatch] (operations, options) {
     // TODO (not urgent): freeze prewrite hook and write event
     if (this[kStatus] === 'opening') {
-      this.defer(() => this.batch(operations, options, callback))
-      return callback[kPromise]
+      return this.deferAsync(() => this[kArrayBatch](operations, options))
     }
 
-    if (maybeError(this, callback)) {
-      return callback[kPromise]
-    }
+    assertOpen(this)
 
     if (!Array.isArray(operations)) {
-      this.nextTick(callback, new TypeError("The first argument 'operations' must be an array"))
-      return callback[kPromise]
+      throw new TypeError("The first argument 'operations' must be an array")
     }
 
     if (operations.length === 0) {
-      this.nextTick(callback)
-      return callback[kPromise]
+      return
     }
 
     const length = operations.length
@@ -671,27 +571,19 @@ class AbstractLevel extends EventEmitter {
       const isPut = op.type === 'put'
       const delegated = op.sublevel != null
       const db = delegated ? op.sublevel : this
-      const keyError = db._checkKey(op.key)
 
-      if (keyError != null) {
-        this.nextTick(callback, keyError)
-        return callback[kPromise]
-      }
+      const keyError = db._checkKey(op.key)
+      if (keyError != null) throw keyError
 
       op.keyEncoding = db.keyEncoding(op.keyEncoding)
 
       if (isPut) {
         const valueError = db._checkValue(op.value)
-
-        if (valueError != null) {
-          this.nextTick(callback, valueError)
-          return callback[kPromise]
-        }
+        if (valueError != null) throw valueError
 
         op.valueEncoding = db.valueEncoding(op.valueEncoding)
       } else if (op.type !== 'del') {
-        this.nextTick(callback, new TypeError("A batch operation must have a type property that is 'put' or 'del'"))
-        return callback[kPromise]
+        throw new TypeError("A batch operation must have a type property that is 'put' or 'del'")
       }
 
       if (enablePrewriteHook) {
@@ -702,12 +594,10 @@ class AbstractLevel extends EventEmitter {
           op.keyEncoding = db.keyEncoding(op.keyEncoding)
           if (isPut) op.valueEncoding = db.valueEncoding(op.valueEncoding)
         } catch (err) {
-          this.nextTick(callback, new ModuleError('The prewrite hook failed on batch()', {
+          throw new ModuleError('The prewrite hook failed on batch()', {
             code: 'LEVEL_HOOK_ERROR',
             cause: err
-          }))
-
-          return callback[kPromise]
+          })
         }
       }
 
@@ -767,25 +657,17 @@ class AbstractLevel extends EventEmitter {
     // API of AbstractSublevel (or reimplement with hooks). TBD how it'd work in chained
     // batch. Hook would look something like hooks.midwrite.run(privateOperations, ...).
 
-    this._batch(privateOperations, options, (err) => {
-      if (err) return callback(err)
+    await this._batch(privateOperations, options)
 
-      if (enableWriteEvent) {
-        this.emit('write', publicOperations)
-      } else if (!enablePrewriteHook) {
-        // TODO (semver-major): remove
-        this.emit('batch', operations)
-      }
-
-      callback()
-    })
-
-    return callback[kPromise]
+    if (enableWriteEvent) {
+      this.emit('write', publicOperations)
+    } else if (!enablePrewriteHook) {
+      // TODO (semver-major): remove
+      this.emit('batch', operations)
+    }
   }
 
-  _batch (operations, options, callback) {
-    this.nextTick(callback)
-  }
+  async _batch (operations, options) {}
 
   sublevel (name, options) {
     const xopts = AbstractSublevel.defaults(options)
@@ -813,19 +695,14 @@ class AbstractLevel extends EventEmitter {
     return key
   }
 
-  clear (options, callback) {
-    callback = getCallback(options, callback)
-    callback = fromCallback(callback, kPromise)
+  async clear (options) {
     options = getOptions(options, this[kDefaultOptions].empty)
 
     if (this[kStatus] === 'opening') {
-      this.defer(() => this.clear(options, callback))
-      return callback[kPromise]
+      return this.deferAsync(() => this.clear(options))
     }
 
-    if (maybeError(this, callback)) {
-      return callback[kPromise]
-    }
+    assertOpen(this)
 
     const original = options
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -833,22 +710,13 @@ class AbstractLevel extends EventEmitter {
     options = rangeOptions(options, keyEncoding)
     options.keyEncoding = keyEncoding.format
 
-    if (options.limit === 0) {
-      this.nextTick(callback)
-    } else {
-      this._clear(options, (err) => {
-        if (err) return callback(err)
-        this.emit('clear', original)
-        callback()
-      })
+    if (options.limit !== 0) {
+      await this._clear(options)
+      this.emit('clear', original)
     }
-
-    return callback[kPromise]
   }
 
-  _clear (options, callback) {
-    this.nextTick(callback)
-  }
+  async _clear (options) {}
 
   iterator (options) {
     const keyEncoding = this.keyEncoding(options && options.keyEncoding)
@@ -868,12 +736,9 @@ class AbstractLevel extends EventEmitter {
 
     if (this[kStatus] === 'opening') {
       return new DeferredIterator(this, options)
-    } else if (this[kStatus] !== 'open') {
-      throw new ModuleError('Database is not open', {
-        code: 'LEVEL_DATABASE_NOT_OPEN'
-      })
     }
 
+    assertOpen(this)
     return this._iterator(options)
   }
 
@@ -898,12 +763,9 @@ class AbstractLevel extends EventEmitter {
 
     if (this[kStatus] === 'opening') {
       return new DeferredKeyIterator(this, options)
-    } else if (this[kStatus] !== 'open') {
-      throw new ModuleError('Database is not open', {
-        code: 'LEVEL_DATABASE_NOT_OPEN'
-      })
     }
 
+    assertOpen(this)
     return this._keys(options)
   }
 
@@ -927,12 +789,9 @@ class AbstractLevel extends EventEmitter {
 
     if (this[kStatus] === 'opening') {
       return new DeferredValueIterator(this, options)
-    } else if (this[kStatus] !== 'open') {
-      throw new ModuleError('Database is not open', {
-        code: 'LEVEL_DATABASE_NOT_OPEN'
-      })
     }
 
+    assertOpen(this)
     return this._values(options)
   }
 
@@ -948,11 +807,20 @@ class AbstractLevel extends EventEmitter {
     this[kOperations].push(fn)
   }
 
-  [kUndefer] () {
-    if (this[kOperations].length === 0) {
-      return
+  // TODO (signals): support signal option
+  deferAsync (fn, options) {
+    if (typeof fn !== 'function') {
+      throw new TypeError('The first argument must be a function')
     }
 
+    return new Promise((resolve, reject) => {
+      this[kOperations].push(function () {
+        fn().then(resolve, reject)
+      })
+    })
+  }
+
+  [kUndefer] () {
     const operations = this[kOperations]
     this[kOperations] = []
 
@@ -997,27 +865,68 @@ class AbstractLevel extends EventEmitter {
   }
 }
 
-// Expose browser-compatible nextTick for dependents
-// TODO: after we drop node 10, also use queueMicrotask in node
-AbstractLevel.prototype.nextTick = require('./lib/next-tick')
-
 const { AbstractSublevel } = require('./lib/abstract-sublevel')({ AbstractLevel })
 
 exports.AbstractLevel = AbstractLevel
 exports.AbstractSublevel = AbstractSublevel
 
-const maybeError = function (db, callback) {
+const assertOpen = function (db) {
   if (db[kStatus] !== 'open') {
-    db.nextTick(callback, new ModuleError('Database is not open', {
+    throw new ModuleError('Database is not open', {
       code: 'LEVEL_DATABASE_NOT_OPEN'
-    }))
-    return true
+    })
   }
+}
 
-  return false
+const assertUnlocked = function (db) {
+  if (db[kStatusLocked]) {
+    throw new ModuleError('Database status is locked', {
+      code: 'LEVEL_STATUS_LOCKED'
+    })
+  }
 }
 
 const formats = function (db) {
   return Object.keys(db.supports.encodings)
     .filter(k => !!db.supports.encodings[k])
+}
+
+const closeResource = function (resource) {
+  return resource.close()
+}
+
+// Ensure that we don't work with falsy err values, because JavaScript unfortunately
+// allows Promise.reject(null) and similar patterns. Which'd break `if (err)` logic.
+const convertRejection = function (reason) {
+  if (reason instanceof Error) {
+    return reason
+  }
+
+  if (Object.prototype.toString.call(reason) === '[object Error]') {
+    return reason
+  }
+
+  const hint = reason === null ? 'null' : typeof reason
+  const msg = `Promise rejection reason must be an Error, received ${hint}`
+
+  return new TypeError(msg)
+}
+
+// Internal utilities, not typed or exported
+class NotOpenError extends ModuleError {
+  constructor (cause) {
+    super('Database failed to open', {
+      code: 'LEVEL_DATABASE_NOT_OPEN',
+      cause
+    })
+  }
+}
+
+class NotClosedError extends ModuleError {
+  constructor (cause) {
+    super('Database failed to close', {
+      code: 'LEVEL_DATABASE_NOT_CLOSED',
+      cause
+    })
+  }
 }

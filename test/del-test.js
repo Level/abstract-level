@@ -1,77 +1,58 @@
 'use strict'
 
-const { illegalKeys, assertAsync } = require('./util')
+const { illegalKeys, assertPromise } = require('./util')
+const traits = require('./traits')
 
 let db
 
 exports.setUp = function (test, testCommon) {
-  test('setUp db', function (t) {
+  test('del() setup', async function (t) {
     db = testCommon.factory()
-    db.open(t.end.bind(t))
+    return db.open()
   })
 }
 
 exports.args = function (test, testCommon) {
-  test('test del() with illegal keys', assertAsync.ctx(function (t) {
-    t.plan(illegalKeys.length * 5)
+  test('del() with illegal keys', function (t) {
+    t.plan(illegalKeys.length * 2)
 
     for (const { name, key } of illegalKeys) {
-      db.del(key, assertAsync(function (err) {
-        t.ok(err instanceof Error, name + ' - is Error (callback)')
-        t.is(err && err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
-      }))
-
       db.del(key).catch(function (err) {
-        t.ok(err instanceof Error, name + ' - is Error (promise)')
-        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code (callback)')
+        t.ok(err instanceof Error, name + ' - is Error')
+        t.is(err.code, 'LEVEL_INVALID_KEY', name + ' - correct error code')
       })
     }
-  }))
+  })
 }
 
 exports.del = function (test, testCommon) {
-  test('test simple del()', function (t) {
-    db.put('foo', 'bar', function (err) {
-      t.error(err)
-      db.del('foo', function (err) {
-        t.error(err)
-        db.get('foo', function (err, value) {
-          t.error(err, 'no error')
-          t.is(value, undefined, 'not found')
-          t.end()
-        })
-      })
-    })
+  test('simple del()', async function (t) {
+    await db.put('foo', 'bar')
+    t.is(await db.get('foo'), 'bar')
+    t.is(await assertPromise(db.del('foo')), undefined, 'void promise')
+    t.is(await db.get('foo'), undefined, 'not found')
   })
 
-  test('test simple del() with promise', function (t) {
-    db.put('foo', 'bar', function (err) {
-      t.error(err)
-      db.del('foo').then(function (err) {
-        t.error(err)
-        db.get('foo', function (err, value) {
-          t.error(err, 'no error')
-          t.is(value, undefined, 'not found')
-          t.end()
-        })
-      }).catch(t.fail.bind(t))
-    })
+  test('del() on non-existent key', async function (t) {
+    for (const key of ['nope', Math.random()]) {
+      t.is(await assertPromise(db.del(key)), undefined, 'void promise')
+    }
   })
 
-  test('test del on non-existent key', function (t) {
-    db.del('blargh', function (err) {
-      t.error(err)
-      t.end()
-    })
+  traits.open('del()', testCommon, async function (t, db) {
+    let emitted = false
+    db.once('del', () => { emitted = true })
+    t.is(await assertPromise(db.del('foo')), undefined, 'void promise')
+    t.ok(emitted)
   })
 
-  test('test del on non-existent key, with promise', async function (t) {
-    return db.del('blargh')
+  traits.closed('del()', testCommon, async function (t, db) {
+    return db.del('foo')
   })
 }
 
 exports.events = function (test, testCommon) {
-  test('test del() emits del event', async function (t) {
+  test('del() emits del event', async function (t) {
     t.plan(2)
 
     const db = testCommon.factory()
@@ -84,13 +65,13 @@ exports.events = function (test, testCommon) {
     })
 
     await db.del(456)
-    await db.close()
+    return db.close()
   })
 }
 
 exports.tearDown = function (test, testCommon) {
-  test('tearDown', function (t) {
-    db.close(t.end.bind(t))
+  test('del() teardown', async function (t) {
+    return db.close()
   })
 }
 

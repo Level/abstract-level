@@ -3,8 +3,8 @@
 // NOTE: copied from levelup
 exports.all = function (test, testCommon) {
   for (const deferred of [false, true]) {
-    test(`custom encoding: simple-object values (deferred: ${deferred})`, function (t) {
-      run(t, deferred, [
+    test(`custom encoding: simple-object values (deferred: ${deferred})`, async function (t) {
+      return run(t, deferred, [
         { key: '0', value: 0 },
         { key: '1', value: 1 },
         { key: 'string', value: 'a string' },
@@ -13,10 +13,10 @@ exports.all = function (test, testCommon) {
       ])
     })
 
-    test(`custom encoding: simple-object keys (deferred: ${deferred})`, function (t) {
+    test(`custom encoding: simple-object keys (deferred: ${deferred})`, async function (t) {
       // Test keys that would be considered the same with default utf8 encoding.
       // Because String([1]) === String(1).
-      run(t, deferred, [
+      return run(t, deferred, [
         { value: '0', key: [1] },
         { value: '1', key: 1 },
         { value: 'string', key: 'a string' },
@@ -25,8 +25,8 @@ exports.all = function (test, testCommon) {
       ])
     })
 
-    test(`custom encoding: complex-object values (deferred: ${deferred})`, function (t) {
-      run(t, deferred, [{
+    test(`custom encoding: complex-object values (deferred: ${deferred})`, async function (t) {
+      return run(t, deferred, [{
         key: '0',
         value: {
           foo: 'bar',
@@ -36,10 +36,10 @@ exports.all = function (test, testCommon) {
       }])
     })
 
-    test(`custom encoding: complex-object keys (deferred: ${deferred})`, function (t) {
+    test(`custom encoding: complex-object keys (deferred: ${deferred})`, async function (t) {
       // Test keys that would be considered the same with default utf8 encoding.
       // Because String({}) === String({}) === '[object Object]'.
-      run(t, deferred, [{
+      return run(t, deferred, [{
         value: '0',
         key: {
           foo: 'bar',
@@ -57,7 +57,7 @@ exports.all = function (test, testCommon) {
     })
   }
 
-  function run (t, deferred, entries) {
+  async function run (t, deferred, entries) {
     const customEncoding = {
       encode: JSON.stringify,
       decode: JSON.parse,
@@ -71,29 +71,16 @@ exports.all = function (test, testCommon) {
     })
 
     const operations = entries.map(entry => ({ type: 'put', ...entry }))
-    const init = deferred ? (fn) => fn() : db.open.bind(db)
 
-    init(function (err) {
-      t.ifError(err, 'no init() error')
+    if (!deferred) await db.open()
 
-      db.batch(operations, function (err) {
-        t.ifError(err, 'no batch() error')
+    await db.batch(operations)
+    await Promise.all(entries.map(testGet))
 
-        let pending = entries.length
-        const next = () => {
-          if (--pending === 0) {
-            db.close(t.end.bind(t))
-          }
-        }
+    async function testGet (entry) {
+      t.same(await db.get(entry.key), entry.value)
+    }
 
-        for (const entry of entries) {
-          db.get(entry.key, function (err, value) {
-            t.ifError(err, 'no get() error')
-            t.same(value, entry.value)
-            next()
-          })
-        }
-      })
-    })
+    return db.close()
   }
 }

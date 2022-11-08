@@ -6,8 +6,8 @@ const { DefaultChainedBatch } = require('../../lib/default-chained-batch')
 const identity = (v) => v
 
 // NOTE: adapted from deferred-leveldown
-test('deferred chained batch encodes once', function (t) {
-  t.plan(9)
+test('deferred chained batch encodes once', async function (t) {
+  t.plan(8)
 
   let called = false
 
@@ -32,15 +32,13 @@ test('deferred chained batch encodes once', function (t) {
   }
 
   const db = mockLevel({
-    _batch: function (array, options, callback) {
+    async _batch (array, options) {
       called = true
       t.is(array[0] && array[0].key, 'FOO')
       t.is(array[0] && array[0].value, 'BAR')
-      this.nextTick(callback)
     },
-    _open: function (options, callback) {
+    async _open (options) {
       t.is(called, false, 'not yet called')
-      this.nextTick(callback)
     }
   }, { encodings: { utf8: true } }, {
     keyEncoding,
@@ -51,20 +49,18 @@ test('deferred chained batch encodes once', function (t) {
     t.is(called, true, 'called')
   })
 
-  db.batch().put('foo', 'bar').write(function (err) {
-    t.ifError(err, 'no write() error')
-  })
+  return db.batch().put('foo', 'bar').write()
 })
 
 test('deferred chained batch is closed upon failed open', function (t) {
   t.plan(6)
 
   const db = mockLevel({
-    _open (options, callback) {
+    async _open (options) {
       t.pass('opening')
-      this.nextTick(callback, new Error('_open error'))
+      throw new Error('_open error')
     },
-    _batch () {
+    async _batch () {
       t.fail('should not be called')
     }
   })
@@ -75,8 +71,8 @@ test('deferred chained batch is closed upon failed open', function (t) {
   batch.put('foo', 'bar')
   batch.del('123')
 
-  batch.write(function (err) {
-    t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
+  batch.write().then(t.fail.bind(t), function (err) {
+    t.is(err.code, 'LEVEL_BATCH_NOT_OPEN')
 
     // Should account for userland code that ignores errors
     try {
@@ -91,7 +87,7 @@ test('deferred chained batch is closed upon failed open', function (t) {
       t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
     }
 
-    batch.write(function (err) {
+    batch.write().catch(function (err) {
       t.is(err && err.code, 'LEVEL_BATCH_NOT_OPEN')
     })
   })

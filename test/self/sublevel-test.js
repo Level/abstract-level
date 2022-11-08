@@ -4,7 +4,6 @@ const test = require('tape')
 const { Buffer } = require('buffer')
 const { AbstractLevel, AbstractSublevel } = require('../..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('../..')
-const nextTick = AbstractLevel.prototype.nextTick
 
 class NoopLevel extends AbstractLevel {
   constructor (...args) {
@@ -174,9 +173,8 @@ test('sublevel prefix and options', function (t) {
 
     const keys = []
     class MockLevel extends AbstractLevel {
-      _put (key, value, options, callback) {
+      async _put (key, value, options) {
         keys.push(key)
-        nextTick(callback)
       }
     }
 
@@ -257,13 +255,28 @@ test('sublevel manifest and parent db', function (t) {
     t.end()
   })
 
-  t.test('sublevel.db is set to parent db', function (t) {
+  t.test('sublevel.db is set to root db', function (t) {
     const db = new NoopLevel()
     const sub = db.sublevel('test')
-    sub.once('open', function () {
-      t.ok(sub.db instanceof NoopLevel)
-      t.end()
-    })
+    const nested = sub.sublevel('nested')
+    t.ok(sub.db === db)
+    t.ok(nested.db === db)
+    t.end()
+  })
+
+  t.test('sublevel.parent is set to parent db', function (t) {
+    const db = new NoopLevel()
+    const sub = db.sublevel('test')
+    const nested = sub.sublevel('nested')
+    t.ok(sub.parent === db)
+    t.ok(nested.parent === sub)
+    t.end()
+  })
+
+  t.test('root db has a null parent', function (t) {
+    const db = new NoopLevel()
+    t.is(db.parent, null)
+    t.end()
   })
 
   t.end()
@@ -275,174 +288,157 @@ test('opening & closing sublevel', function (t) {
     t.plan(5)
 
     class MockLevel extends AbstractLevel {
-      _open (opts, cb) {
-        nextTick(cb, new Error('error from underlying store'))
+      async _open (opts) {
+        throw new Error('test')
       }
     }
 
     const db = new MockLevel({ encodings: { buffer: true } })
     const sub = db.sublevel('test')
 
-    db.open((err) => {
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
-      t.is(err && err.cause && err.cause.message, 'error from underlying store')
+    db.open().catch((err) => {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.is(err.cause && err.cause.message, 'test')
     })
 
-    sub.open((err) => {
-      t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN')
-      t.is(err && err.cause && err.cause.code, 'LEVEL_DATABASE_NOT_OPEN') // from db
-      t.is(err && err.cause && err.cause.cause, undefined) // but does not have underlying error
-    })
-  })
-
-  t.test('cannot create a sublevel on a closed db', function (t) {
-    t.plan(4)
-
-    const db = new NoopLevel()
-
-    db.once('open', function () {
-      db.close(function (err) {
-        t.error(err, 'no error')
-
-        db.sublevel('test').open(function (err) {
-          t.is(err && err.code, 'LEVEL_DATABASE_NOT_OPEN', 'sublevel not opened')
-
-          db.open(function (err) {
-            t.error(err, 'no error')
-
-            db.sublevel('test').on('open', function () {
-              t.pass('sublevel opened')
-            })
-          })
-        })
-      })
+    sub.open().catch((err) => {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.is(err.cause && err.cause.code, 'LEVEL_DATABASE_NOT_OPEN') // from db
+      t.is(err.cause && err.cause.cause, undefined) // but does not have underlying error
     })
   })
 
-  t.test('can close db and sublevel once opened', function (t) {
-    t.plan(3)
+  t.test('cannot create a sublevel on a closed db', async function (t) {
+    t.plan(2)
 
     const db = new NoopLevel()
+    await db.open()
+    await db.close()
 
-    db.open(function (err) {
-      t.ifError(err, 'no open error')
-      const sub = db.sublevel('test')
+    const sub = db.sublevel('test')
 
-      sub.once('open', function () {
-        db.close(function (err) {
-          t.ifError(err, 'no close error')
-        })
+    try {
+      await sub.open()
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN', 'sublevel not opened')
+      t.is(err.message, 'Database failed to open')
+    }
 
-        sub.close(function (err) {
-          t.ifError(err, 'no close error')
-        })
-      })
-    })
+    await db.open()
+    await sub.open()
+    await db.sublevel('test2').open()
   })
 
-  t.test('sublevel rejects operations if parent db is closed', function (t) {
-    t.plan(9)
-
+  t.test('can close db and sublevel once opened', async function (t) {
     const db = new NoopLevel()
-
-    db.open(function (err) {
-      t.ifError(err, 'no open error')
-
-      const sub = db.sublevel('test')
-      const it = sub.iterator()
-
-      sub.once('open', function () {
-        db.close(function (err) {
-          t.ifError(err, 'no close error')
-
-          sub.put('foo', 'bar', verify)
-          sub.get('foo', verify)
-          sub.del('foo', verify)
-          sub.clear(verify)
-          sub.batch([{ type: 'del', key: 'foo' }], verify)
-
-          it.next(function (err) {
-            t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
-            it.close(t.ifError.bind(t))
-          })
-
-          function verify (err) {
-            t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
-          }
-        })
-      })
-    })
+    await db.open()
+    const sub = db.sublevel('test')
+    await sub.open()
+    await db.close()
+    await sub.close()
   })
 
-  t.test('cannot close db while sublevel is opening', function (t) {
-    t.plan(5)
+  t.test('sublevel rejects operations if parent db is closed', async function (t) {
+    t.plan(6)
 
     const db = new NoopLevel()
+    await db.open()
 
-    db.open(function (err) {
-      t.ifError(err, 'no open error')
-      const sub = db.sublevel('test')
+    const sub = db.sublevel('test')
+    const it = sub.iterator()
 
-      sub.open((err) => {
-        t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    await sub.open()
+    await db.close()
+
+    const promises = [
+      sub.put('foo', 'bar').catch(verify),
+      sub.get('foo').catch(verify),
+      sub.del('foo').catch(verify),
+      sub.clear().catch(verify),
+      sub.batch([{ type: 'del', key: 'foo' }]).catch(verify),
+      it.next().catch(function (err) {
+        t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN')
+        return it.close()
       })
+    ]
 
-      db.close(function (err) {
-        t.ifError(err, 'no close error')
-        t.is(sub.status, 'closed')
+    await Promise.all(promises)
+
+    function verify (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    }
+  })
+
+  t.test('close db while sublevel is opening', async function (t) {
+    t.plan(7)
+
+    const db = new NoopLevel()
+    await db.open()
+    const sub = db.sublevel('test')
+
+    t.is(db.status, 'open')
+    t.is(sub.status, 'opening')
+
+    const promises = [
+      db.close().then(async function () {
+        // TODO: implement autoClose option (see AbstractSublevel)
+        // t.is(sub.status, 'closed')
+
         t.is(db.status, 'closed')
-      })
-    })
-  })
 
-  t.test('cannot create sublevel while db is closing', function (t) {
-    t.plan(5)
-
-    const db = new NoopLevel()
-
-    db.open(function (err) {
-      t.ifError(err, 'no open error')
-
-      db.close(function (err) {
-        t.ifError(err, 'no close error')
-        t.is(db.status, 'closed')
-      })
-
-      const sub = db.sublevel('test')
-
-      sub.open((err) => {
+        return sub.get('foo').then(t.fail.bind(t, 'should not succeed'), (err) => {
+          t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+          t.is(sub.status, 'closed')
+        })
+      }),
+      sub.get('foo').then(t.fail.bind(t, 'should not succeed'), (err) => {
         t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
         t.is(sub.status, 'closed')
       })
-    })
+    ]
+
+    await Promise.all(promises)
   })
 
-  t.test('can wrap a sublevel and reopen the wrapped sublevel', function (t) {
+  t.test('cannot create sublevel while db is closing', async function (t) {
+    t.plan(2)
+
+    const db = new NoopLevel()
+    await db.open()
+    const promise = db.close()
+    const sub = db.sublevel('test')
+
+    try {
+      await sub.open()
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.is(sub.status, 'closed')
+    }
+
+    return promise
+  })
+
+  t.test('can wrap a sublevel and reopen the wrapped sublevel', async function (t) {
     const db = new NoopLevel()
     const sub1 = db.sublevel('test1')
     const sub2 = sub1.sublevel('test2')
 
-    sub2.once('open', function () {
-      verify()
+    await sub2.open()
+    verify()
 
-      sub2.close(function (err) {
-        t.ifError(err, 'no close error')
-
-        // Prefixes should be the same after closing & reopening
-        // See https://github.com/Level/subleveldown/issues/78
-        sub2.open(function (err) {
-          t.ifError(err, 'no open error')
-          verify()
-          t.end()
-        })
-      })
-    })
+    // Prefixes should be the same after closing & reopening
+    // See https://github.com/Level/subleveldown/issues/78
+    await sub2.close()
+    await sub2.open()
+    verify()
 
     function verify () {
       t.is(sub1.prefix, '!test1!', 'sub1 prefix ok')
-      t.ok(sub1.db instanceof NoopLevel)
       t.is(sub2.prefix, '!test1!!test2!', 'sub2 prefix ok')
-      t.ok(sub2.db instanceof NoopLevel)
+      t.ok(sub1.db === db, 'root is ok')
+      t.ok(sub2.db === db, 'root is ok')
+      t.ok(sub1.parent === db, 'parent is ok')
+      t.ok(sub2.parent === sub1, 'parent is ok')
     }
   })
 
@@ -452,8 +448,8 @@ test('opening & closing sublevel', function (t) {
     const privateMethod = def ? '_iterator' : '_' + mode
     const publicMethod = mode
 
-    t.test(`error from sublevel.${mode}() bubbles up (default implementation: ${def})`, function (t) {
-      t.plan(2)
+    t.test(`error from sublevel.${mode}() bubbles up (default implementation: ${def})`, async function (t) {
+      t.plan(1)
 
       class MockLevel extends AbstractLevel {
         [privateMethod] (options) {
@@ -462,8 +458,8 @@ test('opening & closing sublevel', function (t) {
       }
 
       class MockIterator extends Ctor {
-        _next (callback) {
-          this.nextTick(callback, new Error('next() error from parent database'))
+        async _next (options) {
+          throw new Error('next() error from parent database')
         }
       }
 
@@ -471,13 +467,13 @@ test('opening & closing sublevel', function (t) {
       const sub = db.sublevel('test')
       const it = sub[publicMethod]()
 
-      it.next(function (err) {
+      try {
+        await it.next()
+      } catch (err) {
         t.is(err.message, 'next() error from parent database')
-
-        it.close(function () {
-          t.pass('closed')
-        })
-      })
+      } finally {
+        await it.close()
+      }
     })
   }
 
@@ -489,10 +485,10 @@ test('sublevel operations are prefixed', function (t) {
     t.plan(2)
 
     class MockLevel extends AbstractLevel {
-      _getMany (keys, options, callback) {
+      async _getMany (keys, options) {
         t.same(keys, ['!test!a', '!test!b'])
         t.same(options, { keyEncoding: 'utf8', valueEncoding: 'utf8' })
-        nextTick(callback, null, ['1', '2'])
+        return ['1', '2']
       }
     }
 
@@ -544,9 +540,8 @@ test('sublevel operations are prefixed', function (t) {
 
     const calls = []
     class MockLevel extends AbstractLevel {
-      _clear (options, callback) {
+      async _clear (options) {
         calls.push(options)
-        nextTick(callback)
       }
     }
 
@@ -599,20 +594,19 @@ test('sublevel operations are prefixed', function (t) {
 test('sublevel encodings', function (t) {
   // NOTE: adapted from subleveldown
   t.test('different sublevels can have different encodings', function (t) {
-    t.plan(10)
+    t.plan(6)
 
     const puts = []
     const gets = []
 
     class MockLevel extends AbstractLevel {
-      _put (key, value, { keyEncoding, valueEncoding }, callback) {
+      async _put (key, value, { keyEncoding, valueEncoding }) {
         puts.push({ key, value, keyEncoding, valueEncoding })
-        nextTick(callback)
       }
 
-      _get (key, { keyEncoding, valueEncoding }, callback) {
+      async _get (key, { keyEncoding, valueEncoding }) {
         gets.push({ key, keyEncoding, valueEncoding })
-        nextTick(callback, null, puts.shift().value)
+        return puts.shift().value
       }
     }
 
@@ -620,9 +614,8 @@ test('sublevel encodings', function (t) {
     const sub1 = db.sublevel('test1', { valueEncoding: 'json' })
     const sub2 = db.sublevel('test2', { keyEncoding: 'buffer', valueEncoding: 'buffer' })
 
-    sub1.put('foo', { some: 'json' }, function (err) {
-      t.error(err, 'no error')
-
+    // TODO: async/await
+    sub1.put('foo', { some: 'json' }).then(function () {
       t.same(puts, [{
         key: '!test1!foo',
         value: '{"some":"json"}',
@@ -630,8 +623,7 @@ test('sublevel encodings', function (t) {
         valueEncoding: 'utf8'
       }])
 
-      sub1.get('foo', function (err, value) {
-        t.error(err, 'no error')
+      sub1.get('foo').then(function (value) {
         t.same(value, { some: 'json' })
         t.same(gets.shift(), {
           key: '!test1!foo',
@@ -639,9 +631,7 @@ test('sublevel encodings', function (t) {
           valueEncoding: 'utf8'
         })
 
-        sub2.put(Buffer.from([1, 2]), Buffer.from([3]), function (err) {
-          t.error(err, 'no error')
-
+        sub2.put(Buffer.from([1, 2]), Buffer.from([3])).then(function () {
           t.same(puts, [{
             key: Buffer.from('!test2!\x01\x02'),
             value: Buffer.from([3]),
@@ -649,8 +639,7 @@ test('sublevel encodings', function (t) {
             valueEncoding: 'buffer'
           }])
 
-          sub2.get(Buffer.from([1, 2]), function (err, value) {
-            t.error(err, 'no error')
+          sub2.get(Buffer.from([1, 2])).then(function (value) {
             t.same(value, Buffer.from([3]))
             t.same(gets.shift(), {
               key: Buffer.from('!test2!\x01\x02'),
@@ -663,80 +652,67 @@ test('sublevel encodings', function (t) {
     })
   })
 
-  t.test('sublevel indirectly supports transcoded encoding', function (t) {
-    t.plan(5)
+  t.test('sublevel indirectly supports transcoded encoding', async function (t) {
+    t.plan(3)
 
     class MockLevel extends AbstractLevel {
-      _put (key, value, { keyEncoding, valueEncoding }, callback) {
+      async _put (key, value, { keyEncoding, valueEncoding }) {
         t.same({ key, value, keyEncoding, valueEncoding }, {
           key: Buffer.from('!test!foo'),
           value: Buffer.from('{"some":"json"}'),
           keyEncoding: 'buffer',
           valueEncoding: 'buffer'
         })
-        nextTick(callback)
       }
 
-      _get (key, { keyEncoding, valueEncoding }, callback) {
+      async _get (key, { keyEncoding, valueEncoding }) {
         t.same({ key, keyEncoding, valueEncoding }, {
           key: Buffer.from('!test!foo'),
           keyEncoding: 'buffer',
           valueEncoding: 'buffer'
         })
-        nextTick(callback, null, Buffer.from('{"some":"json"}'))
+        return Buffer.from('{"some":"json"}')
       }
     }
 
     const db = new MockLevel({ encodings: { buffer: true } })
     const sub = db.sublevel('test', { valueEncoding: 'json' })
 
-    sub.put('foo', { some: 'json' }, function (err) {
-      t.error(err, 'no error')
-
-      sub.get('foo', function (err, value) {
-        t.error(err, 'no error')
-        t.same(value, { some: 'json' })
-      })
-    })
+    await sub.put('foo', { some: 'json' })
+    t.same(await sub.get('foo'), { some: 'json' })
   })
 
-  t.test('concatenating sublevel Buffer keys', function (t) {
-    t.plan(10)
+  t.test('concatenating sublevel Buffer keys', async function (t) {
+    t.plan(8)
 
     const key = Buffer.from('00ff', 'hex')
     const prefixedKey = Buffer.concat([Buffer.from('!test!'), key])
 
     class MockLevel extends AbstractLevel {
-      _put (key, value, options, callback) {
+      async _put (key, value, options) {
         t.is(options.keyEncoding, 'buffer')
         t.is(options.valueEncoding, 'buffer')
         t.same(key, prefixedKey)
         t.same(value, Buffer.from('bar'))
-        nextTick(callback)
       }
 
-      _get (key, options, callback) {
+      async _get (key, options) {
         t.is(options.keyEncoding, 'buffer')
         t.is(options.valueEncoding, 'buffer')
         t.same(key, prefixedKey)
-        nextTick(callback, null, Buffer.from('bar'))
+        return Buffer.from('bar')
       }
     }
 
     const db = new MockLevel({ encodings: { buffer: true } })
     const sub = db.sublevel('test', { keyEncoding: 'buffer' })
 
-    sub.put(key, 'bar', function (err) {
-      t.ifError(err)
-      sub.get(key, function (err, value) {
-        t.ifError(err)
-        t.is(value, 'bar')
-      })
-    })
+    await sub.put(key, 'bar')
+    t.same(await sub.get(key), 'bar')
   })
 
-  t.test('concatenating sublevel Uint8Array keys', function (t) {
-    t.plan(10)
+  t.test('concatenating sublevel Uint8Array keys', async function (t) {
+    t.plan(8)
 
     const key = new Uint8Array([0, 255])
     const textEncoder = new TextEncoder()
@@ -747,32 +723,26 @@ test('sublevel encodings', function (t) {
     prefixedKey.set(key, prefix.byteLength)
 
     class MockLevel extends AbstractLevel {
-      _put (key, value, options, callback) {
+      async _put (key, value, options) {
         t.is(options.keyEncoding, 'view')
         t.is(options.valueEncoding, 'view')
         t.same(key, prefixedKey)
         t.same(value, textEncoder.encode('bar'))
-        nextTick(callback)
       }
 
-      _get (key, options, callback) {
+      async _get (key, options) {
         t.is(options.keyEncoding, 'view')
         t.is(options.valueEncoding, 'view')
         t.same(key, prefixedKey)
-        nextTick(callback, null, textEncoder.encode('bar'))
+        return textEncoder.encode('bar')
       }
     }
 
     const db = new MockLevel({ encodings: { view: true } })
     const sub = db.sublevel('test', { keyEncoding: 'view' })
 
-    sub.put(key, 'bar', function (err) {
-      t.ifError(err)
-      sub.get(key, function (err, value) {
-        t.ifError(err)
-        t.is(value, 'bar')
-      })
-    })
+    await sub.put(key, 'bar')
+    t.same(await sub.get(key), 'bar')
   })
 
   // Also test default fallback implementations of keys() and values()
@@ -781,20 +751,20 @@ test('sublevel encodings', function (t) {
     const privateMethod = def ? '_iterator' : '_' + mode
     const publicMethod = mode
 
-    t.test(`unfixing sublevel.${mode}() Buffer keys (default implementation: ${def})`, function (t) {
-      t.plan(4)
+    t.test(`unfixing sublevel.${mode}() Buffer keys (default implementation: ${def})`, async function (t) {
+      t.plan(3)
 
       const testKey = Buffer.from('00ff', 'hex')
       const prefixedKey = Buffer.concat([Buffer.from('!test!'), testKey])
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, prefixedKey, 'bar')
+            return [prefixedKey, 'bar']
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, prefixedKey)
+            return prefixedKey
           } else {
-            this.nextTick(callback, null, 'bar')
+            return 'bar'
           }
         }
       }
@@ -809,15 +779,17 @@ test('sublevel encodings', function (t) {
 
       const db = new MockLevel({ encodings: { buffer: true, view: true, utf8: true } })
       const sub = db.sublevel('test', { keyEncoding: 'buffer' })
+      const item = await sub[publicMethod]().next()
 
-      sub[publicMethod]().next(function (err, keyOrValue) {
-        t.ifError(err)
-        t.same(keyOrValue, mode === 'values' ? 'bar' : testKey)
-      })
+      if (mode === 'iterator') {
+        t.same(item, [testKey, 'bar'])
+      } else {
+        t.same(item, mode === 'values' ? 'bar' : testKey)
+      }
     })
 
-    t.test(`unfixing sublevel.${mode}() Uint8Array keys (default implementation: ${def})`, function (t) {
-      t.plan(4)
+    t.test(`unfixing sublevel.${mode}() Uint8Array keys (default implementation: ${def})`, async function (t) {
+      t.plan(3)
 
       const testKey = new Uint8Array([0, 255])
       const textEncoder = new TextEncoder()
@@ -828,13 +800,13 @@ test('sublevel encodings', function (t) {
       prefixedKey.set(testKey, prefix.byteLength)
 
       class MockIterator extends Ctor {
-        _next (callback) {
+        async _next (options) {
           if (mode === 'iterator' || def) {
-            this.nextTick(callback, null, prefixedKey, 'bar')
+            return [prefixedKey, 'bar']
           } else if (mode === 'keys') {
-            this.nextTick(callback, null, prefixedKey)
+            return prefixedKey
           } else {
-            this.nextTick(callback, null, 'bar')
+            return 'bar'
           }
         }
       }
@@ -849,11 +821,13 @@ test('sublevel encodings', function (t) {
 
       const db = new MockLevel({ encodings: { buffer: true, view: true, utf8: true } })
       const sub = db.sublevel('test', { keyEncoding: 'view' })
+      const item = await sub[publicMethod]().next()
 
-      sub[publicMethod]().next(function (err, keyOrValue) {
-        t.ifError(err)
-        t.same(keyOrValue, mode === 'values' ? 'bar' : testKey)
-      })
+      if (mode === 'iterator') {
+        t.same(item, [testKey, 'bar'])
+      } else {
+        t.same(item, mode === 'values' ? 'bar' : testKey)
+      }
     })
   }
 
@@ -866,7 +840,7 @@ for (const chained of [false, true]) {
       t.plan(6)
 
       class MockLevel extends AbstractLevel {
-        _batch (operations, options, callback) {
+        async _batch (operations, options) {
           t.same(operations, [
             {
               type: 'put',
@@ -919,7 +893,6 @@ for (const chained of [false, true]) {
             }
           ])
           t.same(options, {})
-          nextTick(callback)
         }
       }
 

@@ -9,7 +9,7 @@ const testKey = () => 'test' + (++keySequence)
 // covered (indirectly) by other tests, but a dedicated property-
 // based test for each would be good to have.
 exports.all = function (test, testCommon) {
-  test('setup', async function (t) {
+  test('encoding setup', async function (t) {
     db = testCommon.factory()
     return db.open()
   })
@@ -64,40 +64,24 @@ exports.all = function (test, testCommon) {
   }
 
   // NOTE: adapted from encoding-down
-  test('can decode from string to json', function (t) {
+  test('can decode from string to json', async function (t) {
     const key = testKey()
     const data = { thisis: 'json' }
-
-    db.put(key, JSON.stringify(data), { valueEncoding: 'utf8' }, function (err) {
-      t.ifError(err, 'no put() error')
-
-      db.get(key, { valueEncoding: 'json' }, function (err, value) {
-        t.ifError(err, 'no get() error')
-        t.same(value, data, 'got parsed object')
-        t.end()
-      })
-    })
+    await db.put(key, JSON.stringify(data), { valueEncoding: 'utf8' })
+    t.same(await db.get(key, { valueEncoding: 'json' }), data, 'got parsed object')
   })
 
   // NOTE: adapted from encoding-down
-  test('can decode from json to string', function (t) {
+  test('can decode from json to string', async function (t) {
     const data = { thisis: 'json' }
     const key = testKey()
-
-    db.put(key, data, { valueEncoding: 'json' }, function (err) {
-      t.ifError(err, 'no put() error')
-
-      db.get(key, { valueEncoding: 'utf8' }, function (err, value) {
-        t.ifError(err, 'no get() error')
-        t.is(value, JSON.stringify(data), 'got unparsed JSON string')
-        t.end()
-      })
-    })
+    await db.put(key, data, { valueEncoding: 'json' })
+    t.same(await db.get(key, { valueEncoding: 'utf8' }), JSON.stringify(data), 'got unparsed JSON string')
   })
 
   // NOTE: adapted from encoding-down
-  test('getMany() skips decoding not-found values', function (t) {
-    t.plan(4)
+  test('getMany() skips decoding not-found values', async function (t) {
+    t.plan(2)
 
     const valueEncoding = {
       encode: JSON.stringify,
@@ -111,14 +95,8 @@ exports.all = function (test, testCommon) {
     const data = { beep: 'boop' }
     const key = testKey()
 
-    db.put(key, data, { valueEncoding }, function (err) {
-      t.ifError(err, 'no put() error')
-
-      db.getMany([key, testKey()], { valueEncoding }, function (err, values) {
-        t.ifError(err, 'no getMany() error')
-        t.same(values, [data, undefined])
-      })
-    })
+    await db.put(key, data, { valueEncoding })
+    t.same(await db.getMany([key, testKey()], { valueEncoding }), [data, undefined])
   })
 
   // NOTE: adapted from memdown
@@ -135,7 +113,7 @@ exports.all = function (test, testCommon) {
     return db.close()
   })
 
-  test('teardown', async function (t) {
+  test('encoding teardown', async function (t) {
     return db.close()
   })
 }

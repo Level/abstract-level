@@ -1,6 +1,6 @@
 # abstract-level
 
-**Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, hooks, events, promises and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, hooks, events and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
 
 > :pushpin: Which module should I use? What happened to `levelup`? Head over to the [FAQ](https://github.com/Level/community#faq).
 
@@ -23,39 +23,40 @@
 - [Public API For Consumers](#public-api-for-consumers)
   - [`db = new Constructor(...[, options])`](#db--new-constructor-options)
   - [`db.status`](#dbstatus)
-  - [`db.open([options][, callback])`](#dbopenoptions-callback)
-  - [`db.close([callback])`](#dbclosecallback)
+  - [`db.open([options])`](#dbopenoptions)
+  - [`db.close()`](#dbclose)
   - [`db.supports`](#dbsupports)
-  - [`db.get(key[, options][, callback])`](#dbgetkey-options-callback)
-  - [`db.getMany(keys[, options][, callback])`](#dbgetmanykeys-options-callback)
-  - [`db.put(key, value[, options][, callback])`](#dbputkey-value-options-callback)
-  - [`db.del(key[, options][, callback])`](#dbdelkey-options-callback)
-  - [`db.batch(operations[, options][, callback])`](#dbbatchoperations-options-callback)
+  - [`db.get(key[, options])`](#dbgetkey-options)
+  - [`db.getMany(keys[, options])`](#dbgetmanykeys-options)
+  - [`db.put(key, value[, options])`](#dbputkey-value-options)
+  - [`db.del(key[, options])`](#dbdelkey-options)
+  - [`db.batch(operations[, options])`](#dbbatchoperations-options)
   - [`chainedBatch = db.batch()`](#chainedbatch--dbbatch)
   - [`iterator = db.iterator([options])`](#iterator--dbiteratoroptions)
   - [`keyIterator = db.keys([options])`](#keyiterator--dbkeysoptions)
   - [`valueIterator = db.values([options])`](#valueiterator--dbvaluesoptions)
-  - [`db.clear([options][, callback])`](#dbclearoptions-callback)
+  - [`db.clear([options])`](#dbclearoptions)
   - [`sublevel = db.sublevel(name[, options])`](#sublevel--dbsublevelname-options)
   - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
   - [`key = db.prefixKey(key, keyFormat[, local])`](#key--dbprefixkeykey-keyformat-local)
   - [`db.defer(fn)`](#dbdeferfn)
+  - [`db.deferAsync(fn)`](#dbdeferasyncfn)
   - [`chainedBatch`](#chainedbatch)
     - [`chainedBatch.put(key, value[, options])`](#chainedbatchputkey-value-options)
     - [`chainedBatch.del(key[, options])`](#chainedbatchdelkey-options)
     - [`chainedBatch.clear()`](#chainedbatchclear)
-    - [`chainedBatch.write([options][, callback])`](#chainedbatchwriteoptions-callback)
-    - [`chainedBatch.close([callback])`](#chainedbatchclosecallback)
+    - [`chainedBatch.write([options])`](#chainedbatchwriteoptions)
+    - [`chainedBatch.close()`](#chainedbatchclose)
     - [`chainedBatch.length`](#chainedbatchlength)
     - [`chainedBatch.db`](#chainedbatchdb)
   - [`iterator`](#iterator)
     - [`for await...of iterator`](#for-awaitof-iterator)
-    - [`iterator.next([callback])`](#iteratornextcallback)
-    - [`iterator.nextv(size[, options][, callback])`](#iteratornextvsize-options-callback)
-    - [`iterator.all([options][, callback])`](#iteratoralloptions-callback)
+    - [`iterator.next()`](#iteratornext)
+    - [`iterator.nextv(size[, options])`](#iteratornextvsize-options)
+    - [`iterator.all([options])`](#iteratoralloptions)
     - [`iterator.seek(target[, options])`](#iteratorseektarget-options)
-    - [`iterator.close([callback])`](#iteratorclosecallback)
+    - [`iterator.close()`](#iteratorclose)
     - [`iterator.db`](#iteratordb)
     - [`iterator.count`](#iteratorcount)
     - [`iterator.limit`](#iteratorlimit)
@@ -115,6 +116,7 @@
     - [`LEVEL_LEGACY`](#level_legacy)
     - [`LEVEL_LOCKED`](#level_locked)
     - [`LEVEL_HOOK_ERROR`](#level_hook_error)
+    - [`LEVEL_STATUS_LOCKED`](#level_status_locked)
     - [`LEVEL_READONLY`](#level_readonly)
     - [`LEVEL_CONNECTION_LOST`](#level_connection_lost)
     - [`LEVEL_REMOTE_ERROR`](#level_remote_error)
@@ -122,25 +124,25 @@
 - [Private API For Implementors](#private-api-for-implementors)
   - [Example](#example-3)
   - [`db = AbstractLevel(manifest[, options])`](#db--abstractlevelmanifest-options)
-  - [`db._open(options, callback)`](#db_openoptions-callback)
-  - [`db._close(callback)`](#db_closecallback)
-  - [`db._get(key, options, callback)`](#db_getkey-options-callback)
-  - [`db._getMany(keys, options, callback)`](#db_getmanykeys-options-callback)
-  - [`db._put(key, value, options, callback)`](#db_putkey-value-options-callback)
-  - [`db._del(key, options, callback)`](#db_delkey-options-callback)
-  - [`db._batch(operations, options, callback)`](#db_batchoperations-options-callback)
+  - [`db._open(options)`](#db_openoptions)
+  - [`db._close()`](#db_close)
+  - [`db._get(key, options)`](#db_getkey-options)
+  - [`db._getMany(keys, options)`](#db_getmanykeys-options)
+  - [`db._put(key, value, options)`](#db_putkey-value-options)
+  - [`db._del(key, options)`](#db_delkey-options)
+  - [`db._batch(operations, options)`](#db_batchoperations-options)
   - [`db._chainedBatch()`](#db_chainedbatch)
   - [`db._iterator(options)`](#db_iteratoroptions)
   - [`db._keys(options)`](#db_keysoptions)
   - [`db._values(options)`](#db_valuesoptions)
-  - [`db._clear(options, callback)`](#db_clearoptions-callback)
+  - [`db._clear(options)`](#db_clearoptions)
   - [`sublevel = db._sublevel(name, options)`](#sublevel--db_sublevelname-options)
   - [`iterator = AbstractIterator(db, options)`](#iterator--abstractiteratordb-options)
-    - [`iterator._next(callback)`](#iterator_nextcallback)
-    - [`iterator._nextv(size, options, callback)`](#iterator_nextvsize-options-callback)
-    - [`iterator._all(options, callback)`](#iterator_alloptions-callback)
+    - [`iterator._next()`](#iterator_next)
+    - [`iterator._nextv(size, options)`](#iterator_nextvsize-options)
+    - [`iterator._all(options)`](#iterator_alloptions)
     - [`iterator._seek(target, options)`](#iterator_seektarget-options)
-    - [`iterator._close(callback)`](#iterator_closecallback)
+    - [`iterator._close()`](#iterator_close)
   - [`keyIterator = AbstractKeyIterator(db, options)`](#keyiterator--abstractkeyiteratordb-options)
   - [`valueIterator = AbstractValueIterator(db, options)`](#valueiterator--abstractvalueiteratordb-options)
   - [`chainedBatch = AbstractChainedBatch(db, options)`](#chainedbatch--abstractchainedbatchdb-options)
@@ -148,8 +150,8 @@
     - [`chainedBatch._put(key, value, options)`](#chainedbatch_putkey-value-options)
     - [`chainedBatch._del(key, options)`](#chainedbatch_delkey-options)
     - [`chainedBatch._clear()`](#chainedbatch_clear)
-    - [`chainedBatch._write(options, callback)`](#chainedbatch_writeoptions-callback)
-    - [`chainedBatch._close(callback)`](#chainedbatch_closecallback)
+    - [`chainedBatch._write(options)`](#chainedbatch_writeoptions)
+    - [`chainedBatch._close()`](#chainedbatch_close)
 - [Test Suite](#test-suite)
   - [Excluding tests](#excluding-tests)
   - [Reusing `testCommon`](#reusing-testcommon)
@@ -184,22 +186,6 @@ for await (const [key, value] of db.iterator({ gt: 'a' })) {
 }
 ```
 
-All asynchronous methods also support callbacks.
-
-<details><summary>Callback example</summary>
-
-```js
-db.put('a', { x: 123 }, function (err) {
-  if (err) throw err
-
-  db.get('a', function (err, value) {
-    console.log(value) // { x: 123 }
-  })
-})
-```
-
-</details>
-
 Usage from TypeScript requires generic type parameters.
 
 <details><summary>TypeScript example</summary>
@@ -227,7 +213,7 @@ const xyz = db.sublevel<string, any>('xyz', { valueEncoding: 'json' })
 
 ## Supported Platforms
 
-We aim to support Active LTS and Current Node.js releases, as well as evergreen browsers that are based on Chromium, Firefox or Webkit. Supported runtime environments may differ per implementation.
+We aim to support Active LTS and Current Node.js releases, as well as evergreen browsers that are based on Chromium, Firefox or Webkit. Features that the runtime must support include [`queueMicrotask`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask#browser_compatibility), [`Promise.allSettled()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled#browser_compatibility), [`globalThis`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/globalThis#browser_compatibility) and [async generators](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function*#browser_compatibility). Supported runtimes may differ per implementation.
 
 ## Public API For Consumers
 
@@ -253,11 +239,11 @@ Read-only getter that returns a string reflecting the current state of the datab
 - `'opening'` - waiting for the database to be opened
 - `'open'` - successfully opened the database
 - `'closing'` - waiting for the database to be closed
-- `'closed'` - successfully closed the database.
+- `'closed'` - database is closed.
 
-### `db.open([options][, callback])`
+### `db.open([options])`
 
-Open the database. The `callback` function will be called with no arguments when successfully opened, or with a single error argument if opening failed. If no callback is provided, a promise is returned. Options passed to `open()` take precedence over options passed to the database constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably [`memory-level`](https://github.com/Level/memory-level) and [`browser-level`](https://github.com/Level/browser-level)) and will indicate so via `db.supports.createIfMissing` and `db.supports.errorIfExists`.
+Open the database. Returns a promise. Options passed to `open()` take precedence over options passed to the database constructor. Not all implementations support the `createIfMissing` and `errorIfExists` options (notably [`memory-level`](https://github.com/Level/memory-level) and [`browser-level`](https://github.com/Level/browser-level)) and will indicate so via `db.supports.createIfMissing` and `db.supports.errorIfExists`.
 
 The optional `options` object may contain:
 
@@ -265,13 +251,13 @@ The optional `options` object may contain:
 - `errorIfExists` (boolean, default: `false`): If `true` and the database already exists, opening will fail.
 - `passive` (boolean, default: `false`): Wait for, but do not initiate, opening of the database.
 
-It's generally not necessary to call `open()` because it's automatically called by the database constructor. It may however be useful to capture an error from failure to open, that would otherwise not surface until another method like `db.get()` is called. It's also possible to reopen the database after it has been closed with [`close()`](#dbclosecallback). Once `open()` has then been called, any read & write operations will again be queued internally until opening has finished.
+It's generally not necessary to call `open()` because it's automatically called by the database constructor. It may however be useful to capture an error from failure to open, that would otherwise not surface until another method like `db.get()` is called. It's also possible to reopen the database after it has been closed with [`close()`](#dbclose). Once `open()` has then been called, any read & write operations will again be queued internally until opening has finished.
 
-The `open()` and `close()` methods are idempotent. If the database is already open, the `callback` will be called in a next tick. If opening is already in progress, the `callback` will be called when that has finished. If closing is in progress, the database will be reopened once closing has finished. Likewise, if `close()` is called after `open()`, the database will be closed once opening has finished and the prior `open()` call will receive an error.
+The `open()` and `close()` methods are idempotent. If the database is already open, the promise returned by `open()` will resolve without delay. If opening is already in progress, the promise will resolve when that has finished. If closing is in progress, the database will be reopened once closing has finished. Likewise, if `close()` is called after `open()`, the database will be closed once opening has finished.
 
-### `db.close([callback])`
+### `db.close()`
 
-Close the database. The `callback` function will be called with no arguments if closing succeeded or with a single `error` argument if closing failed. If no callback is provided, a promise is returned.
+Close the database. Returns a promise.
 
 A database may have associated resources like file handles and locks. When the database is no longer needed (for the remainder of a program) it's recommended to call `db.close()` to free up resources.
 
@@ -287,48 +273,48 @@ if (!db.supports.permanence) {
 }
 ```
 
-### `db.get(key[, options][, callback])`
+### `db.get(key[, options])`
 
 Get a value from the database by `key`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
 
-The `callback` function will be called with an error if the operation failed. If successful the first argument will be nullish and the second argument will be the value. If the `key` was not found then the value will be `undefined`. If no callback is provided, a promise is returned.
+Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
 If the database indicates support of snapshots via `db.supports.snapshots` then `db.get()` _should_ read from a snapshot of the database, created at the time `db.get()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
 
-### `db.getMany(keys[, options][, callback])`
+### `db.getMany(keys[, options])`
 
 Get multiple values from the database by an array of `keys`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
 
-The `callback` function will be called with an error if the operation failed. If successful the first argument will be `null` and the second argument will be an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`. If no callback is provided, a promise is returned.
+Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
 If the database indicates support of snapshots via `db.supports.snapshots` then `db.getMany()` _should_ read from a snapshot of the database, created at the time `db.getMany()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
 
-### `db.put(key, value[, options][, callback])`
+### `db.put(key, value[, options])`
 
 Add a new entry or overwrite an existing entry. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
 
-The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
+Returns a promise.
 
-### `db.del(key[, options][, callback])`
+### `db.del(key[, options])`
 
 Delete an entry by `key`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 
-The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
+Returns a promise.
 
-### `db.batch(operations[, options][, callback])`
+### `db.batch(operations[, options])`
 
-Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument must be an array containing a list of operations to be executed sequentially, although as a whole they are performed as an atomic operation.
+Perform multiple _put_ and/or _del_ operations in bulk. Returns a promise. The `operations` argument must be an array containing a list of operations to be executed sequentially, although as a whole they are performed as an atomic operation.
 
 Each operation must be an object with at least a `type` property set to either `'put'` or `'del'`. If the `type` is `'put'`, the operation must have `key` and `value` properties. It may optionally have `keyEncoding` and / or `valueEncoding` properties to encode keys or values with a custom encoding for just that operation. If the `type` is `'del'`, the operation must have a `key` property and may optionally have a `keyEncoding` property.
 
@@ -366,8 +352,6 @@ await db.batch([
   { type: 'put', key: 'b', value: 123, valueEncoding: 'json' }
 ], { valueEncoding: 'utf8' })
 ```
-
-The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
 
 ### `chainedBatch = db.batch()`
 
@@ -429,9 +413,9 @@ for await (const value of db.values({ gt: 'a' })) {
 const values = await db.values({ gt: 'a', limit: 10 }).all()
 ```
 
-### `db.clear([options][, callback])`
+### `db.clear([options])`
 
-Delete all entries or a range. Not guaranteed to be atomic. Accepts the following options (with the same rules as on iterators):
+Delete all entries or a range. Not guaranteed to be atomic. Returns a promise. Accepts the following options (with the same rules as on iterators):
 
 - `gt` (greater than) or `gte` (greater than or equal): define the lower bound of the range to be deleted. Only entries where the key is greater than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
 - `lt` (less than) or `lte` (less than or equal): define the higher bound of the range to be deleted. Only entries where the key is less than (or equal to) this option will be included in the range. When `reverse` is true the order will be reversed, but the entries deleted will be the same.
@@ -439,7 +423,7 @@ Delete all entries or a range. Not guaranteed to be atomic. Accepts the followin
 - `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
 
-The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted. The `callback` function will be called with no arguments if the operation was successful or with an error if it failed. If no callback is provided, a promise is returned.
+The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted.
 
 ### `sublevel = db.sublevel(name[, options])`
 
@@ -546,12 +530,12 @@ console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 
 ### `db.defer(fn)`
 
-Call the function `fn` at a later time when [`db.status`](#dbstatus) changes to `'open'` or `'closed'`. Used by `abstract-level` itself to implement "deferred open" which is a feature that makes it possible to call operations like `db.put()` before the database has finished opening. The `defer()` method is exposed for implementations and plugins to achieve the same on their custom operations:
+Call the function `fn` at a later time when [`db.status`](#dbstatus) changes to `'open'` or `'closed'`. Used by `abstract-level` itself to implement "deferred open" which is a feature that makes it possible to call methods like `db.put()` before the database has finished opening. The `defer()` method is exposed for implementations and plugins to achieve the same on their custom methods:
 
 ```js
-db.foo = function (key, callback) {
+db.foo = function (key) {
   if (this.status === 'opening') {
-    this.defer(() => this.foo(key, callback))
+    this.defer(() => this.foo(key))
   } else {
     // ..
   }
@@ -559,6 +543,20 @@ db.foo = function (key, callback) {
 ```
 
 When deferring a custom operation, do it early: after normalizing optional arguments but before encoding (to avoid double encoding and to emit original input if the operation has events) and before any _fast paths_ (to avoid calling back before the database has finished opening). For example, `db.batch([])` has an internal fast path where it skips work if the array of operations is empty. Resources that can be closed on their own (like iterators) should however first check such state before deferring, in order to reject operations after close (including when the database was reopened).
+
+### `db.deferAsync(fn)`
+
+Similar to `db.defer(fn)` but for asynchronous work. Returns a promise, which waits for [`db.status`](#dbstatus) to change to `'open'` or `'closed'` and then calls `fn` which itself must return a promise. This allows for recursion:
+
+```js
+db.foo = async function (key) {
+  if (this.status === 'opening') {
+    return this.deferAsync(() => this.foo(key))
+  } else {
+    // ..
+  }
+}
+```
 
 ### `chainedBatch`
 
@@ -581,19 +579,17 @@ Add a `del` operation to this chained batch, not committed until `write()` is ca
 
 Remove all operations from this chained batch, so that they will not be committed.
 
-#### `chainedBatch.write([options][, callback])`
+#### `chainedBatch.write([options])`
 
-Commit the operations. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
+Commit the operations. Returns a promise. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
 
 There are no `options` by default but implementations may add theirs. Note that `write()` does not take encoding options. Those can only be set on `put()` and `del()` because implementations may synchronously forward such calls to an underlying store and thus need keys and values to be encoded at that point.
 
-The `callback` function will be called with no arguments if the batch was successful or with an error if it failed. If no callback is provided, a promise is returned.
-
 After `write()` or `close()` has been called, no further operations are allowed.
 
-#### `chainedBatch.close([callback])`
+#### `chainedBatch.close()`
 
-Free up underlying resources. This should be done even if the chained batch has zero operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
+Free up underlying resources. This should be done even if the chained batch has zero operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference. Returns a promise.
 
 #### `chainedBatch.length`
 
@@ -620,7 +616,7 @@ An iterator reaches its natural end in the following situations:
 An iterator keeps track of calls that are in progress. It doesn't allow concurrent `next()`, `nextv()` or `all()` calls (including a combination thereof) and will throw an error with code [`LEVEL_ITERATOR_BUSY`](#errors) if that happens:
 
 ```js
-// Not awaited and no callback provided
+// Not awaited
 iterator.next()
 
 try {
@@ -647,19 +643,17 @@ try {
 
 Note for implementors: this uses `iterator.next()` and `iterator.close()` under the hood so no further method implementations are needed to support `for await...of`.
 
-#### `iterator.next([callback])`
+#### `iterator.next()`
 
-Advance to the next entry and yield that entry. If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null`, a `key` and a `value`. The type of `key` and `value` depends on the options passed to `db.iterator()`. If the iterator has reached its natural end, both `key` and `value` will be `undefined`.
-
-If no callback is provided, a promise is returned for either an entry array (containing a `key` and `value`) or `undefined` if the iterator reached its natural end.
+Advance to the next entry and yield that entry. Returns a promise for either an entry array (containing a `key` and `value`) or for `undefined` if the iterator reached its natural end. The type of `key` and `value` depends on the options passed to `db.iterator()`.
 
 **Note:** `iterator.close()` must always be called once there's no intention to call `next()` or `nextv()` again. Even if such calls yielded an error and even if the iterator reached its natural end. Not closing the iterator will result in memory leaks and may also affect performance of other operations if many iterators are unclosed and each is holding a snapshot of the database.
 
-#### `iterator.nextv(size[, options][, callback])`
+#### `iterator.nextv(size[, options])`
 
 Advance repeatedly and get at most `size` amount of entries in a single call. Can be faster than repeated `next()` calls. The `size` argument must be an integer and has a soft minimum of 1. There are no `options` by default but implementations may add theirs.
 
-If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null` and an array of entries, where each entry is an array containing a key and value. The natural end of the iterator will be signaled by yielding an empty array. If no callback is provided, a promise is returned.
+Returns a promise for an array of entries, where each entry is an array containing a key and value. The natural end of the iterator will be signaled by yielding an empty array.
 
 ```js
 const iterator = db.iterator()
@@ -679,9 +673,9 @@ while (true) {
 await iterator.close()
 ```
 
-#### `iterator.all([options][, callback])`
+#### `iterator.all([options])`
 
-Advance repeatedly and get all (remaining) entries as an array, automatically closing the iterator. Assumes that those entries fit in memory. If that's not the case, instead use `next()`, `nextv()` or `for await...of`. There are no `options` by default but implementations may add theirs. If an error occurs, the `callback` function will be called with an error. Otherwise, the `callback` receives `null` and an array of entries, where each entry is an array containing a key and value. If no callback is provided, a promise is returned.
+Advance repeatedly and get all (remaining) entries as an array, automatically closing the iterator. Assumes that those entries fit in memory. If that's not the case, instead use `next()`, `nextv()` or `for await...of`. There are no `options` by default but implementations may add theirs. Returns a promise for an array of entries, where each entry is an array containing a key and value.
 
 ```js
 const entries = await db.iterator({ limit: 100 }).all()
@@ -693,7 +687,7 @@ for (const [key, value] of entries) {
 
 #### `iterator.seek(target[, options])`
 
-Seek to the key closest to `target`. Subsequent calls to `iterator.next()`, `nextv()` or `all()` (including implicit calls in a `for await...of` loop) will yield entries with keys equal to or larger than `target`, or equal to or smaller than `target` if the `reverse` option passed to `db.iterator()` was true.
+Seek to the key closest to `target`. This method is synchronous, but the actual work may happen lazily. Subsequent calls to `iterator.next()`, `nextv()` or `all()` (including implicit calls in a `for await...of` loop) will yield entries with keys equal to or larger than `target`, or equal to or smaller than `target` if the `reverse` option passed to `db.iterator()` was true.
 
 The optional `options` object may contain:
 
@@ -703,9 +697,9 @@ If range options like `gt` were passed to `db.iterator()` and `target` does not 
 
 **Note:** Not all implementations support `seek()`. Consult `db.supports.seek` or the [support matrix](https://github.com/Level/supports#seek-boolean).
 
-#### `iterator.close([callback])`
+#### `iterator.close()`
 
-Free up underlying resources. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the iterator is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
+Free up underlying resources. Returns a promise. Closing the iterator is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
 
 If a `next()` ,`nextv()` or `all()` call is in progress, closing will wait for that to finish. After `close()` has been called, further calls to `next()` ,`nextv()` or `all()` will yield an error with code [`LEVEL_ITERATOR_NOT_OPEN`](#errors).
 
@@ -728,11 +722,11 @@ const remaining = iterator.limit - iterator.count
 
 ### `keyIterator`
 
-A key iterator has the same interface as `iterator` except that its methods yield keys instead of entries. For the `keyIterator.next(callback)` method, this means that the `callback` will receive two arguments (an error and key) instead of three. Usage is otherwise the same.
+A key iterator has the same interface as `iterator` except that its methods yield keys instead of entries. Usage is otherwise the same.
 
 ### `valueIterator`
 
-A value iterator has the same interface as `iterator` except that its methods yield values instead of entries. For the `valueIterator.next(callback)` method, this means that the `callback` will receive two arguments (an error and value) instead of three. Usage is otherwise the same.
+A value iterator has the same interface as `iterator` except that its methods yield values instead of entries. Usage is otherwise the same.
 
 ### `sublevel`
 
@@ -780,7 +774,7 @@ Hooks allow userland _hook functions_ to customize behavior of the database. Eac
 
 #### `hook = db.hooks.prewrite`
 
-A synchronous hook for modifying or adding operations to [`db.batch([])`](#dbbatchoperations-options-callback), [`db.batch().put()`](#chainedbatchputkey-value-options), [`db.batch().del()`](#chainedbatchdelkey-options), [`db.put()`](#dbputkey-value-options-callback) and [`db.del()`](#dbdelkey-options-callback) calls. It does not include [`db.clear()`](#dbclearoptions-callback) because the entries deleted by such a call are not communicated back to `db`.
+A synchronous hook for modifying or adding operations to [`db.batch([])`](#dbbatchoperations-options), [`db.batch().put()`](#chainedbatchputkey-value-options), [`db.batch().del()`](#chainedbatchdelkey-options), [`db.put()`](#dbputkey-value-options) and [`db.del()`](#dbdelkey-options) calls. It does not include [`db.clear()`](#dbclearoptions) because the entries deleted by such a call are not communicated back to `db`.
 
 Functions added to this hook will receive two arguments: `op` and `batch`.
 
@@ -810,7 +804,7 @@ await books.put('12', { title: 'Siddhartha', author: 'Hesse' })
 
 ###### `op` (object)
 
-The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from [`db.batch([])`](#db_batchoperations-options-callback)) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
+The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from [`db.batch([])`](#db_batchoperations-options)) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
 
 The `key` and `value` have not yet been encoded at this point. The `keyEncoding` and `valueEncoding` properties are always encoding objects (rather than encoding names like `'json'`) which means hook functions can call (for example) `op.keyEncoding.encode(123)`.
 
@@ -818,19 +812,19 @@ Hook functions can modify the `key`, `value`, `keyEncoding` and `valueEncoding` 
 
 ###### `batch` (object)
 
-The `batch` argument of the hook function is an interface to add operations, to be committed in the same batch as the input operation(s). This also works if the originating call was a singular operation like `db.put()` because the presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch. For originating calls like [`db.batch([])`](#dbbatchoperations-options-callback) that provide multiple input operations, operations will be added after the last input operation, rather than interleaving. The hook function will not be called for operations that were added by either itself or other hook functions.
+The `batch` argument of the hook function is an interface to add operations, to be committed in the same batch as the input operation(s). This also works if the originating call was a singular operation like `db.put()` because the presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch. For originating calls like [`db.batch([])`](#dbbatchoperations-options) that provide multiple input operations, operations will be added after the last input operation, rather than interleaving. The hook function will not be called for operations that were added by either itself or other hook functions.
 
 ###### `batch = batch.add(op)`
 
-Add a batch operation, using the same format as the operations that [`db.batch([])`](#dbbatchoperations-options-callback) takes. However, it is assumed that `op` can be freely mutated by `abstract-level`. Unlike input operations it will not be cloned before doing so. The `add` method returns `batch` which allows for chaining, similar to the [chained batch](#chainedbatch) API.
+Add a batch operation, using the same format as the operations that [`db.batch([])`](#dbbatchoperations-options) takes. However, it is assumed that `op` can be freely mutated by `abstract-level`. Unlike input operations it will not be cloned before doing so. The `add` method returns `batch` which allows for chaining, similar to the [chained batch](#chainedbatch) API.
 
 For hook functions to be generic, it is recommended to explicitly define `keyEncoding` and `valueEncoding` properties on `op` (instead of relying on database defaults) or to use an isolated sublevel with known defaults.
 
 #### `hook = db.hooks.postopen`
 
-An asynchronous hook that runs after the database has succesfully opened, but before deferred operations are executed and before events are emitted. It thus allows for additional initialization, including reading and writing data that deferred operations might need.
+An asynchronous hook that runs after the database has succesfully opened, but before deferred operations are executed and before events are emitted. It thus allows for additional initialization, including reading and writing data that deferred operations might need. The postopen hook always runs before the prewrite hook.
 
-Functions added to this hook must return a promise and will receive one argument: `options`. If one of the hook functions yields an error (or itself closes the database) then the database will be closed. The postopen hook always runs before the prewrite hook.
+Functions added to this hook must return a promise and will receive one argument: `options`. If one of the hook functions yields an error then the database will be closed. In the rare event that closing also fails, which means there's no safe state to return to, the database will enter an internal locked state where `db.status` is `'closed'` and subsequent calls to `db.open()` or `db.close()` will be met with a [`LEVEL_STATUS_LOCKED`](#errors) error. This locked state is also used during the postopen hook itself, meaning hook functions are not allowed to call `db.open()` or `db.close()`.
 
 ##### Example
 
@@ -847,7 +841,7 @@ db.hooks.postopen.add(async function (options) {
 
 ###### `options` (object)
 
-The `options` that were provided in the originating [`db.open(options)`](#dbopenoptions-callback) call, merged with constructor options and defaults. Equivalent to what the private API received in [`db._open(options)`](#db_openoptions-callback).
+The `options` that were provided in the originating [`db.open(options)`](#dbopenoptions) call, merged with constructor options and defaults. Equivalent to what the private API received in [`db._open(options)`](#db_openoptions).
 
 #### `hook = db.hooks.newsub`
 
@@ -1134,7 +1128,7 @@ Error codes will be one of the following.
 
 #### `LEVEL_DATABASE_NOT_OPEN`
 
-When an operation was made on a database while it was closing or closed. Or when a database failed to `open()` including when `close()` was called in the mean time, thus changing the eventual `status`. The error may have a `cause` property that explains a failure to open:
+When an operation was made on a database while it was closing or closed. The error may have a `cause` property that explains a failure to open:
 
 ```js
 try {
@@ -1150,7 +1144,7 @@ try {
 
 #### `LEVEL_DATABASE_NOT_CLOSED`
 
-When a database failed to `close()`. Including when `open()` was called in the mean time, thus changing the eventual `status`. The error may have a `cause` property that explains a failure to close.
+When a database failed to `close()`. The error may have a `cause` property that explains a failure to close.
 
 #### `LEVEL_ITERATOR_NOT_OPEN`
 
@@ -1237,6 +1231,10 @@ When an attempt was made to open a database that is already open in another proc
 
 An error occurred while running a hook function. The error will have a `cause` property set to the original error thrown from the hook function.
 
+#### `LEVEL_STATUS_LOCKED`
+
+When `db.open()` or `db.close()` was called while database was locked, as described in the [postopen hook](#hook--dbhookspostopen) documentation.
+
 #### `LEVEL_READONLY`
 
 When an attempt was made to write data to a read-only database. Used by `many-level`.
@@ -1272,11 +1270,9 @@ const {
 
 Naming-wise, implementations should use a class name in the form of `*Level` (suffixed, for example `MemoryLevel`) and an npm package name in the form of `*-level` (for example `memory-level`). While utilities and plugins should use a package name in the form of `level-*` (prefixed).
 
-Each of the private methods listed below will receive exactly the number and types of arguments described, regardless of what is passed in through the public API. Public methods provide type checking: if a consumer calls `db.batch(123)` they'll get an error that the first argument must be an array. Optional arguments get sensible defaults: a `db.get(key)` call translates to a `db._get(key, options, callback)` call.
+Each of the private methods listed below will receive exactly the number and types of arguments described, regardless of what is passed in through the public API. Public methods provide type checking: if a consumer calls `db.batch(123)` they'll get an error that the first argument must be an array. Optional arguments get sensible defaults: a `db.get(key)` call translates to a `db._get(key, options)` call.
 
-All callbacks are error-first and must be asynchronous. If an operation within your implementation is synchronous, invoke the callback on a next tick using microtask scheduling. For convenience, instances of `AbstractLevel`, `AbstractIterator` and other classes include a `nextTick(fn, ...args)` utility method that uses [`process.nextTick()`](https://nodejs.org/api/process.html#processnexttickcallback-args) in Node.js and [`queueMicrotask()`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask) in browsers. It's recommended to exclusively use this utility (including in unit tests) as it guarantees a consistent order of operations.
-
-Where possible, the default private methods are sensible noops that do nothing. For example, `db._open(callback)` will merely invoke `callback` on a next tick. Other methods have functional defaults. Each method documents whether implementing it is mandatory.
+Where possible, the default private methods are sensible noops that do nothing. For example, `db._open()` will simply resolve its promise on a next tick. Other methods have functional defaults. Each method documents whether implementing it is mandatory.
 
 When throwing or yielding an error, prefer using a [known error code](#errors). If new codes are required for your implementation and you wish to use the `LEVEL_` prefix for consistency, feel free to open an issue to discuss. We'll likely want to document those codes here.
 
@@ -1300,31 +1296,26 @@ class ExampleLevel extends AbstractLevel {
     this._entries = new Map()
   }
 
-  _open (options, callback) {
+  async _open (options) {
     // Here you would open any necessary resources.
-    // Use nextTick to be a nice async citizen
-    this.nextTick(callback)
   }
 
-  _put (key, value, options, callback) {
+  async _put (key, value, options) {
     this._entries.set(key, value)
-    this.nextTick(callback)
   }
 
-  _get (key, options, callback) {
+  async _get (key, options) {
     // Is undefined if not found
-    const value = this._entries.get(key)
-    this.nextTick(callback, null, value)
+    return this._entries.get(key)
   }
 
-  _del (key, options, callback) {
+  async _del (key, options) {
     this._entries.delete(key)
-    this.nextTick(callback)
   }
 }
 ```
 
-Now we can use our implementation (with either callbacks or promises):
+Now we can use our implementation:
 
 ```js
 const db = new ExampleLevel()
@@ -1369,9 +1360,9 @@ Both the public and private API of `abstract-level` are encoding-aware. This mea
 
 If the manifest declared support of `'buffer'`, then `keyEncoding` and `valueEncoding` will always be `'buffer'`. If the manifest declared support of `'utf8'` then `keyEncoding` and `valueEncoding` will be `'utf8'`.
 
-For example: a call like `await db.put(key, { x: 2 }, { valueEncoding: 'json' })` will encode the `{ x: 2 }` value and might forward it to the private API as `db._put(key, '{"x":2}', { valueEncoding: 'utf8' }, callback)`. Same for the key (omitted for brevity).
+For example: a call like `await db.put(key, { x: 2 }, { valueEncoding: 'json' })` will encode the `{ x: 2 }` value and might forward it to the private API as `db._put(key, '{"x":2}', { valueEncoding: 'utf8' })`. Same for the key (omitted for brevity).
 
-The public API will coerce user input as necessary. If the manifest declared support of `'utf8'` then `await db.get(24)` will forward that number key as a string: `db._get('24', { keyEncoding: 'utf8', ... }, callback)`. However, this is _not_ true for output: a private API call like `db._get(key, { keyEncoding: 'utf8', valueEncoding: 'utf8' }, callback)` _must_ yield a string value to the callback.
+The public API will coerce user input as necessary. If the manifest declared support of `'utf8'` then `await db.get(24)` will forward that number key as a string: `db._get('24', { keyEncoding: 'utf8', ... })`. However, this is _not_ true for output: a private API call like `db._get(key, { keyEncoding: 'utf8', valueEncoding: 'utf8' })` _must_ yield a string value.
 
 All private methods below that take a `key` argument, `value` argument or range option, will receive that data in encoded form. That includes `iterator._seek()` with its `target` argument. So if the manifest declared support of `'buffer'` then `db.iterator({ gt: 2 })` translates into `db._iterator({ gt: Buffer.from('2'), ...options })` and `iterator.seek(128)` translates into `iterator._seek(Buffer.from('128'), options)`.
 
@@ -1381,61 +1372,61 @@ The `AbstractLevel` constructor will add other supported encodings to the public
 { buffer: true, view: true, utf8: true, json: true, ... }
 ```
 
-Implementations can also declare support of multiple encodings. Keys and values will then be encoded and decoded via the most optimal path. For example, in [`classic-level`](https://github.com/Level/classic-level) (previously `leveldown`) it's:
+Implementations can also declare support of multiple encodings. Keys and values will then be encoded and decoded via the most optimal path. For example, [`classic-level`](https://github.com/Level/classic-level) uses:
 
 ```js
-super({ encodings: { buffer: true, utf8: true } }, options, callback)
+super({ encodings: { buffer: true, utf8: true } }, options)
 ```
 
 This has the benefit that user input needs less conversion steps: if the input is a string then `classic-level` can pass that to its LevelDB binding as-is. Vice versa for output.
 
-### `db._open(options, callback)`
+### `db._open(options)`
 
-Open the database. The `options` object will always have the following properties: `createIfMissing`, `errorIfExists`. If opening failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
+Open the database. The `options` object will always have the following properties: `createIfMissing`, `errorIfExists`. When this is called, `db.status` will be `'opening'`. Must return a promise. If opening failed, reject the promise, which will set `db.status` to `'closed'`. Otherwise resolve the promise, which will set `db.status` to `'open'`. The default `_open()` is an async noop.
 
-The default `_open()` is a sensible noop and invokes `callback` on a next tick.
+### `db._close()`
 
-### `db._close(callback)`
+Close the database. When this is called, `db.status` will be `'closing'`. Must return a promise. If closing failed, reject the promise, which will reset `db.status` to `'open'`. Otherwise resolve the promise, which will set `db.status` to `'closed'`. If the database was never opened or failed to open then `_close()` will not be called.
 
-Close the database. When this is called, `db.status` will be `'closing'`. If closing failed, call the `callback` function with an error, which resets the `status` to `'open'`. Otherwise call `callback` without any arguments, which sets `status` to `'closed'`. Make an effort to avoid failing, or if it does happen that it is subsequently safe to keep using the database. If the database was never opened or failed to open then `_close()` will not be called.
+The default `_close()` is an async noop. In native implementations (native addons written in C++ or other) it's recommended to delay closing if any operations are in flight. See [`classic-level`](https://github.com/Level/classic-level) (previously `leveldown`) for an example of this behavior. The JavaScript side in `abstract-level` will prevent _new_ operations before the database is reopened (as explained in constructor documentation above) while the C++ side should prevent closing the database before _existing_ operations have completed.
 
-The default `_close()` is a sensible noop and invokes `callback` on a next tick. In native implementations (native addons written in C++ or other) it's recommended to delay closing if any operations are in flight. See [`classic-level`](https://github.com/Level/classic-level) (previously `leveldown`) for an example of this behavior. The JavaScript side in `abstract-level` will prevent _new_ operations before the database is reopened (as explained in constructor documentation above) while the C++ side should prevent closing the database before _existing_ operations have completed.
+### `db._get(key, options)`
 
-### `db._get(key, options, callback)`
+Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with the value. If the `key` was not found then use `undefined` as value.
 
-Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If an error occurs, call the `callback` function with an error. Otherwise call `callback` with `null` as the first argument and the value as the second. If the `key` was not found then use `undefined` as value.
+The default `_get()` returns a promise for an `undefined` value. It must be overridden.
 
-The default `_get()` invokes `callback` on a next tick with an `undefined` value. It must be overridden.
+### `db._getMany(keys, options)`
 
-### `db._getMany(keys, options, callback)`
+Get multiple values by an array of `keys`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with an array of values. If a key does not exist, set the relevant value to `undefined`.
 
-Get multiple values by an array of `keys`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If an error occurs, call the `callback` function with an error. Otherwise call `callback` with `null` as the first argument and an array of values as the second. If a key does not exist, set the relevant value to `undefined`.
+The default `_getMany()` returns a promise for an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden.
 
-The default `_getMany()` invokes `callback` on a next tick with an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden.
+### `db._put(key, value, options)`
 
-### `db._put(key, value, options, callback)`
+Add a new entry or overwrite an existing entry. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise, without an argument.
 
-Add a new entry or overwrite an existing entry. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. If putting failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
+The default `_put()` returns a resolved promise. It must be overridden.
 
-The default `_put()` invokes `callback` on a next tick. It must be overridden.
+### `db._del(key, options)`
 
-### `db._del(key, options, callback)`
+Delete an entry. The `options` object will always have the following properties: `keyEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise, without an argument.
 
-Delete an entry. The `options` object will always have the following properties: `keyEncoding`. If deletion failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
+The default `_del()` returns a resolved promise. It must be overridden.
 
-The default `_del()` invokes `callback` on a next tick. It must be overridden.
+### `db._batch(operations, options)`
 
-### `db._batch(operations, options, callback)`
+Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an array containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. The `_batch()` method will not be called if the `operations` array is empty. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object.
 
-Perform multiple _put_ and/or _del_ operations in bulk. The `operations` argument is always an array containing a list of operations to be executed sequentially, although as a whole they should be performed as an atomic operation. The `_batch()` method will not be called if the `operations` array is empty. Each operation is guaranteed to have at least `type`, `key` and `keyEncoding` properties. If the type is `put`, the operation will also have `value` and `valueEncoding` properties. There are no default options but `options` will always be an object. If the batch failed, call the `callback` function with an error. Otherwise call `callback` without any arguments.
+Must return a promise. If the batch failed, reject the promise. Otherwise resolve the promise, without an argument.
 
 The public `batch()` method supports encoding options both in the `options` argument and per operation. The private `_batch()` method should only support encoding options per operation, which are guaranteed to be set and to be normalized (the `options` argument in the private API might also contain encoding options but only because it's cheaper to not remove them).
 
-The default `_batch()` invokes `callback` on a next tick. It must be overridden.
+The default `_batch()` returns a resolved promise. It must be overridden.
 
 ### `db._chainedBatch()`
 
-The default `_chainedBatch()` returns a functional `AbstractChainedBatch` instance that uses `db._batch(array, options, callback)` under the hood. To implement chained batch in an optimized manner, extend `AbstractChainedBatch` and return an instance of this class in the `_chainedBatch()` method:
+The default `_chainedBatch()` returns a functional `AbstractChainedBatch` instance that uses `db._batch(array, options)` under the hood. To implement chained batch in an optimized manner, extend `AbstractChainedBatch` and return an instance of this class in the `_chainedBatch()` method:
 
 ```js
 const { AbstractChainedBatch } = require('abstract-level')
@@ -1525,9 +1516,9 @@ class ExampleLevel extends AbstractLevel {
 
 The `options` object will always have the following properties: `reverse`, `limit`, `keyEncoding` and `valueEncoding`. The `limit` will always be an integer, greater than or equal to -1 and less than Infinity. If the user passed range options to `db.values()`, those will be encoded and set in `options`.
 
-### `db._clear(options, callback)`
+### `db._clear(options)`
 
-Delete all entries or a range. Does not have to be atomic. It is recommended (and possibly mandatory in the future) to operate on a snapshot so that writes scheduled after a call to `clear()` will not be affected.
+Delete all entries or a range. Does not have to be atomic. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise, without an argument. It is recommended (and possibly mandatory in the future) to operate on a snapshot so that writes scheduled after a call to `clear()` will not be affected.
 
 Implementations that wrap another database can typically forward the `_clear()` call to that database, having transformed range options if necessary.
 
@@ -1566,21 +1557,25 @@ class ExampleSublevel extends AbstractSublevel {
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it. The `options` argument must be the original `options` object that was passed to `db._iterator()` and it is therefore not (publicly) possible to create an iterator via constructors alone.
 
-#### `iterator._next(callback)`
+#### `iterator._next()`
 
-Advance to the next entry and yield that entry. If the operation failed, call the `callback` function with an error. Otherwise, call `callback` with `null`, a `key` and a `value`. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_next()` will not be called.
+Advance to the next entry and yield that entry. Must return a promise. If an error occurs, reject the promise. If the natural end of the iterator has been reached, resolve the promise with `undefined`. Otherwise resolve the promise with an array containing a `key` and `value`. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_next()` will not be called.
 
-The default `_next()` invokes `callback` on a next tick. It must be overridden.
+The default `_next()` returns a promise for `undefined`. It must be overridden.
 
-#### `iterator._nextv(size, options, callback)`
+#### `iterator._nextv(size, options)`
 
-Advance repeatedly and get at most `size` amount of entries in a single call. The `size` argument will always be an integer greater than 0. If a `limit` was set then `size` will be at most `limit - iterator.count`. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_nextv()` will not be called. There are no default options but `options` will always be an object. If the operation failed, call the `callback` function with an error. Otherwise, call `callback` with `null` and an array of entries. An empty array signifies the natural end of the iterator, so yield an array with at least one entry if the end has not been reached yet.
+Advance repeatedly and get at most `size` amount of entries in a single call. The `size` argument will always be an integer greater than 0. If a `limit` was set then `size` will be at most `limit - iterator.count`. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_nextv()` will not be called. There are no default options but `options` will always be an object.
+
+Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with an array of entries. An empty array signifies the natural end of the iterator, so yield an array with at least one entry if the end has not been reached yet.
 
 The default `_nextv()` is a functional default that makes repeated calls to `_next()` and should be overridden for better performance.
 
-#### `iterator._all(options, callback)`
+#### `iterator._all(options)`
 
-Advance repeatedly and get all (remaining) entries as an array. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_all()` will not be called. Do not call `close()` here because `all()` will do so (regardless of any error) and this may become an opt-out behavior in the future. There are no default options but `options` will always be an object. If the operation failed, call the `callback` function with an error. Otherwise, call `callback` with `null` and an array of entries.
+Advance repeatedly and get all (remaining) entries as an array. If a `limit` was set and the iterator already yielded that many entries (via any of the methods) then `_all()` will not be called. Do not call `close()` here because `all()` will do so (regardless of any error) and this may become an opt-out behavior in the future. There are no default options but `options` will always be an object.
+
+Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with an array of entries.
 
 The default `_all()` is a functional default that makes repeated calls to `_nextv()` and should be overridden for better performance.
 
@@ -1588,26 +1583,26 @@ The default `_all()` is a functional default that makes repeated calls to `_next
 
 Seek to the key closest to `target`. The `options` object will always have the following properties: `keyEncoding`. This method is optional. The default will throw an error with code [`LEVEL_NOT_SUPPORTED`](#errors). If supported, set `db.supports.seek` to `true` (via the manifest passed to the database constructor) which also enables relevant tests in the [test suite](#test-suite).
 
-#### `iterator._close(callback)`
+#### `iterator._close()`
 
-Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
+Free up underlying resources. This method is guaranteed to only be called once. Must return a promise.
 
-The default `_close()` invokes `callback` on a next tick. Overriding is optional.
+The default `_close()` returns a resolved promise. Overriding is optional.
 
 ### `keyIterator = AbstractKeyIterator(db, options)`
 
-A key iterator has the same interface and constructor arguments as `AbstractIterator` except that it must yields keys instead of entries. For the `keyIterator._next(callback)` method, this means that the `callback` must be given two arguments (an error and key) instead of three. The same goes for value iterators:
+A key iterator has the same interface and constructor arguments as `AbstractIterator` except that it must yields keys instead of entries. The same goes for value iterators:
 
 ```js
 class ExampleKeyIterator extends AbstractKeyIterator {
-  _next (callback) {
-    this.nextTick(callback, null, 'key')
+  async _next () {
+    return 'example-key'
   }
 }
 
 class ExampleValueIterator extends AbstractValueIterator {
-  _next (callback) {
-    this.nextTick(callback, null, 'value')
+  async _next () {
+    return 'example-value'
   }
 }
 ```
@@ -1642,15 +1637,15 @@ Add a `del` operation. The `options` object will always have the following prope
 
 Remove all operations from this batch.
 
-#### `chainedBatch._write(options, callback)`
+#### `chainedBatch._write(options)`
 
-The default `_write` method uses `db._batch`. If the `_write` method is overridden it must atomically commit the operations. There are no default options but `options` will always be an object. If committing fails, call the `callback` function with an error. Otherwise call `callback` without any arguments. The `_write()` method will not be called if the chained batch contains zero operations.
+The default `_write()` method uses `db._batch()`. If `_write()` is overridden it must atomically commit the operations. There are no default options but `options` will always be an object. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise, without an argument. The `_write()` method will not be called if the chained batch contains zero operations.
 
-#### `chainedBatch._close(callback)`
+#### `chainedBatch._close()`
 
-Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
+Free up underlying resources. This method is guaranteed to only be called once. Must return a promise.
 
-The default `_close()` invokes `callback` on a next tick. Overriding is optional.
+The default `_close()` returns a resolved promise. Overriding is optional.
 
 ## Test Suite
 
