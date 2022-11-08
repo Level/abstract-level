@@ -92,8 +92,7 @@ class AbstractLevel extends EventEmitter {
       { name: 'write' },
       { name: 'put', deprecated: true, alt: 'write' },
       { name: 'del', deprecated: true, alt: 'write' },
-      { name: 'batch', deprecated: true, alt: 'write' },
-      { name: 'ready', deprecated: true, alt: 'open' }
+      { name: 'batch', deprecated: true, alt: 'write' }
     ])
 
     this[kTranscoder] = new Transcoder(formats(this))
@@ -235,9 +234,6 @@ class AbstractLevel extends EventEmitter {
 
         // Only emit public event if pending state changes are done
         if (this[kStatus] === 'open') this.emit('open')
-
-        // TODO (next major): remove this alias
-        if (this[kStatus] === 'open') this.emit('ready')
 
         maybeOpened()
       }
