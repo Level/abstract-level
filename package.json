@@ -6,7 +6,8 @@
   "main": "index.js",
   "types": "./index.d.ts",
   "scripts": {
-    "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | faucet) && nyc report",
+    "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | tap-arc) && nyc report",
+    "test-pessimistic": "node test/self.js | tap-arc -pv",
     "test-browsers": "airtap --coverage test/self.js",
     "coverage": "nyc report -r lcovonly"
   },
@@ -35,11 +36,11 @@
     "@voxpelli/tsconfig": "^4.0.0",
     "airtap": "^4.0.4",
     "airtap-playwright": "^1.0.1",
-    "faucet": "^0.0.3",
     "hallmark": "^4.0.0",
     "nyc": "^15.1.0",
     "sinon": "^14.0.0",
     "standard": "^16.0.4",
+    "tap-arc": "^0.3.5",
     "tape": "^5.4.0",
     "ts-standard": "^11.0.0",
     "typescript": "^4.5.5"
