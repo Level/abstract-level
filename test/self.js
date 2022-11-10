@@ -777,7 +777,7 @@ test('rangeOptions', function (t) {
     t.end()
   }
 
-  t.plan(11)
+  t.plan(10)
   t.test('setup', async (t) => db.open())
 
   t.test('default options', function (t) {
@@ -858,21 +858,6 @@ test('rangeOptions', function (t) {
       t.is(options[key], undefined)
     })
     verifyOptions(t, getRangeOptions(options, db.keyEncoding('utf8')))
-  })
-
-  t.test('rejects legacy range and encoding options', function (t) {
-    t.plan(3)
-
-    for (const key of ['start', 'end', 'encoding']) {
-      const options = {}
-      options[key] = 'x'
-
-      try {
-        getRangeOptions(options, db.keyEncoding('utf8'))
-      } catch (err) {
-        t.is(err.code, 'LEVEL_LEGACY')
-      }
-    }
   })
 })
 

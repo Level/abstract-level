@@ -189,26 +189,3 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
     await db.close()
   })
 }
-
-test('AbstractIterator throws when accessing legacy properties', async function (t) {
-  t.plan(3 * 2)
-
-  const db = testCommon.factory()
-  await db.open()
-  const it = new AbstractIterator(db, {})
-
-  for (const k of ['_ended property', '_nexting property', '_end method']) {
-    try {
-      // eslint-disable-next-line no-unused-expressions
-      it[k.split(' ')[0]]
-    } catch (err) {
-      t.is(err.code, 'LEVEL_LEGACY')
-    }
-
-    try {
-      it[k.split(' ')[0]] = 123
-    } catch (err) {
-      t.is(err.code, 'LEVEL_LEGACY')
-    }
-  }
-})
