@@ -770,6 +770,8 @@ console.log(nested.db === db) // true
 
 ### Hooks
 
+**Hooks are experimental and subject to change without notice.**
+
 Hooks allow userland _hook functions_ to customize behavior of the database. Each hook is a different extension point, accessible via `db.hooks`. Some are shared between database methods to encapsulate common behavior. A hook is either synchronous or asynchronous, and functions added to a hook must respect that trait.
 
 #### `hook = db.hooks.prewrite`
