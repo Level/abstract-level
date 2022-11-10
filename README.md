@@ -282,8 +282,6 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
-If the database indicates support of snapshots via `db.supports.snapshots` then `db.get()` _should_ read from a snapshot of the database, created at the time `db.get()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
-
 ### `db.getMany(keys[, options])`
 
 Get multiple values from the database by an array of `keys`. The optional `options` object may contain:
@@ -292,8 +290,6 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
-
-If the database indicates support of snapshots via `db.supports.snapshots` then `db.getMany()` _should_ read from a snapshot of the database, created at the time `db.getMany()` was called. This means it should not see the data of simultaneous write operations. However, this is currently not verified by the [abstract test suite](#test-suite).
 
 ### `db.put(key, value[, options])`
 
@@ -1396,11 +1392,15 @@ The default `_close()` is an async noop. In native implementations (native addon
 
 Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with the value. If the `key` was not found then use `undefined` as value.
 
+If the database indicates support of snapshots via `db.supports.snapshots` then `db._get()` must read from a snapshot of the database. That snapshot (or similar mechanism) must be created synchronously when `db._get()` is called, before asynchronously reading the value. This means it should not see the data of write operations that are scheduled immediately after `db._get()`.
+
 The default `_get()` returns a promise for an `undefined` value. It must be overridden.
 
 ### `db._getMany(keys, options)`
 
 Get multiple values by an array of `keys`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with an array of values. If a key does not exist, set the relevant value to `undefined`.
+
+Snapshot behavior of `db._getMany()` must be the same as described for `db._get()` above.
 
 The default `_getMany()` returns a promise for an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden.
 
