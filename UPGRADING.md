@@ -16,6 +16,7 @@ This document describes breaking changes and how to upgrade. For a complete list
     - [2.1. Promises all the way](#21-promises-all-the-way)
     - [2.2. Ticks](#22-ticks)
     - [2.3. A new way to abort iterator work](#23-a-new-way-to-abort-iterator-work)
+    - [2.4. Snapshots must be synchronous](#24-snapshots-must-be-synchronous)
 - [1.0.0](#100)
   - [1. API parity with `levelup`](#1-api-parity-with-levelup)
     - [1.1. New: promises](#11-new-promises)
@@ -210,6 +211,10 @@ class ExampleLevel extends AbstractLevel {
 _This section is incomplete._
 
 Closing an iterator now aborts work, if supported by implementation. The undocumented `abortOnClose` option of iterators (added as a workaround for `many-level`) has been removed in favor of AbortSignal.
+
+#### 2.4. Snapshots must be synchronous
+
+If an implementations indicates support of snapshots via `db.supports.snapshots` then the `db._get()` and `db._getMany()` methods are now required to synchronously create their snapshot, rather than asynchronously. For details, please see the [README](./README.md#db_getkey-options). This is a documentation-only change because the abstract test suite cannot verify it.
 
 ## 1.0.0
 
