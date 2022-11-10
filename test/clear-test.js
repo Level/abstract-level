@@ -3,29 +3,6 @@
 const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
 
-exports.args = function (test, testCommon) {
-  test('clear() with legacy range options', async function (t) {
-    t.plan(2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    try {
-      await db.clear({ start: 'foo' })
-    } catch (err) {
-      t.is(err.code, 'LEVEL_LEGACY')
-    }
-
-    try {
-      await db.clear({ end: 'foo' })
-    } catch (err) {
-      t.is(err.code, 'LEVEL_LEGACY')
-    }
-
-    return db.close()
-  })
-}
-
 exports.clear = function (test, testCommon) {
   makeTest('string', ['a', 'b'])
 
@@ -128,7 +105,6 @@ exports.events = function (test, testCommon) {
 }
 
 exports.all = function (test, testCommon) {
-  exports.args(test, testCommon)
   exports.events(test, testCommon)
   exports.clear(test, testCommon)
 }

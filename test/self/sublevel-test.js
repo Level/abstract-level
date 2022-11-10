@@ -161,12 +161,6 @@ test('sublevel prefix and options', function (t) {
     t.end()
   })
 
-  t.test('legacy sublevel(down) options', function (t) {
-    t.throws(() => new NoopLevel().sublevel('foo', 'bar'), (err) => err.code === 'LEVEL_LEGACY')
-    t.throws(() => new NoopLevel().sublevel('foo', { open: () => {} }), (err) => err.code === 'LEVEL_LEGACY')
-    t.end()
-  })
-
   // See https://github.com/Level/subleveldown/issues/78
   t.test('doubly nested sublevel has correct prefix', async function (t) {
     t.plan(1)

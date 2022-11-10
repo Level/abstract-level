@@ -405,14 +405,6 @@ class IteratorDecodeError extends ModuleError {
 //   }
 // }
 
-// To help migrating to abstract-level
-for (const k of ['_ended property', '_nexting property', '_end method']) {
-  Object.defineProperty(AbstractIterator.prototype, k.split(' ')[0], {
-    get () { throw new ModuleError(`The ${k} has been removed`, { code: 'LEVEL_LEGACY' }) },
-    set () { throw new ModuleError(`The ${k} has been removed`, { code: 'LEVEL_LEGACY' }) }
-  })
-}
-
 function assertStatus (iterator) {
   if (iterator[kClosing]) {
     throw new ModuleError('Iterator is not open: cannot read after close()', {

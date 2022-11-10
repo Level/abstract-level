@@ -48,6 +48,8 @@ _This is a work in progress upgrade guide for the upcoming 2.0.0 release._
 
 The guide for this release consists of two sections. One for the public API, relevant to all consumers of `abstract-level` and implementations thereof (`level`, `classic-level`, `memory-level` et cetera) and another for the private API that only implementors should have to read.
 
+If you're upgrading from `levelup`, `abstract-leveldown` or other old modules, it's recommended to first upgrade to `abstract-level` 1.x because that version includes compatibility checks that have since been removed.
+
 ### 1. Public API
 
 #### 1.1. Callbacks have been removed
