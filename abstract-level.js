@@ -526,7 +526,6 @@ class AbstractLevel extends EventEmitter {
   // of classic-level, that should not be copied to individual operations.
   batch (operations, options) {
     if (!arguments.length) {
-      if (this[kStatus] === 'opening') return new DefaultChainedBatch(this)
       assertOpen(this)
       return this._chainedBatch()
     }

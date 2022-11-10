@@ -355,15 +355,21 @@ await db.batch([
 
 ### `chainedBatch = db.batch()`
 
-Create a [chained batch](#chainedbatch), when `batch()` is called with zero arguments. A chained batch can be used to build and eventually commit an atomic batch of operations. Depending on how it's used, it is possible to obtain greater performance with this form of `batch()`. On several implementations however, it is just sugar.
+Create a [chained batch](#chainedbatch), when `batch()` is called with zero arguments. A chained batch can be used to build and eventually commit an atomic batch of operations:
 
 ```js
-await db.batch()
+const chainedBatch = db.batch()
   .del('bob')
   .put('alice', 361)
   .put('kim', 220)
-  .write()
+
+// Commit
+await chainedBatch.write()
 ```
+
+Depending on how it's used, it is possible to obtain greater overall performance with this form of `batch()`, mainly because its methods like `put()` can immediately copy the data of that singular operation to the underlying storage, rather than having to block the event loop while copying the data of multiple operations. However, on several `abstract-level` implementations, chained batch is just sugar and has no performance benefits.
+
+Due to its synchronous nature, it is not possible to create a chained batch before the database has finished opening. Be sure to call `await db.open()` before `chainedBatch = db.batch()`. This does not apply to other database methods.
 
 ### `iterator = db.iterator([options])`
 

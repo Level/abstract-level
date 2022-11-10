@@ -165,6 +165,36 @@ indexes.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
 db.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
 ```
 
+#### 1.5. Open before creating a chained batch
+
+It is no longer possible to create a chained batch while the database is opening. If you previously did:
+
+```js
+const db = new ExampleLevel()
+
+const batch = db.batch().del('example')
+await batch.write()
+```
+
+You must now do:
+
+```js
+const db = new ExampleLevel()
+await db.open()
+
+const batch = db.batch().del('example')
+await batch.write()
+```
+
+Alternatively:
+
+```js
+const db = new ExampleLevel()
+await db.batch([{ type: 'del', key: 'example' }])
+```
+
+As for why that last example works yet the same is not supported on a chained batch: the `put()`, `del()` and `clear()` methods of a chained batch are synchronous. This meant `abstract-level` (and `levelup` before it) had to jump through several hoops to make it work while the database is opening. Having such logic internally is fine, but the problem extended to the new [hooks](./README.md#hooks) feature and more specifically, the `prewrite` hook that runs on `put()` and `del()`.
+
 ### 2. Private API
 
 #### 2.1. Promises all the way

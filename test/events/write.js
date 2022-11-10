@@ -2,7 +2,12 @@
 
 module.exports = function (test, testCommon) {
   for (const deferred of [false, true]) {
-    for (const method of ['batch', 'chained batch', 'singular']) {
+    // Chained batch does not support deferred open
+    const batchMethods = deferred ? ['batch'] : ['batch', 'chained batch']
+    const allMethods = batchMethods.concat(['singular'])
+
+    for (const method of allMethods) {
+      // db.put() and db.del() do not support the sublevel option
       for (const withSublevel of (method === 'singular' ? [false] : [false, true])) {
         test(`db emits write event for ${method} put operation (deferred: ${deferred}, sublevel: ${withSublevel})`, async function (t) {
           t.plan(1)
@@ -100,7 +105,7 @@ module.exports = function (test, testCommon) {
       }
     }
 
-    for (const method of ['batch', 'chained batch']) {
+    for (const method of batchMethods) {
       test(`db emits write event for multiple ${method} operations (deferred: ${deferred})`, async function (t) {
         t.plan(1)
 
@@ -124,7 +129,7 @@ module.exports = function (test, testCommon) {
       })
     }
 
-    for (const method of ['batch', 'chained batch', 'singular']) {
+    for (const method of allMethods) {
       test(`db emits write event for ${method} operation in favor of deprecated events (deferred: ${deferred})`, async function (t) {
         t.plan(5)
 
