@@ -5,3 +5,10 @@ browsers:
   - name: chromium
   - name: firefox
   - name: webkit
+
+presets:
+  electron:
+    providers:
+      - airtap-electron
+    browsers:
+      - name: electron

@@ -8,7 +8,6 @@
 [![npm](https://img.shields.io/npm/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Node version](https://img.shields.io/node/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Test](https://img.shields.io/github/workflow/status/Level/abstract-level/Test?label=test)](https://github.com/Level/abstract-level/actions/workflows/test.yml)
-[![Browsers](https://img.shields.io/github/workflow/status/Level/abstract-level/Browsers?label=browsers)](https://github.com/Level/abstract-level/actions/workflows/browsers.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Level/abstract-level?label=\&logo=codecov\&logoColor=fff)](https://codecov.io/gh/Level/abstract-level)
 [![Standard](https://img.shields.io/badge/standard-informational?logo=javascript\&logoColor=fff)](https://standardjs.com)
 [![Common Changelog](https://common-changelog.org/badge.svg)](https://common-changelog.org)
