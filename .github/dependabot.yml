@@ -5,7 +5,16 @@ updates:
     schedule:
       interval: monthly
     ignore:
-      - dependency-name: dependency-check
+      - dependency-name: standard
+      - dependency-name: ts-standard
+      - dependency-name: '@types/node'
+      - dependency-name: voxpelli/tsconfig
+      - dependency-name: typescript
+      - dependency-name: hallmark
+
+      # Stay on the 3rd or 4th oldest stable release, per
+      # https://www.electronjs.org/docs/latest/tutorial/electron-timelines#version-support-policy
+      - dependency-name: electron
   - package-ecosystem: github-actions
     directory: /
     schedule:

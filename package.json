@@ -9,6 +9,7 @@
     "test": "standard && ts-standard *.ts types/*.ts && hallmark && (nyc -s node test/self.js | tap-arc) && nyc report",
     "test-pessimistic": "node test/self.js | tap-arc -pv",
     "test-browsers": "airtap --coverage test/self.js",
+    "test-electron": "airtap -p electron --coverage test/self.js | tap-arc",
     "coverage": "nyc report -r lcovonly"
   },
   "files": [
@@ -35,7 +36,9 @@
     "@types/node": "^18.0.0",
     "@voxpelli/tsconfig": "^4.0.0",
     "airtap": "^4.0.4",
+    "airtap-electron": "^1.0.0",
     "airtap-playwright": "^1.0.1",
+    "electron": "^18.3.15",
     "hallmark": "^4.0.0",
     "nyc": "^15.1.0",
     "sinon": "^14.0.0",
