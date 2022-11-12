@@ -51,14 +51,14 @@ exports.open = function (test, testCommon) {
 
     t.is(db.status, 'opening', 'is opening')
 
-    // This wins from the open() call
+    // This eventually wins from the open() call
     db.close().then(function () {
       order.push('B')
       t.same(order, ['open event', 'A', 'closed event', 'B'], 'order is correct')
       t.is(db.status, 'closed', 'is closed')
     })
 
-    // But open() is still in control
+    // But open() is still in progress
     t.is(db.status, 'opening', 'is still opening')
 
     db.on('open', () => { order.push('open event') })
@@ -176,31 +176,59 @@ exports.open = function (test, testCommon) {
     }
   })
 
-  test('close() on open event', function (t) {
-    t.plan(4)
+  for (const event of ['open', 'opening']) {
+    test(`close() on ${event} event`, function (t) {
+      t.plan(3)
 
-    const db = testCommon.factory()
-    const order = []
+      const db = testCommon.factory()
+      const order = []
 
-    db.open().then(function () {
-      order.push('A')
-      t.is(db.status, 'open', 'is open')
-    })
+      db.on(event, function () {
+        order.push(`${event} event`)
 
-    db.on('open', function () {
-      order.push('open event')
-
-      // This wins from the (still in progress) open() call
-      db.close().then(function (err) {
-        order.push('B')
-        t.same(order, ['open event', 'A', 'closed event', 'B'], 'order is correct')
-        t.ifError(err, 'no close() error')
-        t.is(db.status, 'closed', 'is closed')
+        // This eventually wins from the in-progress open() call
+        db.close().then(function () {
+          order.push('B')
+          t.same(order, [`${event} event`, 'A', 'closed event', 'B'], 'order is correct')
+          t.is(db.status, 'closed', 'is closed')
+        }, t.fail.bind(t))
       })
-    })
 
-    db.on('closed', () => { order.push('closed event') })
-  })
+      db.open().then(function () {
+        order.push('A')
+        t.is(db.status, 'open', 'is open')
+      }, t.fail.bind(t))
+
+      db.on('closed', () => { order.push('closed event') })
+    })
+  }
+
+  for (const event of ['closed', 'closing']) {
+    test(`open() on ${event} event`, function (t) {
+      t.plan(3)
+
+      const db = testCommon.factory()
+      const order = []
+
+      db.on(event, function () {
+        order.push(`${event} event`)
+
+        // This eventually wins from the in-progress close() call
+        db.open().then(function () {
+          order.push('B')
+          t.same(order, [`${event} event`, 'A', 'open event', 'B'], 'order is correct')
+          t.is(db.status, 'open', 'is open')
+        }, t.fail.bind(t))
+      })
+
+      db.close().then(function () {
+        order.push('A')
+        t.is(db.status, 'closed', 'is closed')
+      }, t.fail.bind(t))
+
+      db.on('open', () => { order.push('open event') })
+    })
+  }
 
   test('passive open()', async function (t) {
     t.plan(1)

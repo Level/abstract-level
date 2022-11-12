@@ -12,7 +12,8 @@ export {
   AbstractBatchDelOperation,
   AbstractClearOptions,
   AbstractDatabaseHooks,
-  AbstractHook
+  AbstractHook,
+  AbstractDeferOptions
 } from './types/abstract-level'
 
 export {

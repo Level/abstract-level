@@ -39,8 +39,8 @@
   - [`encoding = db.keyEncoding([encoding])`](#encoding--dbkeyencodingencoding)
   - [`encoding = db.valueEncoding([encoding])`](#encoding--dbvalueencodingencoding)
   - [`key = db.prefixKey(key, keyFormat[, local])`](#key--dbprefixkeykey-keyformat-local)
-  - [`db.defer(fn)`](#dbdeferfn)
-  - [`db.deferAsync(fn)`](#dbdeferasyncfn)
+  - [`db.defer(fn[, options])`](#dbdeferfn-options)
+  - [`db.deferAsync(fn[, options])`](#dbdeferasyncfn-options)
   - [`chainedBatch`](#chainedbatch)
     - [`chainedBatch.put(key, value[, options])`](#chainedbatchputkey-value-options)
     - [`chainedBatch.del(key[, options])`](#chainedbatchdelkey-options)
@@ -59,6 +59,7 @@
     - [`iterator.db`](#iteratordb)
     - [`iterator.count`](#iteratorcount)
     - [`iterator.limit`](#iteratorlimit)
+    - [Aborting Iterators](#aborting-iterators)
   - [`keyIterator`](#keyiterator)
   - [`valueIterator`](#valueiterator)
   - [`sublevel`](#sublevel)
@@ -103,6 +104,7 @@
     - [`LEVEL_ITERATOR_NOT_OPEN`](#level_iterator_not_open)
     - [`LEVEL_ITERATOR_BUSY`](#level_iterator_busy)
     - [`LEVEL_BATCH_NOT_OPEN`](#level_batch_not_open)
+    - [`LEVEL_ABORTED`](#level_aborted)
     - [`LEVEL_ENCODING_NOT_FOUND`](#level_encoding_not_found)
     - [`LEVEL_ENCODING_NOT_SUPPORTED`](#level_encoding_not_supported)
     - [`LEVEL_DECODE_ERROR`](#level_decode_error)
@@ -375,6 +377,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 - `values` (boolean, default: `true`): whether to return the value of each entry. If set to `false`, the iterator will yield values that are `undefined`. Prefer to use `db.values()` instead.
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
+- `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to [abort read operations on the iterator](#aborting-iterators).
 
 Lastly, an implementation is free to add its own options.
 
@@ -523,9 +526,9 @@ console.log(nested.prefixKey('a', 'utf8')) // '!example!!nested!a'
 console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 ```
 
-### `db.defer(fn)`
+### `db.defer(fn[, options])`
 
-Call the function `fn` at a later time when [`db.status`](#dbstatus) changes to `'open'` or `'closed'`. Used by `abstract-level` itself to implement "deferred open" which is a feature that makes it possible to call methods like `db.put()` before the database has finished opening. The `defer()` method is exposed for implementations and plugins to achieve the same on their custom methods:
+Call the function `fn` at a later time when [`db.status`](#dbstatus) changes to `'open'` or `'closed'`. Known as a _deferred operation_. Used by `abstract-level` itself to implement "deferred open" which is a feature that makes it possible to call methods like `db.put()` before the database has finished opening. The `defer()` method is exposed for implementations and plugins to achieve the same on their custom methods:
 
 ```js
 db.foo = function (key) {
@@ -537,9 +540,13 @@ db.foo = function (key) {
 }
 ```
 
+The optional `options` object may contain:
+
+- `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to abort the deferred operation. When aborted (now or later) the `fn` function will not be called.
+
 When deferring a custom operation, do it early: after normalizing optional arguments but before encoding (to avoid double encoding and to emit original input if the operation has events) and before any _fast paths_ (to avoid calling back before the database has finished opening). For example, `db.batch([])` has an internal fast path where it skips work if the array of operations is empty. Resources that can be closed on their own (like iterators) should however first check such state before deferring, in order to reject operations after close (including when the database was reopened).
 
-### `db.deferAsync(fn)`
+### `db.deferAsync(fn[, options])`
 
 Similar to `db.defer(fn)` but for asynchronous work. Returns a promise, which waits for [`db.status`](#dbstatus) to change to `'open'` or `'closed'` and then calls `fn` which itself must return a promise. This allows for recursion:
 
@@ -552,6 +559,10 @@ db.foo = async function (key) {
   }
 }
 ```
+
+The optional `options` object may contain:
+
+- `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to abort the deferred operation. When aborted (now or later) the `fn` function will not be called, and the promise returned by `deferAsync()` will be rejected with a [`LEVEL_ABORTED`](#errors) error.
 
 ### `chainedBatch`
 
@@ -713,6 +724,44 @@ Read-only getter that reflects the `limit` that was set in options. Greater than
 ```js
 const hasMore = iterator.count < iterator.limit
 const remaining = iterator.limit - iterator.count
+```
+
+#### Aborting Iterators
+
+Iterators take an experimental `signal` option that, once signaled, aborts an in-progress read operation (if any) and reject subsequent reads. The relevant promise will be rejected with a [`LEVEL_ABORTED`](#errors) error. Aborting does not close the iterator, because closing is asynchronous and may result in an error that needs a place to go. This means signals should be used together with a pattern that automatically closes the iterator:
+
+```js
+const abortController = new AbortController()
+const signal = abortController.signal
+
+// Will result in 'aborted' log
+abortController.abort()
+
+try {
+  for await (const entry of db.iterator({ signal })) {
+    console.log(entry)
+  }
+} catch (err) {
+  if (err.code === 'LEVEL_ABORTED') {
+    console.log('aborted')
+  }
+}
+```
+
+Otherwise, close the iterator explicitly:
+
+```js
+const iterator = db.iterator({ signal })
+
+try {
+  const entries = await iterator.nextv(10)
+} catch (err) {
+  if (err.code === 'LEVEL_ABORTED') {
+    console.log('aborted')
+  }
+} finally {
+  await iterator.close()
+}
 ```
 
 ### `keyIterator`
@@ -1155,6 +1204,10 @@ When `iterator.next()` or `seek()` was called while a previous `next()` call was
 
 When an operation was made on a chained batch while it was closing or closed, which may also be the result of the database being closed or that `write()` was called on the chained batch.
 
+#### `LEVEL_ABORTED`
+
+When an operation was aborted by the user.
+
 #### `LEVEL_ENCODING_NOT_FOUND`
 
 When a `keyEncoding` or `valueEncoding` option specified a named encoding that does not exist.
@@ -1557,6 +1610,14 @@ class ExampleSublevel extends AbstractSublevel {
 ### `iterator = AbstractIterator(db, options)`
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it. The `options` argument must be the original `options` object that was passed to `db._iterator()` and it is therefore not (publicly) possible to create an iterator via constructors alone.
+
+The `signal` option, if any and once signaled, should abort an in-progress `_next()`, `_nextv()` or `_all()` call and reject the promise returned by that call with a [`LEVEL_ABORTED`](#errors) error. Doing so is optional until a future semver-major release. Responsibilities are divided as follows:
+
+1. Before a database has finished opening, `abstract-level` handles the signal
+2. While a call is in progress, the implementation handles the signal
+3. Once the signal is aborted, `abstract-level` rejects further calls.
+
+A method like `_next()` therefore doesn't have to check the signal _before_ it start its asynchronous work, only _during_ that work. Whether to respect the signal and on which (potentially long-running) methods, is up to the implementation.
 
 #### `iterator._next()`
 

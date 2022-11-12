@@ -452,7 +452,7 @@ test('opening & closing sublevel', function (t) {
       }
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           throw new Error('next() error from parent database')
         }
       }
@@ -752,7 +752,7 @@ test('sublevel encodings', function (t) {
       const prefixedKey = Buffer.concat([Buffer.from('!test!'), testKey])
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           if (mode === 'iterator' || def) {
             return [prefixedKey, 'bar']
           } else if (mode === 'keys') {
@@ -794,7 +794,7 @@ test('sublevel encodings', function (t) {
       prefixedKey.set(testKey, prefix.byteLength)
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           if (mode === 'iterator' || def) {
             return [prefixedKey, 'bar']
           } else if (mode === 'keys') {

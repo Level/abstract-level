@@ -27,7 +27,7 @@ test('deferred operations are called in order', function (t) {
     _iterator (options) {
       calls.push({ type: 'iterator' })
       return mockIterator(this, options, {
-        async _next (options) {
+        async _next () {
           calls.push({ type: 'iterator.next' })
         }
       })

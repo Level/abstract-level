@@ -172,7 +172,7 @@ db.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
 
 #### 2.1. Promises all the way
 
-All private methods that previously took a callback now use a promise. For example, the function signature `_get(key, options, callback)` has changed to `async _get(key, options)`. Same as in the public API, the new function signatures are predictable and the only method that requires special attention is `iterator._next()`. Which in addition now also takes an `options` argument. For details, please see the updated [README](./README.md#private-api-for-implementors).
+All private methods that previously took a callback now use a promise. For example, the function signature `_get(key, options, callback)` has changed to `async _get(key, options)`. Same as in the public API, the new function signatures are predictable and the only method that requires special attention is `iterator._next()`. For details, please see the updated [README](./README.md#private-api-for-implementors).
 
 #### 2.2. Ticks
 
@@ -210,9 +210,7 @@ class ExampleLevel extends AbstractLevel {
 
 #### 2.3. A new way to abort iterator work
 
-_This section is incomplete._
-
-Closing an iterator now aborts work, if supported by implementation. The undocumented `abortOnClose` option of iterators (added as a workaround for `many-level`) has been removed in favor of AbortSignal.
+Iterators now take an experimental `signal` option that is an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal). You can use the `signal` to abort an in-progress `_next()`, `_nextv()` or `_all()` call. Doing so is optional until a future semver-major release.
 
 #### 2.4. Snapshots must be synchronous
 

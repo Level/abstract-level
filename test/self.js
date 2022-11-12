@@ -861,7 +861,8 @@ test('rangeOptions', function (t) {
   })
 })
 
-require('./self/abort-test')
+require('./self/deferred-queue-test')
+require('./self/errors-test')
 require('./self/defer-test')
 require('./self/attach-resource-test')
 require('./self/abstract-iterator-test')
