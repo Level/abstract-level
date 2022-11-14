@@ -217,85 +217,57 @@ for (const deferred of [false, true]) {
   })
 
   // NOTE: adapted from encoding-down
-  test(`chainedBatch.put() and del() encode utf8 key and value (deferred: ${deferred})`, async function (t) {
-    t.plan(deferred ? 2 : 5)
+  deferred || test('chainedBatch.put() and del() encode utf8 key and value', async function (t) {
+    t.plan(5)
 
-    let db
+    const db = mockLevel({
+      _chainedBatch () {
+        return mockChainedBatch(this, {
+          _put: function (key, value, options) {
+            t.same({ key, value }, { key: '1', value: '2' })
 
-    if (deferred) {
-      db = mockLevel({
-        async _batch (array, options) {
-          t.same(array, [
-            { type: 'put', key: '1', value: '2', keyEncoding: 'utf8', valueEncoding: 'utf8' },
-            { type: 'del', key: '3', keyEncoding: 'utf8' }
-          ])
-          t.same(options, {})
-        }
-      }, utf8Manifest)
-    } else {
-      db = mockLevel({
-        _chainedBatch () {
-          return mockChainedBatch(this, {
-            _put: function (key, value, options) {
-              t.same({ key, value }, { key: '1', value: '2' })
+            // May contain additional options just because it's cheaper to not remove them
+            t.is(options.keyEncoding, 'utf8')
+            t.is(options.valueEncoding, 'utf8')
+          },
+          _del: function (key, options) {
+            t.is(key, '3')
+            t.is(options.keyEncoding, 'utf8')
+          }
+        })
+      }
+    }, utf8Manifest)
 
-              // May contain additional options just because it's cheaper to not remove them
-              t.is(options.keyEncoding, 'utf8')
-              t.is(options.valueEncoding, 'utf8')
-            },
-            _del: function (key, options) {
-              t.is(key, '3')
-              t.is(options.keyEncoding, 'utf8')
-            }
-          })
-        }
-      }, utf8Manifest)
-    }
-
-    if (!deferred) await db.open()
+    await db.open()
     await db.batch().put(1, 2).del(3).write()
   })
 
   // NOTE: adapted from encoding-down
-  test(`chainedBatch.put() and del() take encoding options (deferred: ${deferred})`, async function (t) {
-    t.plan(deferred ? 2 : 5)
-
-    let db
+  deferred || test('chainedBatch.put() and del() take encoding options', async function (t) {
+    t.plan(5)
 
     const putOptions = { keyEncoding: 'json', valueEncoding: 'json' }
     const delOptions = { keyEncoding: 'json' }
 
-    if (deferred) {
-      db = mockLevel({
-        async _batch (array, options) {
-          t.same(array, [
-            { type: 'put', key: '"1"', value: '{"x":[2]}', keyEncoding: 'utf8', valueEncoding: 'utf8' },
-            { type: 'del', key: '"3"', keyEncoding: 'utf8' }
-          ])
-          t.same(options, {})
-        }
-      }, utf8Manifest)
-    } else {
-      db = mockLevel({
-        _chainedBatch () {
-          return mockChainedBatch(this, {
-            _put: function (key, value, options) {
-              t.same({ key, value }, { key: '"1"', value: '{"x":[2]}' })
+    const db = mockLevel({
+      _chainedBatch () {
+        return mockChainedBatch(this, {
+          _put: function (key, value, options) {
+            t.same({ key, value }, { key: '"1"', value: '{"x":[2]}' })
 
-              // May contain additional options just because it's cheaper to not remove them
-              t.is(options.keyEncoding, 'utf8')
-              t.is(options.valueEncoding, 'utf8')
-            },
-            _del: function (key, options) {
-              t.is(key, '"3"')
-              t.is(options.keyEncoding, 'utf8')
-            }
-          })
-        }
-      }, utf8Manifest)
-    }
+            // May contain additional options just because it's cheaper to not remove them
+            t.is(options.keyEncoding, 'utf8')
+            t.is(options.valueEncoding, 'utf8')
+          },
+          _del: function (key, options) {
+            t.is(key, '"3"')
+            t.is(options.keyEncoding, 'utf8')
+          }
+        })
+      }
+    }, utf8Manifest)
 
-    if (!deferred) await db.open()
+    await db.open()
     await db.batch().put('1', { x: [2] }, putOptions).del('3', delOptions).write()
   })
 

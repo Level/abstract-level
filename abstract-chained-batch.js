@@ -265,13 +265,10 @@ class AbstractChainedBatch {
   _clear () {}
 
   async write (options) {
+    assertStatus(this)
     options = getOptions(options)
 
-    if (this[kStatus] !== 'open') {
-      throw new ModuleError('Batch is not open: cannot call write() after write() or close()', {
-        code: 'LEVEL_BATCH_NOT_OPEN'
-      })
-    } else if (this[kLength] === 0) {
+    if (this[kLength] === 0) {
       return this.close()
     } else {
       this[kStatus] = 'writing'
@@ -391,9 +388,12 @@ function assertStatus (batch) {
     })
   }
 
-  // TODO (next major): enforce this regardless of hooks
-  if (batch[kPrewriteBatch] !== null && batch.db.status !== 'open') {
-    throw new ModuleError('Chained batch is not available until database is open', {
+  // Can technically be removed, because it's no longer possible to call db.batch() when
+  // status is not 'open', and db.close() closes the batch. Keep for now, in case of
+  // unforseen userland behaviors.
+  if (batch.db.status !== 'open') {
+    /* istanbul ignore next */
+    throw new ModuleError('Database is not open', {
       code: 'LEVEL_DATABASE_NOT_OPEN'
     })
   }
