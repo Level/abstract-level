@@ -186,6 +186,52 @@ exports.batch = function (test, testCommon) {
     ])
   })
 
+  test('chained batch requires database to be open', async function (t) {
+    t.plan(5)
+
+    const db1 = testCommon.factory()
+    const db2 = testCommon.factory()
+
+    try {
+      db1.batch()
+    } catch (err) {
+      t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    }
+
+    await db2.open()
+    const batch = db2.batch()
+    await db2.close()
+
+    try {
+      batch.put('beep', 'boop')
+    } catch (err) {
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN')
+    }
+
+    try {
+      batch.del('456')
+    } catch (err) {
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN')
+    }
+
+    try {
+      batch.clear()
+    } catch (err) {
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN')
+    }
+
+    try {
+      await batch.write()
+    } catch (err) {
+      t.is(err.code, 'LEVEL_BATCH_NOT_OPEN')
+    }
+
+    // Should be a noop (already closed)
+    await batch.close()
+
+    return Promise.all([db1.close(), db2.close()])
+  })
+
   // NOTE: adapted from levelup
   test('chained batch with per-operation encoding options', async function (t) {
     t.plan(2)

@@ -75,10 +75,10 @@ test('deferred operations are called in order', function (t) {
     { type: 'put', key: '041', value: 'b' }
   ])
   const it = db.iterator()
-  db.batch()
-    .put('050', 'c')
-    .put('051', 'd')
-    .write()
+  db.batch([
+    { type: 'put', key: '050', value: 'c' },
+    { type: 'put', key: '051', value: 'd' }
+  ])
   it.next()
   db.clear({ gt: '060' })
 

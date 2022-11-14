@@ -478,12 +478,12 @@ test('test chained batch() (custom _chainedBatch) extensibility', async function
   t.is(spy.getCall(1).thisValue, test, '`this` on _chainedBatch() was correct')
 })
 
-test('test AbstractChainedBatch extensibility', function (t) {
+test('test AbstractChainedBatch extensibility', async function (t) {
   const Batch = implement(AbstractChainedBatch)
   const db = testCommon.factory()
+  await db.open()
   const test = new Batch(db)
   t.ok(test.db === db, 'instance has db reference')
-  t.end()
 })
 
 test('test AbstractChainedBatch expects a db', function (t) {
@@ -868,7 +868,6 @@ require('./self/abstract-iterator-test')
 require('./self/iterator-test')
 require('./self/deferred-iterator-test')
 require('./self/deferred-operations-test')
-require('./self/deferred-chained-batch-test')
 require('./self/async-iterator-test')
 require('./self/encoding-test')
 require('./self/sublevel-test')

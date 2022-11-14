@@ -38,27 +38,6 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: copied from levelup
-  test('deferred open(): chained batch() on new database', async function (t) {
-    // Create database, opens in next tick
-    const db = testCommon.factory()
-    const entries = 3
-    const batch = db.batch()
-
-    // Add entries with batch(), these should be deferred until the database is actually open
-    for (let i = 1; i <= entries; i++) {
-      batch.put('k' + i, 'v' + i)
-    }
-
-    t.is(db.status, 'opening')
-    t.is(batch.length, entries)
-
-    await batch.write()
-    await verifyValues(t, db, entries)
-
-    return db.close()
-  })
-
-  // NOTE: copied from levelup
   test('deferred open(): value of deferred operation is not stringified', async function (t) {
     const db = testCommon.factory({ valueEncoding: 'json' })
 

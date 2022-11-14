@@ -829,7 +829,8 @@ test('sublevel encodings', function (t) {
 })
 
 for (const chained of [false, true]) {
-  for (const deferred of [false, true]) {
+  // Chained batch does not support deferred open
+  for (const deferred of (chained ? [false] : [false, true])) {
     test(`batch() with sublevel per operation (chained: ${chained}, deferred: ${deferred})`, async function (t) {
       t.plan(6)
 
