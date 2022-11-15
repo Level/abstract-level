@@ -136,18 +136,19 @@ exports.all = function (test, testCommon) {
         if (!deferred) await sub1.open()
         if (!deferred) await sub2.open()
 
-        const batch1 = sub1.batch()
-        const batch2 = sub2.batch()
+        const batch1 = []
+        const batch2 = []
         const keys = []
 
+        // TODO: write before creating the sublevels, to make the deferred test more meaningful
         for (let i = 0; i < 256; i++) {
           const key = keyEncoding === 'buffer' ? Buffer.from([i]) : new Uint8Array([i])
           keys.push(key)
-          batch1.put(key, 'aa')
-          batch2.put(key, 'bb')
+          batch1.push({ type: 'put', key, value: 'aa' })
+          batch2.push({ type: 'put', key, value: 'bb' })
         }
 
-        await Promise.all([batch1.write(), batch2.write()])
+        await Promise.all([sub1.batch(batch1), sub2.batch(batch2)])
 
         const entries1 = await sub1.iterator().all()
         const entries2 = await sub2.iterator().all()
