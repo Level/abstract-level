@@ -728,7 +728,7 @@ const remaining = iterator.limit - iterator.count
 
 #### Aborting Iterators
 
-Iterators take an experimental `signal` option that, once signaled, aborts an in-progress read operation (if any) and reject subsequent reads. The relevant promise will be rejected with a [`LEVEL_ABORTED`](#errors) error. Aborting does not close the iterator, because closing is asynchronous and may result in an error that needs a place to go. This means signals should be used together with a pattern that automatically closes the iterator:
+Iterators take an experimental `signal` option that, once signaled, aborts an in-progress read operation (if any) and rejects subsequent reads. The relevant promise will be rejected with a [`LEVEL_ABORTED`](#errors) error. Aborting does not close the iterator, because closing is asynchronous and may result in an error that needs a place to go. This means signals should be used together with a pattern that automatically closes the iterator:
 
 ```js
 const abortController = new AbortController()
