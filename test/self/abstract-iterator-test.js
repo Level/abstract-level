@@ -2,7 +2,6 @@
 
 const test = require('tape')
 const { AbstractLevel, AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('../..')
-const { AbortSignal } = require('../../lib/abort')
 
 const testCommon = require('../common')({
   test,
@@ -51,15 +50,12 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.next() extensibility`, async function (t) {
-    t.plan(4)
+    t.plan(2)
 
     class TestIterator extends Ctor {
-      async _next (options) {
+      async _next () {
         t.is(this, it, 'thisArg on _next() was correct')
-        t.is(arguments.length, 1, 'got one argument')
-        const { signal, ...rest } = options
-        t.ok(signal instanceof AbortSignal)
-        t.same(rest, {})
+        t.is(arguments.length, 0, 'got 0 arguments')
       }
     }
 
@@ -71,16 +67,14 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.nextv() extensibility`, async function (t) {
-    t.plan(5 * 2)
+    t.plan(4 * 2)
 
     class TestIterator extends Ctor {
       async _nextv (size, options) {
         t.is(this, it, 'thisArg on _nextv() was correct')
         t.is(arguments.length, 2, 'got 2 arguments')
         t.is(size, 100)
-        const { signal, ...rest } = options
-        t.ok(signal instanceof AbortSignal)
-        t.same(rest, {})
+        t.same(options, {})
         return []
       }
     }
@@ -94,14 +88,12 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.nextv() extensibility (options)`, async function (t) {
-    t.plan(3)
+    t.plan(2)
 
     class TestIterator extends Ctor {
       async _nextv (size, options) {
         t.is(size, 100)
-        const { signal, ...rest } = options
-        t.ok(signal instanceof AbortSignal)
-        t.same(rest, { foo: 123 }, 'got userland options')
+        t.same(options, { foo: 123 }, 'got userland options')
         return []
       }
     }
@@ -115,16 +107,14 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.all() extensibility`, async function (t) {
-    t.plan(2 * 4)
+    t.plan(2 * 3)
 
     for (const args of [[], [{}]]) {
       class TestIterator extends Ctor {
         async _all (options) {
           t.is(this, it, 'thisArg on _all() was correct')
           t.is(arguments.length, 1, 'got 1 argument')
-          const { signal, ...rest } = options
-          t.ok(signal instanceof AbortSignal)
-          t.same(rest, {}, '')
+          t.same(options, {}, '')
           return []
         }
       }
@@ -138,13 +128,11 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.all() extensibility (options)`, async function (t) {
-    t.plan(2)
+    t.plan(1)
 
     class TestIterator extends Ctor {
       async _all (options) {
-        const { signal, ...rest } = options
-        t.ok(signal instanceof AbortSignal)
-        t.same(rest, { foo: 123 }, 'got userland options')
+        t.same(options, { foo: 123 }, 'got userland options')
         return []
       }
     }

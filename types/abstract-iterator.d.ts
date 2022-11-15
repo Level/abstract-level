@@ -1,7 +1,16 @@
 import * as Transcoder from 'level-transcoder'
 import { RangeOptions } from './interfaces'
 
-export interface AbstractIteratorOptions<K, V> extends RangeOptions<K> {
+declare interface CommonIteratorOptions {
+  /**
+   * An [`AbortSignal`][1] to abort read operations on the iterator.
+   *
+   * [1]: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal
+   */
+  signal?: AbortSignal | undefined
+}
+
+export interface AbstractIteratorOptions<K, V> extends RangeOptions<K>, CommonIteratorOptions {
   /**
    * Whether to return the key of each entry. Defaults to `true`. If set to `false`,
    * the iterator will yield keys that are `undefined`.
@@ -26,7 +35,7 @@ export interface AbstractIteratorOptions<K, V> extends RangeOptions<K> {
   valueEncoding?: string | Transcoder.PartialDecoder<V> | undefined
 }
 
-export interface AbstractKeyIteratorOptions<K> extends RangeOptions<K> {
+export interface AbstractKeyIteratorOptions<K> extends RangeOptions<K>, CommonIteratorOptions {
   /**
    * Custom key encoding for this iterator, used to encode range options, to encode
    * {@link AbstractKeyIterator.seek} targets and to decode keys.
@@ -34,7 +43,7 @@ export interface AbstractKeyIteratorOptions<K> extends RangeOptions<K> {
   keyEncoding?: string | Transcoder.PartialEncoding<K> | undefined
 }
 
-export interface AbstractValueIteratorOptions<K, V> extends RangeOptions<K> {
+export interface AbstractValueIteratorOptions<K, V> extends RangeOptions<K>, CommonIteratorOptions {
   /**
    * Custom key encoding for this iterator, used to encode range options and
    * {@link AbstractValueIterator.seek} targets.

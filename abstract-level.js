@@ -12,14 +12,14 @@ const { DefaultChainedBatch } = require('./lib/default-chained-batch')
 const { DatabaseHooks } = require('./lib/hooks')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 const { EventMonitor } = require('./lib/event-monitor')
-const { getOptions, noop, emptyOptions } = require('./lib/common')
+const { getOptions, noop, emptyOptions, resolvedPromise } = require('./lib/common')
 const { prefixDescendantKey } = require('./lib/prefixes')
+const { DeferredQueue } = require('./lib/deferred-queue')
 const rangeOptions = require('./lib/range-options')
 
 const kResources = Symbol('resources')
 const kCloseResources = Symbol('closeResources')
-const kOperations = Symbol('operations')
-const kUndefer = Symbol('undefer')
+const kQueue = Symbol('queue')
 const kDeferOpen = Symbol('deferOpen')
 const kOptions = Symbol('options')
 const kStatus = Symbol('status')
@@ -44,7 +44,7 @@ class AbstractLevel extends EventEmitter {
     const { keyEncoding, valueEncoding, passive, ...forward } = options
 
     this[kResources] = new Set()
-    this[kOperations] = []
+    this[kQueue] = new DeferredQueue()
     this[kDeferOpen] = true
     this[kOptions] = forward
     this[kStatus] = 'opening'
@@ -159,18 +159,19 @@ class AbstractLevel extends EventEmitter {
       if (this[kStatus] !== 'open') throw new NotOpenError()
     } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
       this[kDeferOpen] = false
-      this[kStatus] = 'opening'
-      this.emit('opening')
-
+      this[kStatusChange] = resolvedPromise // TODO: refactor
       this[kStatusChange] = (async () => {
+        this[kStatus] = 'opening'
+
         try {
+          this.emit('opening')
           await this._open(options)
         } catch (err) {
           this[kStatus] = 'closed'
 
           // Must happen before we close resources, in case their close() is waiting
           // on a deferred operation which in turn is waiting on db.open().
-          this[kUndefer]()
+          this[kQueue].drain()
 
           try {
             await this[kCloseResources]()
@@ -200,7 +201,7 @@ class AbstractLevel extends EventEmitter {
           // Revert
           if (hookErr) {
             this[kStatus] = 'closing'
-            this[kUndefer]()
+            this[kQueue].drain()
 
             try {
               await this[kCloseResources]()
@@ -222,7 +223,7 @@ class AbstractLevel extends EventEmitter {
           }
         }
 
-        this[kUndefer]()
+        this[kQueue].drain()
         this.emit('open')
       })()
 
@@ -232,8 +233,7 @@ class AbstractLevel extends EventEmitter {
         this[kStatusChange] = null
       }
     } else if (this[kStatus] !== 'open') {
-      // Should not happen
-      /* istanbul ignore next */
+      /* istanbul ignore next: should not happen */
       throw new NotOpenError()
     }
   }
@@ -251,21 +251,23 @@ class AbstractLevel extends EventEmitter {
       const fromInitial = this[kDeferOpen]
 
       this[kDeferOpen] = false
-      this[kStatus] = 'closing'
-      this.emit('closing')
-
+      this[kStatusChange] = resolvedPromise
       this[kStatusChange] = (async () => {
+        this[kStatus] = 'closing'
+        this[kQueue].drain()
+
         try {
+          this.emit('closing')
           await this[kCloseResources]()
           if (!fromInitial) await this._close()
         } catch (err) {
           this[kStatus] = 'open'
-          this[kUndefer]()
+          this[kQueue].drain()
           throw new NotClosedError(err)
         }
 
         this[kStatus] = 'closed'
-        this[kUndefer]()
+        this[kQueue].drain()
         this.emit('closed')
       })()
 
@@ -275,8 +277,7 @@ class AbstractLevel extends EventEmitter {
         this[kStatusChange] = null
       }
     } else if (this[kStatus] !== 'closed') {
-      // Should not happen
-      /* istanbul ignore next */
+      /* istanbul ignore next: should not happen */
       throw new NotClosedError()
     }
   }
@@ -290,6 +291,7 @@ class AbstractLevel extends EventEmitter {
     const resources = Array.from(this[kResources])
     const promises = resources.map(closeResource)
 
+    // TODO: async/await
     return Promise.allSettled(promises).then(async (results) => {
       const errors = []
 
@@ -798,34 +800,27 @@ class AbstractLevel extends EventEmitter {
     return new DefaultValueIterator(this, options)
   }
 
-  defer (fn) {
+  defer (fn, options) {
     if (typeof fn !== 'function') {
       throw new TypeError('The first argument must be a function')
     }
 
-    this[kOperations].push(fn)
+    this[kQueue].add(function (abortError) {
+      if (!abortError) fn()
+    }, options)
   }
 
-  // TODO (signals): support signal option
   deferAsync (fn, options) {
     if (typeof fn !== 'function') {
       throw new TypeError('The first argument must be a function')
     }
 
     return new Promise((resolve, reject) => {
-      this[kOperations].push(function () {
-        fn().then(resolve, reject)
-      })
+      this[kQueue].add(function (abortError) {
+        if (abortError) reject(abortError)
+        else fn().then(resolve, reject)
+      }, options)
     })
-  }
-
-  [kUndefer] () {
-    const operations = this[kOperations]
-    this[kOperations] = []
-
-    for (const op of operations) {
-      op()
-    }
   }
 
   // TODO: docs and types

@@ -15,8 +15,8 @@ for (const mode of ['iterator', 'keys', 'values']) {
   const publicMethod = mode
 
   // NOTE: adapted from deferred-leveldown
-  test(`deferred ${mode}()`, function (t) {
-    t.plan(6)
+  test(`deferred ${mode}().next()`, async function (t) {
+    t.plan(5)
 
     const keyEncoding = {
       format: 'utf8',
@@ -28,7 +28,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
     }
 
     class MockIterator extends RealCtor {
-      async _next (options) {
+      async _next () {
         return nextArg
       }
 
@@ -50,16 +50,8 @@ for (const mode of ['iterator', 'keys', 'values']) {
     const it = db[publicMethod]({ gt: 'foo' })
     t.ok(it instanceof DeferredCtor, 'is deferred')
 
-    let nextFirst = false
-
-    it.next().then(function (item) {
-      nextFirst = true
-      t.is(item, nextArg)
-    })
-
-    it.close().then(function () {
-      t.ok(nextFirst)
-    })
+    t.is(await it.next(), nextArg)
+    return it.close()
   })
 
   // NOTE: adapted from deferred-leveldown
@@ -71,7 +63,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
         t.is(target, '123')
       }
 
-      async _next (options) {
+      async _next () {
         return nextArg
       }
     }
@@ -82,6 +74,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
       }
     })
 
+    // TODO: async/await
     db.open().then(function () {
       it.seek(123)
       it.next().then(function (item) {
@@ -186,6 +179,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
         return original.call(this, ...args)
       }
 
+      // TODO: async/await
       db.open().then(() => db.close()).then(function () {
         verifyClosed(t, it, method, function () {
           db.open().then(function () {
@@ -268,6 +262,39 @@ for (const mode of ['iterator', 'keys', 'values']) {
 
     it.close().then(function () {
       t.same(order, ['_open', privateMethod, '_close'])
+    })
+  })
+
+  globalThis.AbortController && test(`deferred ${mode}(): skips real iterator if aborted`, function (t) {
+    t.plan(3)
+
+    const order = []
+    const db = mockLevel({
+      async _open (options) {
+        order.push('_open')
+      },
+      [privateMethod] (options) {
+        t.fail('should not be called')
+      }
+    })
+
+    const ac = new globalThis.AbortController()
+    const it = db[publicMethod]({ signal: ac.signal })
+    t.ok(it instanceof DeferredCtor)
+
+    // Test synchronous call, which should be silently skipped on abort
+    it.seek('foo')
+
+    // Test asynchronous call, which should be rejected
+    it.next().then(t.fail.bind(t, 'should not succeed'), function (err) {
+      t.is(err.code, 'LEVEL_ABORTED')
+    })
+
+    // Signal should prevent real iterator from being created.
+    ac.abort()
+
+    it.close().then(function () {
+      t.same(order, ['_open'])
     })
   })
 

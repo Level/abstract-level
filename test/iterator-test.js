@@ -101,29 +101,18 @@ exports.sequence = function (test, testCommon) {
           return iterator.close()
         })
       }
-    }
-  }
 
-  for (const deferred of [false, true]) {
-    for (const mode of ['iterator', 'keys', 'values']) {
-      for (const method of ['next', 'nextv', 'all']) {
-        const requiredArgs = method === 'nextv' ? [10] : []
-
-        // NOTE: adapted from leveldown
-        test(`${mode}().${method}() after db.close() yields error (deferred: ${deferred})`, async function (t) {
+      for (const deferred of [false, true]) {
+        test(`${mode}().${method}() during close() yields error (deferred: ${deferred})`, async function (t) {
           t.plan(2)
 
           const db = testCommon.factory()
           if (!deferred) await db.open()
-
-          await db.put('a', 'a')
-          await db.put('b', 'b')
-
           const it = db[mode]()
 
-          // The first call *should* succeed, because it was scheduled before close(). However, success
-          // is not a must. Because nextv() and all() fallback to next*(), they're allowed to fail. An
-          // implementation can also choose to abort any pending call on close.
+          // The first call *may* succeed, because it was scheduled before close(). The
+          // default implementations of nextv() and all() fallback to next*() and thus
+          // make multiple calls, so they're allowed to fail.
           let promise = it[method](...requiredArgs).then(() => {
             t.pass('Optionally succeeded')
           }, (err) => {
@@ -139,9 +128,31 @@ exports.sequence = function (test, testCommon) {
             })
           })
 
-          return Promise.all([db.close(), promise])
+          await Promise.all([it.close(), promise])
+          return db.close()
         })
       }
+
+      // At the moment, we can only be sure that signals are supported if the iterator is deferred
+      globalThis.AbortController && test(`${mode}().${method}() with aborted signal yields error`, async function (t) {
+        t.plan(2)
+
+        const db = testCommon.factory()
+        const ac = new globalThis.AbortController()
+        const it = db[mode]({ signal: ac.signal })
+
+        t.is(db.status, 'opening', 'is deferred')
+        ac.abort()
+
+        try {
+          await it[method](...requiredArgs)
+        } catch (err) {
+          t.is(err.code, 'LEVEL_ABORTED')
+        }
+
+        await it.close()
+        return db.close()
+      })
     }
   }
 }

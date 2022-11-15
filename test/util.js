@@ -144,7 +144,7 @@ class MinimalValueIterator extends AbstractValueIterator {
 for (const Ctor of [MinimalIterator, MinimalKeyIterator, MinimalValueIterator]) {
   const mapEntry = Ctor === MinimalIterator ? e => e : Ctor === MinimalKeyIterator ? e => e[0] : e => e[1]
 
-  Ctor.prototype._next = async function (options) {
+  Ctor.prototype._next = async function () {
     const entry = this[kEntries][this[kPosition]++]
     if (entry === undefined) return undefined
     return mapEntry(entry)

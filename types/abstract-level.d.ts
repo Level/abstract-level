@@ -237,15 +237,22 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
 
   /**
    * Call the function {@link fn} at a later time when {@link status} changes to
-   * `'open'` or `'closed'`.
+   * `'open'` or `'closed'`. Known as a _deferred operation_.
+   *
+   * @param fn Synchronous function to (eventually) call.
+   * @param options Options for the deferred operation.
    */
-  defer (fn: Function): void
+  defer (fn: Function, options?: AbstractDeferOptions | undefined): void
 
   /**
    * Call the function {@link fn} at a later time when {@link status} changes to
-   * `'open'` or `'closed'`.
+   * `'open'` or `'closed'`. Known as a _deferred operation_.
+   *
+   * @param fn Asynchronous function to (eventually) call.
+   * @param options Options for the deferred operation.
+   * @returns A promise for the result of {@link fn}.
    */
-  deferAsync<T> (fn: () => Promise<T>): Promise<T>
+  deferAsync<T> (fn: () => Promise<T>, options?: AbstractDeferOptions | undefined): Promise<T>
 }
 
 export { AbstractLevel }
@@ -514,4 +521,16 @@ export interface AbstractHook<TFn extends Function> {
    * @param fn Hook function.
    */
   delete: (fn: TFn) => void
+}
+
+/**
+ * Options for {@link AbstractLevel.defer()} and {@link AbstractLevel.deferAsync()}.
+ */
+export interface AbstractDeferOptions {
+  /**
+   * An [`AbortSignal`][1] to abort the deferred operation.
+   *
+   * [1]: https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal
+   */
+  signal?: AbortSignal | undefined
 }
