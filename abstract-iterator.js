@@ -17,6 +17,7 @@ const kKeys = Symbol('keys')
 const kValues = Symbol('values')
 const kLimit = Symbol('limit')
 const kCount = Symbol('count')
+const kEnded = Symbol('ended')
 
 // This class is an internal utility for common functionality between AbstractIterator,
 // AbstractKeyIterator and AbstractValueIterator. It's not exported.
@@ -40,6 +41,10 @@ class CommonIterator {
     this[kCount] = 0
     this[kSignal] = options.signal != null ? options.signal : null
 
+    // Ending means reaching the natural end of the data and (unlike closing) that can
+    // be reset by seek(), unless the limit was reached.
+    this[kEnded] = false
+
     this.db = db
     this.db.attachResource(this)
   }
@@ -56,21 +61,25 @@ class CommonIterator {
     startWork(this)
 
     try {
-      if (this[kCount] >= this[kLimit]) {
+      if (this[kEnded] || this[kCount] >= this[kLimit]) {
+        this[kEnded] = true
         return undefined
       }
 
       let item = await this._next()
 
+      if (item === undefined) {
+        this[kEnded] = true
+        return undefined
+      }
+
       try {
-        if (item !== undefined) {
-          item = this[kDecodeOne](item)
-          this[kCount]++
-        }
+        item = this[kDecodeOne](item)
       } catch (err) {
         throw new IteratorDecodeError(err)
       }
 
+      this[kCount]++
       return item
     } finally {
       endWork(this)
@@ -92,9 +101,17 @@ class CommonIterator {
     startWork(this)
 
     try {
-      if (size <= 0) return []
+      if (this[kEnded] || size <= 0) {
+        this[kEnded] = true
+        return []
+      }
 
       const items = await this._nextv(size, options)
+
+      if (items.length === 0) {
+        this[kEnded] = true
+        return items
+      }
 
       try {
         this[kDecodeMany](items)
@@ -112,10 +129,16 @@ class CommonIterator {
   async _nextv (size, options) {
     const acc = []
 
-    let item
+    while (acc.length < size) {
+      const item = await this._next(options)
 
-    while (acc.length < size && (item = await this._next(options)) !== undefined) {
-      acc.push(item)
+      if (item !== undefined) {
+        acc.push(item)
+      } else {
+        // Must track this here because we're directly calling _next()
+        this[kEnded] = true
+        break
+      }
     }
 
     return acc
@@ -126,7 +149,7 @@ class CommonIterator {
     startWork(this)
 
     try {
-      if (this[kCount] >= this[kLimit]) {
+      if (this[kEnded] || this[kCount] >= this[kLimit]) {
         return []
       }
 
@@ -144,6 +167,8 @@ class CommonIterator {
       endWork(this)
       await destroy(this, err)
     } finally {
+      this[kEnded] = true
+
       if (this[kWorking]) {
         endWork(this)
         await this.close()
@@ -196,6 +221,9 @@ class CommonIterator {
 
       const mapped = this.db.prefixKey(keyEncoding.encode(target), keyFormat, false)
       this._seek(mapped, options)
+
+      // If _seek() was successfull, more data may be available.
+      this[kEnded] = false
     }
   }
 

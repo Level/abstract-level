@@ -270,10 +270,30 @@ exports.iterator = function (test, testCommon) {
       await it.close()
     })
 
+    test(`${mode}().nextv() honors limit and size`, async function (t) {
+      const it = db[mode]({ limit: 2 })
+
+      t.same(await it.nextv(1), [['foobatch1', 'bar1']].map(mapEntry))
+      t.same(await it.nextv(10), [['foobatch2', 'bar2']].map(mapEntry))
+      t.same(await it.nextv(10), [])
+
+      await it.close()
+    })
+
     test(`${mode}().nextv() honors limit in reverse`, async function (t) {
       const it = db[mode]({ limit: 2, reverse: true })
 
       t.same(await it.nextv(10), [['foobatch3', 'bar3'], ['foobatch2', 'bar2']].map(mapEntry))
+      t.same(await it.nextv(10), [])
+
+      await it.close()
+    })
+
+    test(`${mode}().nextv() honors limit and size in reverse`, async function (t) {
+      const it = db[mode]({ limit: 2, reverse: true })
+
+      t.same(await it.nextv(1), [['foobatch3', 'bar3']].map(mapEntry))
+      t.same(await it.nextv(10), [['foobatch2', 'bar2']].map(mapEntry))
       t.same(await it.nextv(10), [])
 
       await it.close()

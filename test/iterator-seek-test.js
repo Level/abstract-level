@@ -132,6 +132,44 @@ exports.seek = function (test, testCommon) {
       return db.close()
     })
 
+    test(`${mode}().seek() can be used to iterate twice`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const it = db[mode]()
+
+      t.same(await it.nextv(10), [['one', '1'], ['three', '3'], ['two', '2']].map(mapEntry), 'match')
+      t.same(await it.nextv(10), [], 'end of iterator')
+
+      it.seek('one')
+
+      t.same(await it.nextv(10), [['one', '1'], ['three', '3'], ['two', '2']].map(mapEntry), 'match again')
+      t.same(await it.nextv(10), [], 'end of iterator again')
+
+      await it.close()
+      return db.close()
+    })
+
+    test(`${mode}().seek() can be used to iterate twice, within limit`, async function (t) {
+      const db = testCommon.factory()
+      await db.batch(testData())
+      const limit = 4
+      const it = db[mode]({ limit })
+
+      t.same(await it.nextv(10), [['one', '1'], ['three', '3'], ['two', '2']].map(mapEntry), 'match')
+      t.same(await it.nextv(10), [], 'end of iterator')
+
+      it.seek('one')
+
+      t.same(await it.nextv(10), [['one', '1']].map(mapEntry), 'limit reached')
+      t.same(await it.nextv(10), [], 'end of iterator')
+
+      it.seek('one')
+      t.same(await it.nextv(10), [], 'does not reset after limit has been reached')
+
+      await it.close()
+      return db.close()
+    })
+
     if (testCommon.supports.snapshots) {
       for (const reverse of [false, true]) {
         for (const deferred of [false, true]) {
