@@ -159,7 +159,7 @@ class AbstractLevel extends EventEmitter {
       if (this[kStatus] !== 'open') throw new NotOpenError()
     } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
       this[kDeferOpen] = false
-      this[kStatusChange] = resolvedPromise
+      this[kStatusChange] = resolvedPromise // TODO: refactor
       this[kStatusChange] = (async () => {
         this[kStatus] = 'opening'
 
