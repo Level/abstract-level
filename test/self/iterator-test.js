@@ -4,7 +4,6 @@ const test = require('tape')
 const { Buffer } = require('buffer')
 const { AbstractLevel } = require('../..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('../..')
-const { AbortSignal } = require('../../lib/abort')
 const { mockLevel, mockIterator, nullishEncoding } = require('../util')
 
 const identity = (v) => v
@@ -84,7 +83,7 @@ for (const deferred of [false, true]) {
         let yielded = 0
 
         class MockIterator extends Ctor {
-          async _next (options) {
+          async _next () {
             calls++
 
             if (mode === 'iterator' || def) {
@@ -158,7 +157,7 @@ for (const deferred of [false, true]) {
 
         let nextCount = 0
         class MockIterator extends Ctor {
-          async _next (options) {
+          async _next () {
             if (++nextCount > 10) {
               throw new Error('Potential infinite loop')
             } else if (mode === 'iterator' || def) {
@@ -220,7 +219,7 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           if (mode === 'iterator' || def) {
             return ['a', 'a']
           } else {
@@ -273,7 +272,7 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        _next (options) {
+        _next () {
           if (mode === 'iterator' || def) {
             return ['281', Buffer.from('a')]
           } else if (mode === 'keys') {
@@ -305,7 +304,7 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           if (mode === 'iterator' || def) {
             return [Buffer.from('a'), Buffer.from('b')]
           } else if (mode === 'keys') {
@@ -342,7 +341,7 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           if (mode === 'iterator' || def) {
             return ['a', 'b']
           } else if (mode === 'keys') {
@@ -557,7 +556,7 @@ for (const deferred of [false, true]) {
 
       let pos = 0
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           if (mode === 'iterator' || def) {
             return ['k' + pos, 'v' + (pos++)]
           } else if (mode === 'keys') {
@@ -600,7 +599,7 @@ for (const deferred of [false, true]) {
       }
 
       class MockIterator extends Ctor {
-        async _next (options) {
+        async _next () {
           t.pass('called')
           throw new Error('test')
         }
@@ -617,7 +616,7 @@ for (const deferred of [false, true]) {
     })
 
     test(`${mode}() has default all() (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
-      t.plan(11)
+      t.plan(8)
 
       class MockLevel extends AbstractLevel {
         [privateMethod] (options) {
@@ -630,10 +629,7 @@ for (const deferred of [false, true]) {
       class MockIterator extends Ctor {
         async _nextv (size, options) {
           t.is(size, 1000)
-
-          const { signal, ...rest } = options
-          t.ok(signal instanceof AbortSignal)
-          t.same(rest, {})
+          t.same(options, {})
 
           if (pos === 4) {
             return []
@@ -690,7 +686,7 @@ for (const deferred of [false, true]) {
     })
 
     test(`${mode}() custom all() (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
-      t.plan(4)
+      t.plan(3)
 
       class MockLevel extends AbstractLevel {
         [privateMethod] (options) {
@@ -700,9 +696,7 @@ for (const deferred of [false, true]) {
 
       class MockIterator extends Ctor {
         async _all (options) {
-          const { signal, ...rest } = options
-          t.ok(signal instanceof AbortSignal)
-          t.same(rest, {})
+          t.same(options, {})
 
           if (mode === 'iterator' || def) {
             return [['k0', 'v0'], ['k1', 'v1']]
@@ -777,7 +771,7 @@ for (const deferred of [false, true]) {
         t.is(options.keys, false)
 
         return mockIterator(this, options, {
-          async _next (options) {
+          async _next () {
             return ['', 'value']
           }
         })
@@ -808,7 +802,7 @@ for (const deferred of [false, true]) {
         t.is(options.values, false)
 
         return mockIterator(this, options, {
-          async _next (options) {
+          async _next () {
             return ['key', '']
           }
         })

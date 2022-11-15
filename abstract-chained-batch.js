@@ -10,7 +10,6 @@ const kStatus = Symbol('status')
 const kPublicOperations = Symbol('publicOperations')
 const kLegacyOperations = Symbol('legacyOperations')
 const kPrivateOperations = Symbol('privateOperations')
-const kCallClose = Symbol('callClose')
 const kClosePromise = Symbol('closePromise')
 const kLength = Symbol('length')
 const kPrewriteRun = Symbol('prewriteRun')
@@ -273,13 +272,8 @@ class AbstractChainedBatch {
     } else {
       this[kStatus] = 'writing'
 
-      // Prepare promise in case write() is called in the mean time
-      let close
-      this[kClosePromise] = new Promise((resolve, reject) => {
-        close = () => {
-          this[kCallClose]().then(resolve, reject)
-        }
-      })
+      // Prepare promise in case close() is called in the mean time
+      const close = prepareClose(this)
 
       try {
         // Process operations added by prewrite hook functions
@@ -344,18 +338,31 @@ class AbstractChainedBatch {
       // First caller of close() or write() is responsible for error
       return this[kClosePromise].catch(noop)
     } else {
-      this[kClosePromise] = this[kCallClose]()
+      // Wrap promise to avoid race issues on recursive calls
+      prepareClose(this)()
       return this[kClosePromise]
     }
   }
 
-  async [kCallClose] () {
-    this[kStatus] = 'closing'
-    await this._close()
-    this.db.detachResource(this)
-  }
-
   async _close () {}
+}
+
+const prepareClose = function (batch) {
+  let close
+
+  batch[kClosePromise] = new Promise((resolve, reject) => {
+    close = () => {
+      privateClose(batch).then(resolve, reject)
+    }
+  })
+
+  return close
+}
+
+const privateClose = async function (batch) {
+  batch[kStatus] = 'closing'
+  await batch._close()
+  batch.db.detachResource(batch)
 }
 
 class PrewriteData {
@@ -381,7 +388,7 @@ class PrewriteData {
   }
 }
 
-function assertStatus (batch) {
+const assertStatus = function (batch) {
   if (batch[kStatus] !== 'open') {
     throw new ModuleError('Batch is not open: cannot change operations after write() or close()', {
       code: 'LEVEL_BATCH_NOT_OPEN'

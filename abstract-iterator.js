@@ -3,18 +3,14 @@
 const ModuleError = require('module-error')
 const combineErrors = require('maybe-combine-errors')
 const { getOptions, emptyOptions, noop } = require('./lib/common')
-const { AbortController } = require('./lib/abort')
+const { AbortError } = require('./lib/errors')
 
 const kWorking = Symbol('working')
 const kDecodeOne = Symbol('decodeOne')
 const kDecodeMany = Symbol('decodeMany')
-const kAbortController = Symbol('abortController')
-const kAbortSignalOptions = Symbol('abortSignalOptions')
-const kClosing = Symbol('closing')
-const kCallClose = Symbol('callClose')
+const kSignal = Symbol('signal')
 const kPendingClose = Symbol('pendingClose')
 const kClosingPromise = Symbol('closingPromise')
-const kClosed = Symbol('closed')
 const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
 const kKeys = Symbol('keys')
@@ -35,25 +31,14 @@ class CommonIterator {
       throw new TypeError('The second argument must be an options object')
     }
 
-    this[kClosed] = false
     this[kWorking] = false
-    this[kClosing] = false
     this[kPendingClose] = null
     this[kClosingPromise] = null
     this[kKeyEncoding] = options[kKeyEncoding]
     this[kValueEncoding] = options[kValueEncoding]
     this[kLimit] = Number.isInteger(options.limit) && options.limit >= 0 ? options.limit : Infinity
     this[kCount] = 0
-
-    // TODO (signals): docs, types, tests
-    this[kAbortController] = new AbortController()
-    this[kAbortSignalOptions] = Object.freeze({
-      signal: this[kAbortController].signal
-    })
-
-    if (options.signal) {
-      // TODO (signals): combine signals
-    }
+    this[kSignal] = options.signal != null ? options.signal : null
 
     this.db = db
     this.db.attachResource(this)
@@ -68,15 +53,14 @@ class CommonIterator {
   }
 
   async next () {
-    assertStatus(this)
-    this[kWorking] = true
+    startWork(this)
 
     try {
       if (this[kCount] >= this[kLimit]) {
         return undefined
       }
 
-      let item = await this._next(this[kAbortSignalOptions])
+      let item = await this._next()
 
       try {
         if (item !== undefined) {
@@ -89,30 +73,23 @@ class CommonIterator {
 
       return item
     } finally {
-      this[kWorking] = false
-
-      if (this[kPendingClose] !== null) {
-        this[kPendingClose]()
-      }
+      endWork(this)
     }
   }
 
-  // TODO (signals): docs
-  // TODO (signals): check if signal option can work in many-level
-  async _next (options) {}
+  async _next () {}
 
   async nextv (size, options) {
     if (!Number.isInteger(size)) {
       throw new TypeError("The first argument 'size' must be an integer")
     }
 
-    options = getAbortOptions(this, options)
-    assertStatus(this)
+    options = getOptions(options, emptyOptions)
 
     if (size < 1) size = 1
     if (this[kLimit] < Infinity) size = Math.min(size, this[kLimit] - this[kCount])
 
-    this[kWorking] = true
+    startWork(this)
 
     try {
       if (size <= 0) return []
@@ -128,11 +105,7 @@ class CommonIterator {
       this[kCount] += items.length
       return items
     } finally {
-      this[kWorking] = false
-
-      if (this[kPendingClose] !== null) {
-        this[kPendingClose]()
-      }
+      endWork(this)
     }
   }
 
@@ -143,21 +116,14 @@ class CommonIterator {
 
     while (acc.length < size && (item = await this._next(options)) !== undefined) {
       acc.push(item)
-
-      // TODO (signals)
-      // if (options.signal.aborted) {
-      //   throw new AbortedError()
-      // }
     }
 
     return acc
   }
 
   async all (options) {
-    options = getAbortOptions(this, options)
-    assertStatus(this)
-
-    this[kWorking] = true
+    options = getOptions(options, emptyOptions)
+    startWork(this)
 
     try {
       if (this[kCount] >= this[kLimit]) {
@@ -175,27 +141,11 @@ class CommonIterator {
       this[kCount] += items.length
       return items
     } catch (err) {
-      this[kWorking] = false
-
-      if (this[kPendingClose] !== null) {
-        this[kPendingClose]()
-      }
-
-      try {
-        await this.close()
-      } catch (closeErr) {
-        throw combineErrors([err, closeErr])
-      }
-
-      throw err
+      endWork(this)
+      await destroy(this, err)
     } finally {
       if (this[kWorking]) {
-        this[kWorking] = false
-
-        if (this[kPendingClose] !== null) {
-          this[kPendingClose]()
-        }
-
+        endWork(this)
         await this.close()
       }
     }
@@ -203,7 +153,6 @@ class CommonIterator {
 
   async _all (options) {
     // Must count here because we're directly calling _nextv()
-    // TODO: should we not increment this[kCount] as well?
     let count = this[kCount]
 
     const acc = []
@@ -224,18 +173,13 @@ class CommonIterator {
 
       acc.push.apply(acc, items)
       count += items.length
-
-      // TODO (signals)
-      // if (options.signal.aborted) {
-      //   throw new AbortedError()
-      // }
     }
   }
 
   seek (target, options) {
     options = getOptions(options, emptyOptions)
 
-    if (this[kClosing]) {
+    if (this[kClosingPromise] !== null) {
       // Don't throw here, to be kind to implementations that wrap
       // another db and don't necessarily control when the db is closed
     } else if (this[kWorking]) {
@@ -262,47 +206,28 @@ class CommonIterator {
   }
 
   async close () {
-    if (this[kClosed]) {
-      return
-    }
-
-    if (this[kClosing]) {
+    if (this[kClosingPromise] !== null) {
       // First caller of close() is responsible for error
       return this[kClosingPromise].catch(noop)
-    } else {
-      this[kClosing] = true
-
-      if (this[kWorking]) {
-        // Wait for work, but handle closing and its error here.
-        this[kClosingPromise] = new Promise((resolve, reject) => {
-          this[kPendingClose] = () => {
-            this[kCallClose]().then(resolve, reject)
-          }
-        })
-
-        // If implementation supports it, abort the work.
-        this[kAbortController].abort()
-      } else {
-        this[kClosingPromise] = this[kCallClose]()
-      }
-
-      return this[kClosingPromise]
     }
+
+    // Wrap to avoid race issues on recursive calls
+    this[kClosingPromise] = new Promise((resolve, reject) => {
+      this[kPendingClose] = () => {
+        this[kPendingClose] = null
+        privateClose(this).then(resolve, reject)
+      }
+    })
+
+    // If working we'll delay closing, but still handle the close error (if any) here
+    if (!this[kWorking]) {
+      this[kPendingClose]()
+    }
+
+    return this[kClosingPromise]
   }
 
   async _close () {}
-
-  async [kCallClose] () {
-    this[kPendingClose] = null
-
-    try {
-      await this._close()
-    } finally {
-      this[kClosed] = true
-    }
-
-    this.db.detachResource(this)
-  }
 
   async * [Symbol.asyncIterator] () {
     try {
@@ -311,8 +236,10 @@ class CommonIterator {
       while ((item = (await this.next())) !== undefined) {
         yield item
       }
+    } catch (err) {
+      await destroy(this, err)
     } finally {
-      if (!this[kClosed]) await this.close()
+      await this.close()
     }
   }
 }
@@ -394,19 +321,8 @@ class IteratorDecodeError extends ModuleError {
   }
 }
 
-// Internal utility, not typed or exported
-// TODO (signals): define and document new code
-// class AbortedError extends ModuleError {
-//   constructor (cause) {
-//     super('Iterator has been aborted', {
-//       code: 'LEVEL_ITERATOR_NOT_OPEN',
-//       cause
-//     })
-//   }
-// }
-
-function assertStatus (iterator) {
-  if (iterator[kClosing]) {
+const startWork = function (iterator) {
+  if (iterator[kClosingPromise] !== null) {
     throw new ModuleError('Iterator is not open: cannot read after close()', {
       code: 'LEVEL_ITERATOR_NOT_OPEN'
     })
@@ -414,26 +330,34 @@ function assertStatus (iterator) {
     throw new ModuleError('Iterator is busy: cannot read until previous read has completed', {
       code: 'LEVEL_ITERATOR_BUSY'
     })
+  } else if (iterator[kSignal] !== null && iterator[kSignal].aborted) {
+    throw new AbortError()
   }
 
-  // TODO (signals): may want to do (unless aborting closes the iterator, TBD):
-  // if (iterator[kAbortController].signal.aborted) {
-  //   throw new AbortedError()
-  // }
+  iterator[kWorking] = true
 }
 
-function getAbortOptions (iterator, options) {
-  if (typeof options === 'object' && options !== null) {
-    // The signal option should only be set via constructor. Including when we're
-    // forwarding calls like in AbstractSublevelIterator#_next(). Meaning we knowingly
-    // lose the signal between _next({ signal }) and next({ signal }) calls. We might
-    // support merging signals in the future but at this time we don't need it, because
-    // in these forwarding scenarios, we also forward close() and thus the main signal.
-    return Object.assign({}, options, iterator[kAbortSignalOptions])
-  } else {
-    // Avoid an expensive Object.assign({})
-    return iterator[kAbortSignalOptions]
+const endWork = function (iterator) {
+  iterator[kWorking] = false
+
+  if (iterator[kPendingClose] !== null) {
+    iterator[kPendingClose]()
   }
+}
+
+const privateClose = async function (iterator) {
+  await iterator._close()
+  iterator.db.detachResource(iterator)
+}
+
+const destroy = async function (iterator, err) {
+  try {
+    await iterator.close()
+  } catch (closeErr) {
+    throw combineErrors([err, closeErr])
+  }
+
+  throw err
 }
 
 // Exposed so that AbstractLevel can set these options
