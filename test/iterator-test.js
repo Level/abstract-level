@@ -158,25 +158,22 @@ exports.sequence = function (test, testCommon) {
 }
 
 exports.iterator = function (test, testCommon) {
-  test('simple iterator().next()', async function (t) {
-    const data = [
+  test('iterator data setup', function (t) {
+    return db.batch([
       { type: 'put', key: 'foobatch1', value: 'bar1' },
       { type: 'put', key: 'foobatch2', value: 'bar2' },
       { type: 'put', key: 'foobatch3', value: 'bar3' }
-    ]
+    ])
+  })
 
-    await db.batch(data)
+  test('simple iterator().next()', async function (t) {
     const iterator = db.iterator()
 
-    let idx = 0
-    let entry
+    t.same(await iterator.next(), ['foobatch1', 'bar1'])
+    t.same(await iterator.next(), ['foobatch2', 'bar2'])
+    t.same(await iterator.next(), ['foobatch3', 'bar3'])
+    t.is(await iterator.next(), undefined)
 
-    while ((entry = await iterator.next()) !== undefined) {
-      t.is(entry[0], data[idx].key, 'correct key')
-      t.is(entry[1], data[idx++].value, 'correct value')
-    }
-
-    t.is(idx, data.length, 'correct number of entries')
     return iterator.close()
   })
 
