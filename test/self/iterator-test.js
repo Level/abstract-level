@@ -71,6 +71,41 @@ for (const deferred of [false, true]) {
       if (deferred) await db.open()
     })
 
+    test(`${mode}().next() skips _next() if it previously signaled end (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
+      }
+
+      let calls = 0
+
+      class MockIterator extends Ctor {
+        async _next () {
+          if (calls++) return undefined
+
+          if (mode === 'iterator' || def) {
+            return ['a', 'a']
+          } else {
+            return 'a'
+          }
+        }
+      }
+
+      const db = new MockLevel(utf8Manifest)
+      if (!deferred) await db.open()
+      const it = db[publicMethod]()
+
+      t.same(await it.next(), mode === 'iterator' ? ['a', 'a'] : 'a')
+      t.is(calls, 1, 'got one _next() call')
+
+      t.is(await it.next(), undefined)
+      t.is(calls, 2, 'got another _next() call')
+
+      t.is(await it.next(), undefined)
+      t.is(calls, 2, 'not called again')
+    })
+
     for (const limit of [2, 0]) {
       test(`${mode}().next() skips _next() when limit ${limit} is reached (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
         class MockLevel extends AbstractLevel {
@@ -183,6 +218,41 @@ for (const deferred of [false, true]) {
         t.same(await it.all(), [])
       })
     }
+
+    test(`${mode}().nextv() skips _nextv() if it previously signaled end (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
+      }
+
+      let calls = 0
+
+      class MockIterator extends Ctor {
+        async _nextv () {
+          if (calls++) return []
+
+          if (mode === 'iterator' || def) {
+            return [['a', 'a']]
+          } else {
+            return ['a']
+          }
+        }
+      }
+
+      const db = new MockLevel(utf8Manifest)
+      if (!deferred) await db.open()
+      const it = db[publicMethod]()
+
+      t.same(await it.nextv(100), [mode === 'iterator' ? ['a', 'a'] : 'a'])
+      t.is(calls, 1, 'got one _nextv() call')
+
+      t.same(await it.nextv(100), [])
+      t.is(calls, 2, 'got another _nextv() call')
+
+      t.same(await it.nextv(100), [])
+      t.is(calls, 2, 'not called again')
+    })
 
     test(`${mode}().nextv() reduces size for _nextv() when near limit (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
       class MockLevel extends AbstractLevel {
@@ -615,6 +685,38 @@ for (const deferred of [false, true]) {
       }
     })
 
+    test(`${mode}() default nextv() stops when natural end is reached (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
+      let calls = 0
+
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
+      }
+
+      class MockIterator extends Ctor {
+        async _next () {
+          if (calls++) return undefined
+
+          if (mode === 'iterator' || def) {
+            return ['a', 'a']
+          } else {
+            return 'a'
+          }
+        }
+      }
+
+      const db = new MockLevel(utf8Manifest)
+      if (!deferred) await db.open()
+      const it = await db[publicMethod]()
+
+      t.same(await it.nextv(10), [mode === 'iterator' ? ['a', 'a'] : 'a'])
+      t.is(calls, 2)
+
+      t.same(await it.nextv(10), [], 'ended')
+      t.is(calls, 2, 'not called again')
+    })
+
     test(`${mode}() has default all() (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
       t.plan(8)
 
@@ -683,6 +785,35 @@ for (const deferred of [false, true]) {
       } catch (err) {
         t.is(err.message, 'test')
       }
+    })
+
+    test(`${mode}() default all() stops when limit is reached (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
+      t.plan(2)
+      let calls = 0
+
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
+      }
+
+      class MockIterator extends Ctor {
+        async _nextv (size, options) {
+          calls++
+          if (mode === 'iterator' || def) {
+            return [[String(calls), String(calls)]]
+          } else {
+            return [String(calls)]
+          }
+        }
+      }
+
+      const db = new MockLevel(utf8Manifest)
+      if (!deferred) await db.open()
+
+      const items = await db[publicMethod]({ limit: 2 }).all()
+      t.is(items.length, 2)
+      t.is(calls, 2)
     })
 
     test(`${mode}() custom all() (deferred: ${deferred}, default implementation: ${def})`, async function (t) {

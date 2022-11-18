@@ -11,6 +11,10 @@ const testCommon = require('../common')({
 })
 
 for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator]) {
+  // Note, these tests don't create fully functional iterators, because they're not
+  // created via db.iterator() and therefore lack the options necessary to decode data.
+  // Not relevant for these tests.
+
   test(`test ${Ctor.name} extensibility`, function (t) {
     const Test = class TestIterator extends Ctor {}
     const db = testCommon.factory()
@@ -67,7 +71,7 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
   })
 
   test(`${Ctor.name}.nextv() extensibility`, async function (t) {
-    t.plan(4 * 2)
+    t.plan(4)
 
     class TestIterator extends Ctor {
       async _nextv (size, options) {
@@ -83,7 +87,6 @@ for (const Ctor of [AbstractIterator, AbstractKeyIterator, AbstractValueIterator
     await db.open()
     const it = new TestIterator(db, {})
     await it.nextv(100)
-    await it.nextv(100, {})
     await db.close()
   })
 

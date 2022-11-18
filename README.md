@@ -721,7 +721,7 @@ A reference to the database that created this iterator.
 
 #### `iterator.count`
 
-Read-only getter that indicates how many keys have been yielded so far (by any method) excluding calls that errored or yielded `undefined`.
+Read-only getter that indicates how many entries have been yielded so far (by any method) excluding calls that errored or yielded `undefined`.
 
 #### `iterator.limit`
 
