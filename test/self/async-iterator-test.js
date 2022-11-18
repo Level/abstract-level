@@ -140,6 +140,39 @@ for (const mode of ['iterator', 'keys', 'values']) {
       }
     })
 
+    test(`for await...of ${mode}() combines errors (${type} open)`, async function (t) {
+      t.plan(6)
+
+      const db = withIterator({
+        async _next (callback) {
+          t.pass('nexted')
+          throw new Error('next error')
+        },
+
+        async _close (callback) {
+          closed = true
+          throw new Error('close error')
+        }
+      })
+
+      if (type === 'explicit') await db.open()
+      const it = db[mode]()
+      verify(t, db, it)
+
+      let closed = false
+
+      try {
+        // eslint-disable-next-line no-unused-vars
+        for await (const kv of it) {
+          t.fail('should not yield items')
+        }
+      } catch (err) {
+        t.is(err.name, 'CombinedError')
+        t.is(err.message, 'next error; close error')
+        t.ok(closed, 'closed')
+      }
+    })
+
     test(`for await...of ${mode}() closes on user break (${type} open)`, async function (t) {
       t.plan(4)
 

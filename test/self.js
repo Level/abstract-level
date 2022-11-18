@@ -263,6 +263,30 @@ test('test open(), close(), open() with second failed open', function (t) {
   })
 })
 
+test('open() error is combined with resource error', async function (t) {
+  t.plan(4)
+
+  const db = testCommon.factory()
+  const resource = db.iterator()
+
+  db._open = async function (options) {
+    throw new Error('error from open')
+  }
+
+  resource.close = async function () {
+    throw new Error('error from resource')
+  }
+
+  try {
+    await db.open()
+  } catch (err) {
+    t.is(db.status, 'closed')
+    t.is(err.code, 'LEVEL_DATABASE_NOT_OPEN')
+    t.is(err.cause.name, 'CombinedError')
+    t.is(err.cause.message, 'error from open; error from resource')
+  }
+})
+
 test('test get() extensibility', async function (t) {
   const spy = sinon.spy(async function () {})
   const expectedOptions = { keyEncoding: 'utf8', valueEncoding: 'utf8' }

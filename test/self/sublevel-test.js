@@ -823,6 +823,48 @@ test('sublevel encodings', function (t) {
         t.same(item, mode === 'values' ? 'bar' : testKey)
       }
     })
+
+    mode === 'values' || t.test(`sublevel.${mode}() skips unfixing undefined keys (default implementation: ${def})`, async function (t) {
+      // Note, this iterator technically returns invalid data
+      class MockIterator extends Ctor {
+        async _next () {
+          if (mode === 'iterator' || def) {
+            return [undefined, 'foo']
+          } else {
+            return undefined
+          }
+        }
+
+        async _nextv () {
+          if (mode === 'iterator' || def) {
+            return [[undefined, 'foo']]
+          } else {
+            return [undefined]
+          }
+        }
+
+        async _all () {
+          if (mode === 'iterator' || def) {
+            return [[undefined, 'foo']]
+          } else {
+            return [undefined]
+          }
+        }
+      }
+
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
+      }
+
+      const db = new MockLevel({ encodings: { utf8: true } })
+      const sub = db.sublevel('test')
+
+      t.same(await sub[publicMethod]().next(), mode === 'iterator' ? [undefined, 'foo'] : undefined)
+      t.same(await sub[publicMethod]().nextv(1), mode === 'iterator' ? [[undefined, 'foo']] : [undefined])
+      t.same(await sub[publicMethod]().all(), mode === 'iterator' ? [[undefined, 'foo']] : [undefined])
+    })
   }
 
   t.end()
