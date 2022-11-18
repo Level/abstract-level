@@ -180,10 +180,11 @@ exports.iterator = function (test, testCommon) {
   // NOTE: adapted from leveldown
   test('iterator().next() with values: false', async function (t) {
     const it = db.iterator({ values: false })
-    const entry = await it.next()
 
-    t.is(entry[0], 'foobatch1')
-    t.is(entry[1], undefined)
+    t.same(await it.next(), ['foobatch1', undefined])
+    t.same(await it.next(), ['foobatch2', undefined])
+    t.same(await it.next(), ['foobatch3', undefined])
+    t.is(await it.next(), undefined)
 
     return it.close()
   })
@@ -191,23 +192,34 @@ exports.iterator = function (test, testCommon) {
   // NOTE: adapted from leveldown
   test('iterator().next() with keys: false', async function (t) {
     const it = db.iterator({ keys: false })
-    const entry = await it.next()
 
-    t.is(entry[0], undefined)
-    t.is(entry[1], 'bar1')
+    t.same(await it.next(), [undefined, 'bar1'])
+    t.same(await it.next(), [undefined, 'bar2'])
+    t.same(await it.next(), [undefined, 'bar3'])
+    t.is(await it.next(), undefined)
 
     return it.close()
   })
 
   test('keys().next()', async function (t) {
     const it = db.keys()
+
     t.is(await it.next(), 'foobatch1')
+    t.is(await it.next(), 'foobatch2')
+    t.is(await it.next(), 'foobatch3')
+    t.is(await it.next(), undefined)
+
     return it.close()
   })
 
   test('values().next()', async function (t) {
     const it = db.values()
+
     t.is(await it.next(), 'bar1')
+    t.is(await it.next(), 'bar2')
+    t.is(await it.next(), 'bar3')
+    t.is(await it.next(), undefined)
+
     return it.close()
   })
 
@@ -307,6 +319,24 @@ exports.iterator = function (test, testCommon) {
         ['foobatch1', 'bar1'],
         ['foobatch2', 'bar2'],
         ['foobatch3', 'bar3']
+      ].map(mapEntry))
+    })
+
+    test(`${mode}().all() with keys: false`, async function (t) {
+      // keys option should be ignored on db.keys() and db.values()
+      t.same(await db[mode]({ keys: false }).all(), [
+        [mode === 'iterator' ? undefined : 'foobatch1', 'bar1'],
+        [mode === 'iterator' ? undefined : 'foobatch2', 'bar2'],
+        [mode === 'iterator' ? undefined : 'foobatch3', 'bar3']
+      ].map(mapEntry))
+    })
+
+    test(`${mode}().all() with values: false`, async function (t) {
+      // values option should be ignored on db.keys() and db.values()
+      t.same(await db[mode]({ values: false }).all(), [
+        ['foobatch1', mode === 'iterator' ? undefined : 'bar1'],
+        ['foobatch2', mode === 'iterator' ? undefined : 'bar2'],
+        ['foobatch3', mode === 'iterator' ? undefined : 'bar3']
       ].map(mapEntry))
     })
 

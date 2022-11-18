@@ -881,12 +881,44 @@ for (const deferred of [false, true]) {
         t.is(err.message, 'test')
       }
     })
+
+    test(`${mode}() all() combines errors (deferred: ${deferred}, default implementation: ${def})`, async function (t) {
+      t.plan(4)
+
+      class MockLevel extends AbstractLevel {
+        [privateMethod] (options) {
+          return new MockIterator(this, options)
+        }
+      }
+
+      class MockIterator extends Ctor {
+        async _all (options) {
+          t.pass('_all called')
+          throw new Error('all error')
+        }
+
+        async _close () {
+          t.pass('closed')
+          throw new Error('close error')
+        }
+      }
+
+      const db = new MockLevel(utf8Manifest)
+      if (!deferred) await db.open()
+
+      try {
+        await db[publicMethod]().all()
+      } catch (err) {
+        t.is(err.name, 'CombinedError')
+        t.is(err.message, 'all error; close error')
+      }
+    })
   }
 }
 
 for (const deferred of [false, true]) {
   // NOTE: adapted from encoding-down
-  test(`iterator() skips decoding keys if options.keys is false (deferred: ${deferred})`, async function (t) {
+  test(`iterator().next() skips decoding keys if options.keys is false (deferred: ${deferred})`, async function (t) {
     t.plan(3)
 
     const keyEncoding = {
@@ -917,7 +949,7 @@ for (const deferred of [false, true]) {
   })
 
   // NOTE: adapted from encoding-down
-  test(`iterator() skips decoding values if options.values is false (deferred: ${deferred})`, async function (t) {
+  test(`iterator().next() skips decoding values if options.values is false (deferred: ${deferred})`, async function (t) {
     t.plan(3)
 
     const valueEncoding = {
@@ -945,6 +977,66 @@ for (const deferred of [false, true]) {
 
     t.is(key, 'key', 'got key')
     t.is(value, undefined, 'normalized value to undefined')
+  })
+
+  test(`keys().all() default skips decoding undefined keys (deferred: ${deferred})`, async function (t) {
+    t.plan(3)
+
+    const keyEncoding = {
+      format: 'utf8',
+      decode (key) {
+        t.isNot(key, undefined)
+        return key
+      },
+      encode: identity
+    }
+
+    class MockIterator extends AbstractKeyIterator {
+      async _all () {
+        // Note, this is technically invalid
+        return ['1', undefined, '3']
+      }
+    }
+
+    const db = mockLevel({
+      _keys (options) {
+        return new MockIterator(this, options)
+      }
+    }, utf8Manifest, { keyEncoding })
+
+    if (!deferred) await db.open()
+
+    t.same(await db.keys().all(), ['1', undefined, '3'])
+  })
+
+  test(`values().all() default skips decoding undefined values (deferred: ${deferred})`, async function (t) {
+    t.plan(3)
+
+    const valueEncoding = {
+      format: 'utf8',
+      decode (value) {
+        t.isNot(value, undefined)
+        return value
+      },
+      encode: identity
+    }
+
+    class MockIterator extends AbstractValueIterator {
+      async _all () {
+        // Note, this is technically invalid
+        return ['1', undefined, '3']
+      }
+    }
+
+    const db = mockLevel({
+      _values (options) {
+        return new MockIterator(this, options)
+      }
+    }, utf8Manifest, { valueEncoding })
+
+    if (!deferred) await db.open()
+
+    t.same(await db.values().all(), ['1', undefined, '3'])
   })
 }
 
