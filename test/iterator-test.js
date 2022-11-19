@@ -133,26 +133,74 @@ exports.sequence = function (test, testCommon) {
         })
       }
 
-      // At the moment, we can only be sure that signals are supported if the iterator is deferred
-      globalThis.AbortController && test(`${mode}().${method}() with aborted signal yields error`, async function (t) {
-        t.plan(2)
+      // 1) At the moment, we can only be sure that signals are supported if the iterator is deferred
+      if (globalThis.AbortController) {
+        test(`${mode}().${method}() with aborted signal yields error (deferred)`, async function (t) {
+          t.plan(2)
 
-        const db = testCommon.factory()
-        const ac = new globalThis.AbortController()
-        const it = db[mode]({ signal: ac.signal })
+          const db = testCommon.factory()
+          const ac = new globalThis.AbortController()
+          const it = db[mode]({ signal: ac.signal })
 
-        t.is(db.status, 'opening', 'is deferred')
-        ac.abort()
+          t.is(db.status, 'opening', 'is deferred')
+          ac.abort()
 
-        try {
+          try {
+            await it[method](...requiredArgs)
+          } catch (err) {
+            t.is(err.code, 'LEVEL_ABORTED')
+          }
+
+          await it.close()
+          return db.close()
+        })
+      }
+
+      // 2) Unless the implementation opts-in
+      if (globalThis.AbortController && testCommon.supports.signals && testCommon.supports.signals.iterators) {
+        test(`${mode}().${method}() with signal yields error when aborted`, async function (t) {
+          t.plan(1)
+
+          const db = testCommon.factory()
+
+          await db.open()
+          await db.batch().put('a', 'a').put('b', 'b').write()
+
+          const ac = new globalThis.AbortController()
+          const it = db[mode]({ signal: ac.signal })
+          const promise = it[method](...requiredArgs)
+
+          ac.abort()
+
+          try {
+            await promise
+          } catch (err) {
+            t.is(err.code, 'LEVEL_ABORTED')
+          }
+
+          await it.close()
+          return db.close()
+        })
+
+        test(`${mode}().${method}() with non-aborted signal`, async function (t) {
+          const db = testCommon.factory()
+
+          await db.open()
+          await db.batch().put('a', 'a').put('b', 'b').write()
+
+          const ac = new globalThis.AbortController()
+          const it = db[mode]({ signal: ac.signal })
+
+          // We're merely testing that this does not throw. And implicitly testing (through
+          // coverage) that abort listeners are removed. An implementation might choose to
+          // periodically check signal.aborted instead of using an abort listener, so we
+          // can't directly assert that cleanup indeed happens.
           await it[method](...requiredArgs)
-        } catch (err) {
-          t.is(err.code, 'LEVEL_ABORTED')
-        }
+          await it.close()
 
-        await it.close()
-        return db.close()
-      })
+          return db.close()
+        })
+      }
     }
   }
 }

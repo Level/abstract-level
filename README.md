@@ -770,6 +770,8 @@ try {
 }
 ```
 
+Support of signals is indicated via [`db.supports.signals.iterators`](https://github.com/Level/supports#signals-object).
+
 ### `keyIterator`
 
 A key iterator has the same interface as `iterator` except that its methods yield keys instead of entries. Usage is otherwise the same.
@@ -1623,7 +1625,7 @@ The `signal` option, if any and once signaled, should abort an in-progress `_nex
 2. While a call is in progress, the implementation handles the signal
 3. Once the signal is aborted, `abstract-level` rejects further calls.
 
-A method like `_next()` therefore doesn't have to check the signal _before_ it start its asynchronous work, only _during_ that work. Whether to respect the signal and on which (potentially long-running) methods, is up to the implementation.
+A method like `_next()` therefore doesn't have to check the signal _before_ it start its asynchronous work, only _during_ that work. If supported, set `db.supports.signals.iterators` to `true` (via the manifest passed to the database constructor) which also enables relevant tests in the [test suite](#test-suite).
 
 #### `iterator._next()`
 
