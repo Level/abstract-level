@@ -568,7 +568,7 @@ db.foo = async function (key) {
 
 The optional `options` object may contain:
 
-- `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to abort the deferred operation. When aborted (now or later) the `fn` function will not be called, and the promise returned by `deferAsync()` will be rejected with a [`LEVEL_ABORTED`](#errors) error.
+- `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to abort the deferred operation. When aborted (now or later) the `fn` function will not be called, and the promise returned by `deferAsync()` will be rejected with a [`LEVEL_ABORTED`](#level_aborted) error.
 
 ### `chainedBatch`
 
@@ -734,7 +734,7 @@ const remaining = iterator.limit - iterator.count
 
 #### Aborting Iterators
 
-Iterators take an experimental `signal` option that, once signaled, aborts an in-progress read operation (if any) and rejects subsequent reads. The relevant promise will be rejected with a [`LEVEL_ABORTED`](#errors) error. Aborting does not close the iterator, because closing is asynchronous and may result in an error that needs a place to go. This means signals should be used together with a pattern that automatically closes the iterator:
+Iterators take an experimental `signal` option that, once signaled, aborts an in-progress read operation (if any) and rejects subsequent reads. The relevant promise will be rejected with a [`LEVEL_ABORTED`](#level_aborted) error. Aborting does not close the iterator, because closing is asynchronous and may result in an error that needs a place to go. This means signals should be used together with a pattern that automatically closes the iterator:
 
 ```js
 const abortController = new AbortController()
@@ -1214,7 +1214,13 @@ When an operation was made on a chained batch while it was closing or closed, wh
 
 #### `LEVEL_ABORTED`
 
-When an operation was aborted by the user.
+When an operation was aborted by the user. For [web compatibility](https://dom.spec.whatwg.org/#aborting-ongoing-activities) this error can also be identified by its `name` which is `'AbortError'`:
+
+```js
+if (err.name === 'AbortError') {
+  // Operation was aborted
+}
+```
 
 #### `LEVEL_ENCODING_NOT_FOUND`
 
@@ -1619,7 +1625,7 @@ class ExampleSublevel extends AbstractSublevel {
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it. The `options` argument must be the original `options` object that was passed to `db._iterator()` and it is therefore not (publicly) possible to create an iterator via constructors alone.
 
-The `signal` option, if any and once signaled, should abort an in-progress `_next()`, `_nextv()` or `_all()` call and reject the promise returned by that call with a [`LEVEL_ABORTED`](#errors) error. Doing so is optional until a future semver-major release. Responsibilities are divided as follows:
+The `signal` option, if any and once signaled, should abort an in-progress `_next()`, `_nextv()` or `_all()` call and reject the promise returned by that call with a [`LEVEL_ABORTED`](#level_aborted) error. Doing so is optional until a future semver-major release. Responsibilities are divided as follows:
 
 1. Before a database has finished opening, `abstract-level` handles the signal
 2. While a call is in progress, the implementation handles the signal

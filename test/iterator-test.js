@@ -136,7 +136,7 @@ exports.sequence = function (test, testCommon) {
       // 1) At the moment, we can only be sure that signals are supported if the iterator is deferred
       if (globalThis.AbortController) {
         test(`${mode}().${method}() with aborted signal yields error (deferred)`, async function (t) {
-          t.plan(2)
+          t.plan(3)
 
           const db = testCommon.factory()
           const ac = new globalThis.AbortController()
@@ -149,6 +149,7 @@ exports.sequence = function (test, testCommon) {
             await it[method](...requiredArgs)
           } catch (err) {
             t.is(err.code, 'LEVEL_ABORTED')
+            t.is(err.name, 'AbortError')
           }
 
           await it.close()
@@ -159,7 +160,7 @@ exports.sequence = function (test, testCommon) {
       // 2) Unless the implementation opts-in
       if (globalThis.AbortController && testCommon.supports.signals && testCommon.supports.signals.iterators) {
         test(`${mode}().${method}() with signal yields error when aborted`, async function (t) {
-          t.plan(1)
+          t.plan(2)
 
           const db = testCommon.factory()
 
@@ -176,6 +177,7 @@ exports.sequence = function (test, testCommon) {
             await promise
           } catch (err) {
             t.is(err.code, 'LEVEL_ABORTED')
+            t.is(err.name, 'AbortError')
           }
 
           await it.close()
