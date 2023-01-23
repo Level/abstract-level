@@ -102,10 +102,10 @@ export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase,
    * @param options Options (none at the moment, reserved for future use).
    * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  nextv (size: number, options: {}, callback: NodeCallback<[[K, V]]>): void
-  nextv (size: number, callback: NodeCallback<[[K, V]]>): void
-  nextv (size: number, options: {}): Promise<[[K, V]]>
-  nextv (size: number): Promise<[[K, V]]>
+  nextv (size: number, options: {}, callback: NodeCallback<[K, V][]>): void
+  nextv (size: number, callback: NodeCallback<[K, V][]>): void
+  nextv (size: number, options: {}): Promise<[K, V][]>
+  nextv (size: number): Promise<[K, V][]>
 
   /**
    * Advance repeatedly and get all (remaining) entries as an array, automatically
@@ -117,10 +117,10 @@ export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase,
    * @param options Options (none at the moment, reserved for future use).
    * @param callback Error-first callback. If none is provided, a promise is returned.
    */
-  all (options: {}, callback: NodeCallback<[[K, V]]>): void
-  all (callback: NodeCallback<[[K, V]]>): void
-  all (options: {}): Promise<[[K, V]]>
-  all (): Promise<[[K, V]]>
+  all (options: {}, callback: NodeCallback<[K, V][]>): void
+  all (callback: NodeCallback<[K, V][]>): void
+  all (options: {}): Promise<[K, V][]>
+  all (): Promise<[K, V][]>
 
   /**
    * Seek to the key closest to {@link target}. Subsequent calls to {@link next()},
