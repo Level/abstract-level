@@ -39,7 +39,7 @@
     "@voxpelli/tsconfig": "^4.0.0",
     "airtap": "^4.0.4",
     "airtap-playwright": "^1.0.1",
-    "faucet": "^0.0.3",
+    "faucet": "^0.0.4",
     "hallmark": "^4.0.0",
     "nyc": "^15.1.0",
     "sinon": "^14.0.0",
