@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.4] - 2024-01-20
+
+### Fixed
+
+- Fix TypeScript definitions of `all()` and `nextv()` ([#67](https://github.com/Level/abstract-level/issues/67)) ([`8e85993`](https://github.com/Level/abstract-level/commit/8e85993), [`9f17757`](https://github.com/Level/abstract-level/commit/9f17757)) (Bryan)
+
 ## [1.0.3] - 2022-03-20
 
 ### Added
@@ -30,6 +36,8 @@
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[1.0.4]: https://github.com/Level/abstract-level/releases/tag/v1.0.4
 
 [1.0.3]: https://github.com/Level/abstract-level/releases/tag/v1.0.3
 
