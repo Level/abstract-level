@@ -1,13 +1,13 @@
 # abstract-level
 
-**Abstract class for a lexicographically sorted key-value database.** The successor to [`abstract-leveldown`](https://github.com/Level/abstract-leveldown) with builtin encodings, sublevels, hooks, events and support of Uint8Array. If you are upgrading please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract class for a lexicographically sorted key-value database.** Provides state, encodings, sublevels, events and hooks. If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md).
 
-> :pushpin: Which module should I use? What happened to `levelup`? Head over to the [FAQ](https://github.com/Level/community#faq).
+> :pushpin: What happened to `levelup`? Head on over to [Frequently Asked Questions](https://github.com/Level/community#faq).
 
 [![level badge][level-badge]](https://github.com/Level/awesome)
 [![npm](https://img.shields.io/npm/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
 [![Node version](https://img.shields.io/node/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
-[![Test](https://img.shields.io/github/actions/workflow/status/Level/abstract-level/test.yml?branch=main&label=test)](https://github.com/Level/abstract-level/actions/workflows/test.yml)
+[![Test](https://img.shields.io/github/actions/workflow/status/Level/abstract-level/test.yml?branch=main\&label=test)](https://github.com/Level/abstract-level/actions/workflows/test.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Level/abstract-level?label=\&logo=codecov\&logoColor=fff)](https://codecov.io/gh/Level/abstract-level)
 [![Standard](https://img.shields.io/badge/standard-informational?logo=javascript\&logoColor=fff)](https://standardjs.com)
 [![Common Changelog](https://common-changelog.org/badge.svg)](https://common-changelog.org)
@@ -167,7 +167,7 @@
 
 ## Usage
 
-Usage of a typical implementation looks as follows.
+This module exports an abstract class that should not be instantiated by end users. Instead use modules like [`level`](https://github.com/Level/level) that contain a concrete implementation and actual data storage. The purpose of the abstract class is to provide a common interface that looks like this:
 
 ```js
 // Create a database
