@@ -75,26 +75,36 @@ test('sublevel prefix and options', function (t) {
   t.test('empty prefix', function (t) {
     const sub = new NoopLevel().sublevel('')
     t.is(sub.prefix, '!!')
+    t.same(sub.path(), [''])
     t.end()
   })
 
   t.test('prefix without options', function (t) {
     const sub = new NoopLevel().sublevel('prefix')
     t.is(sub.prefix, '!prefix!')
+    t.same(sub.path(), ['prefix'])
     t.end()
   })
 
   t.test('prefix and separator option', function (t) {
     const sub = new NoopLevel().sublevel('prefix', { separator: '%' })
     t.is(sub.prefix, '%prefix%')
+    t.same(sub.path(), ['prefix'])
     t.end()
   })
 
   t.test('array name', function (t) {
     const sub = new NoopLevel().sublevel(['a', 'b'])
-    t.is(sub.prefix, '!a!!b!')
     const alt = new NoopLevel().sublevel('a').sublevel('b')
+
+    t.is(sub.prefix, '!a!!b!')
+    t.same(sub.path(), ['a', 'b'])
+    t.same(sub.path(true), ['a', 'b'])
+
     t.is(alt.prefix, sub.prefix)
+    t.same(alt.path(), ['a', 'b'])
+    t.same(alt.path(true), ['b'])
+
     t.end()
   })
 
@@ -109,37 +119,51 @@ test('sublevel prefix and options', function (t) {
   t.test('array name with single element', function (t) {
     const sub = new NoopLevel().sublevel(['a'])
     t.is(sub.prefix, '!a!')
+    t.same(sub.path(), ['a'])
+
     const alt = new NoopLevel().sublevel('a')
     t.is(alt.prefix, sub.prefix)
+    t.same(sub.path(), alt.path())
+
     t.end()
   })
 
   t.test('array name and separator option', function (t) {
     const sub = new NoopLevel().sublevel(['a', 'b'], { separator: '%' })
     t.is(sub.prefix, '%a%%b%')
+    t.same(sub.path(), ['a', 'b'])
+
     const alt = new NoopLevel().sublevel('a', { separator: '%' }).sublevel('b', { separator: '%' })
     t.is(alt.prefix, sub.prefix)
+    t.same(alt.path(), ['a', 'b'])
+
     t.end()
   })
 
   t.test('separator is trimmed from prefix', function (t) {
     const sub1 = new NoopLevel().sublevel('!prefix')
     t.is(sub1.prefix, '!prefix!')
+    t.same(sub1.path(), ['prefix'])
 
     const sub2 = new NoopLevel().sublevel('prefix!')
     t.is(sub2.prefix, '!prefix!')
+    t.same(sub2.path(), ['prefix'])
 
     const sub3 = new NoopLevel().sublevel('!!prefix!!')
     t.is(sub3.prefix, '!prefix!')
+    t.same(sub3.path(), ['prefix'])
 
     const sub4 = new NoopLevel().sublevel('@prefix@', { separator: '@' })
     t.is(sub4.prefix, '@prefix@')
+    t.same(sub4.path(), ['prefix'])
 
     const sub5 = new NoopLevel().sublevel(['!!!a', 'b!!!'])
     t.is(sub5.prefix, '!a!!b!')
+    t.same(sub5.path(), ['a', 'b'])
 
     const sub6 = new NoopLevel().sublevel(['a@@@', '@@@b'], { separator: '@' })
     t.is(sub6.prefix, '@a@@b@')
+    t.same(sub6.path(), ['a', 'b'])
 
     t.end()
   })
@@ -147,8 +171,12 @@ test('sublevel prefix and options', function (t) {
   t.test('repeated separator can not result in empty prefix', function (t) {
     const sub1 = new NoopLevel().sublevel('!!!!')
     t.is(sub1.prefix, '!!')
+    t.same(sub1.path(), [''])
+
     const sub2 = new NoopLevel().sublevel(['!!!!', '!!!!'])
     t.is(sub2.prefix, '!!!!')
+    t.same(sub2.path(), ['', ''])
+
     t.end()
   })
 

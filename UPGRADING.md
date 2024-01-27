@@ -12,6 +12,7 @@ This document describes breaking changes and how to upgrade. For a complete list
     - [1.2. Not found](#12-not-found)
     - [1.3. Not ready](#13-not-ready)
     - [1.4. Hooks](#14-hooks)
+    - [1.5. Open before creating a chained batch](#15-open-before-creating-a-chained-batch)
   - [2. Private API](#2-private-api)
     - [2.1. Promises all the way](#21-promises-all-the-way)
     - [2.2. Ticks](#22-ticks)

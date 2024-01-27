@@ -66,6 +66,7 @@
     - [`sublevel.prefix`](#sublevelprefix)
     - [`sublevel.parent`](#sublevelparent)
     - [`sublevel.db`](#subleveldb)
+    - [`sublevel.path([local])`](#sublevelpathlocal)
   - [Hooks](#hooks)
     - [`hook = db.hooks.prewrite`](#hook--dbhooksprewrite)
       - [Example](#example)
@@ -782,7 +783,7 @@ A value iterator has the same interface as `iterator` except that its methods yi
 
 ### `sublevel`
 
-A sublevel is an instance of the `AbstractSublevel` class, which extends `AbstractLevel` and thus has the same API as documented above. Sublevels have a few additional properties.
+A sublevel is an instance of the `AbstractSublevel` class, which extends `AbstractLevel` and thus has the same API as documented above. Sublevels have a few additional properties and methods.
 
 #### `sublevel.prefix`
 
@@ -818,6 +819,24 @@ const nested = example.sublevel('nested')
 
 console.log(example.db === db) // true
 console.log(nested.db === db) // true
+```
+
+#### `sublevel.path([local])`
+
+Get the path of this sublevel, which is its prefix without separators. If `local` is true, exclude path of parent database. If false (the default) then recurse to form a fully-qualified path that travels from the root database to this sublevel.
+
+```js
+const example = db.sublevel('example')
+const nested = example.sublevel('nested')
+const foo = db.sublevel(['example', 'nested', 'foo'])
+
+// Get global or local path
+console.log(nested.path()) // ['example', 'nested']
+console.log(nested.path(true)) // ['nested']
+
+// Has no intermediary sublevels, so the local option has no effect
+console.log(foo.path()) // ['example', 'nested', 'foo']
+console.log(foo.path(true)) // ['example', 'nested', 'foo']
 ```
 
 ### Hooks
