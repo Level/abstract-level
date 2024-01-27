@@ -27,6 +27,15 @@ declare class AbstractSublevel<TDatabase, TFormat, KDefault, VDefault>
   get prefix (): string
 
   /**
+   * Get the path of the sublevel, which is its prefix without separators.
+   *
+   * @param local If true, exclude path of parent database. If false (the default) then
+   * recurse to form a fully-qualified path that travels from the root database to this
+   * sublevel.
+   */
+  path (local?: boolean | undefined): string[]
+
+  /**
    * Parent database. A read-only property.
    */
   get parent (): TDatabase
