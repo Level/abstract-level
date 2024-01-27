@@ -22,8 +22,8 @@ function testCommon (options) {
   let supports = kNone
 
   return protect(options, {
-    test: test,
-    factory: factory,
+    test,
+    factory,
     internals: options.internals || {},
 
     // Expose manifest through testCommon to more easily skip tests based on

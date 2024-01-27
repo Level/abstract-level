@@ -20,7 +20,7 @@ exports.clear = function (test, testCommon) {
       const ops = keys.map(function (key) {
         return {
           type: 'put',
-          key: key,
+          key,
           value: 'foo',
           keyEncoding: isBuffer(key) ? 'buffer' : 'utf8'
         }
