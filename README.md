@@ -66,6 +66,7 @@
     - [`sublevel.prefix`](#sublevelprefix)
     - [`sublevel.parent`](#sublevelparent)
     - [`sublevel.db`](#subleveldb)
+    - [`sublevel.path([local])`](#sublevelpathlocal)
   - [Hooks](#hooks)
     - [`hook = db.hooks.prewrite`](#hook--dbhooksprewrite)
       - [Example](#example)
