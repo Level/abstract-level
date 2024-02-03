@@ -6,7 +6,7 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 <details><summary>Click to expand</summary>
 
-- [Upcoming](#upcoming)
+- [2.0.0](#200)
   - [1. Public API](#1-public-api)
     - [1.1. Callbacks have been removed](#11-callbacks-have-been-removed)
     - [1.2. Not found](#12-not-found)
@@ -43,11 +43,9 @@ This document describes breaking changes and how to upgrade. For a complete list
 
 </details>
 
-## Upcoming
+## 2.0.0
 
-_This is a work in progress upgrade guide for the upcoming 2.0.0 release._
-
-This release drops callbacks, not-found errors, support of Node.js < 16, and adds a new feature called [hooks](./README.md#hooks). The guide for this release consists of two sections. One for the public API, relevant to all consumers of `abstract-level` and implementations thereof (`level`, `classic-level`, `memory-level` et cetera) and another for the private API that only implementors should have to read.
+**This release adds [hooks](./README.md#hooks) and drops callbacks, not-found errors and support of Node.js < 16. The guide for this release consists of two sections. One for the public API, relevant to all consumers of `abstract-level` and implementations thereof (`level`, `classic-level`, `memory-level` et cetera) and another for the private API that only implementors should have to read.**
 
 If you're upgrading from `levelup`, `abstract-leveldown` or other old modules, it's recommended to first upgrade to `abstract-level` 1.x because that version includes compatibility checks that have since been removed.
 
@@ -103,7 +101,7 @@ if (value === undefined) {
 }
 ```
 
-The same applies to equivalent and older `if (err.notFound)` code in the style of levelup.
+The same applies to equivalent and older `if (err.notFound)` code in the style of `levelup`.
 
 #### 1.3. Not ready
 
@@ -123,7 +121,7 @@ db.once('open', function () {
 })
 ```
 
-Although old code that uses these events would likely be better off using `db.open()` because synchronous events don't mix well with `async/await`. You could instead do:
+Although, old code that uses these events would likely be better off using `db.open()` because synchronous events don't mix well with `async/await`. You could instead do:
 
 ```js
 await db.open({ passive: true })
