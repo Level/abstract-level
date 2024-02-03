@@ -56,6 +56,8 @@ exports.all = function (test, testCommon) {
       const b = a.sublevel('b')
       const c = b.sublevel('c')
 
+      await Promise.all([a.open(), b.open(), c.open()])
+
       // Note: may return a transcoder encoding
       const utf8 = db.keyEncoding('utf8')
 
@@ -119,6 +121,27 @@ exports.all = function (test, testCommon) {
 
       t.same(await db.keys().all(), [], 'db has no entries')
       return db.close()
+    })
+
+    // See https://github.com/Level/abstract-level/issues/80
+    test(`${method} with nondescendant sublevel option`, async function (t) {
+      const db = testCommon.factory()
+      await db.open()
+
+      const a = db.sublevel('a')
+      const b = db.sublevel('b')
+
+      await Promise.all([a.open(), b.open()])
+
+      // The b sublevel is not a descendant of a, so the sublevel option
+      // has to be forwarded to db so that the key gets the correct prefix.
+      if (method === 'batch') {
+        await a.batch([{ type: 'put', key: 'k', value: 'v', sublevel: b }])
+      } else {
+        await a.batch().put('k', 'v', { sublevel: b }).write()
+      }
+
+      t.same(await db.keys().all(), ['!b!k'], 'written to sublevel b')
     })
   }
 

@@ -761,4 +761,48 @@ module.exports = function (test, testCommon) {
     await Promise.all([batchBefore.close(), batchAfter.close()])
     return db.close()
   })
+
+  // See https://github.com/Level/abstract-level/issues/80
+  test('prewrite hook function can write to nondescendant sublevel', async function (t) {
+    t.plan(2)
+
+    const db = testCommon.factory()
+    await db.open()
+
+    const books = db.sublevel('books', { valueEncoding: 'json' })
+    const index = db.sublevel('authors', {
+      // Use JSON, which normally doesn't make sense for keys but
+      // helps to assert that there's no double encoding happening.
+      keyEncoding: 'json'
+    })
+
+    db.on('write', (ops) => {
+      // Check that data is written to correct sublevels, specifically
+      // !authors!Hesse~12 rather than !books!!authors!Hesse~12.
+      t.same(ops.map(x => x.key), ['!books!12', '!authors!"Hesse~12"'])
+    })
+
+    books.on('write', (ops) => {
+      // Should not include the op of the index
+      t.same(ops.map(x => x.key), ['12'])
+    })
+
+    index.on('write', (ops) => {
+      t.fail('Did not expect an event on index')
+    })
+
+    books.hooks.prewrite.add(function (op, batch) {
+      if (op.type === 'put') {
+        batch.add({
+          type: 'put',
+          // Key structure is synthetic and not relevant to the test
+          key: op.value.author + '~' + op.key,
+          value: '',
+          sublevel: index
+        })
+      }
+    })
+
+    await books.put('12', { title: 'Siddhartha', author: 'Hesse' })
+  })
 }

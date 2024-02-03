@@ -3,7 +3,7 @@
 const combineErrors = require('maybe-combine-errors')
 const ModuleError = require('module-error')
 const { getOptions, emptyOptions, noop } = require('./lib/common')
-const { prefixDescendantKey } = require('./lib/prefixes')
+const { prefixDescendantKey, isDescendant } = require('./lib/prefixes')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 
 const kStatus = Symbol('status')
@@ -116,15 +116,25 @@ class AbstractChainedBatch {
     const keyEncoding = op.keyEncoding
     const preencodedKey = keyEncoding.encode(op.key)
     const keyFormat = keyEncoding.format
-    const encodedKey = delegated ? prefixDescendantKey(preencodedKey, keyFormat, db, this.db) : preencodedKey
+
+    // If the sublevel is not a descendant then forward that option to the parent db
+    // so that we don't erroneously add our own prefix to the key of the operation.
+    const siblings = delegated && !isDescendant(op.sublevel, this.db) && op.sublevel !== this.db
+    const encodedKey = delegated && !siblings
+      ? prefixDescendantKey(preencodedKey, keyFormat, db, this.db)
+      : preencodedKey
+
     const valueEncoding = op.valueEncoding
     const encodedValue = valueEncoding.encode(op.value)
     const valueFormat = valueEncoding.format
 
-    // Prevent double prefixing
-    if (delegated) op.sublevel = null
+    // Only prefix once
+    if (delegated && !siblings) {
+      op.sublevel = null
+    }
 
-    if (this[kPublicOperations] !== null) {
+    // If the sublevel is not a descendant then we shouldn't emit events
+    if (this[kPublicOperations] !== null && !siblings) {
       // Clone op before we mutate it for the private API
       const publicOperation = Object.assign({}, op)
       publicOperation.encodedKey = encodedKey
@@ -139,7 +149,7 @@ class AbstractChainedBatch {
       }
 
       this[kPublicOperations].push(publicOperation)
-    } else if (this[kLegacyOperations] !== null) {
+    } else if (this[kLegacyOperations] !== null && !siblings) {
       const legacyOperation = Object.assign({}, original)
 
       legacyOperation.type = 'put'
@@ -149,7 +159,8 @@ class AbstractChainedBatch {
       this[kLegacyOperations].push(legacyOperation)
     }
 
-    op.key = this.db.prefixKey(encodedKey, keyFormat, true)
+    // If we're forwarding the sublevel option then don't prefix the key yet
+    op.key = siblings ? encodedKey : this.db.prefixKey(encodedKey, keyFormat, true)
     op.value = encodedValue
     op.keyEncoding = keyFormat
     op.valueEncoding = valueFormat

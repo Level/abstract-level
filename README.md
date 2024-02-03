@@ -316,7 +316,7 @@ Perform multiple _put_ and/or _del_ operations in bulk. Returns a promise. The `
 
 Each operation must be an object with at least a `type` property set to either `'put'` or `'del'`. If the `type` is `'put'`, the operation must have `key` and `value` properties. It may optionally have `keyEncoding` and / or `valueEncoding` properties to encode keys or values with a custom encoding for just that operation. If the `type` is `'del'`, the operation must have a `key` property and may optionally have a `keyEncoding` property.
 
-An operation of either type may also have a `sublevel` property, to prefix the key of the operation with the prefix of that sublevel. This allows atomically committing data to multiple sublevels. The given `sublevel` must be a descendant of `db`. Keys and values will be encoded by the sublevel, to the same effect as a `sublevel.batch(..)` call. In the following example, the first `value` will be encoded with `'json'` rather than the default encoding of `db`:
+An operation of either type may also have a `sublevel` property, to prefix the key of the operation with the prefix of that sublevel. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `db`. Keys and values will be encoded by the sublevel, to the same effect as a `sublevel.batch(..)` call. In the following example, the first `value` will be encoded with `'json'` rather than the default encoding of `db`:
 
 ```js
 const people = db.sublevel('people', { valueEncoding: 'json' })
@@ -579,14 +579,14 @@ Add a `put` operation to this chained batch, not committed until `write()` is ca
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
-- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must be a descendant of `db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
+- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `chainedBatch.db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
 
 #### `chainedBatch.del(key[, options])`
 
 Add a `del` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) error if `key` is invalid. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
-- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must be a descendant of `db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
+- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `chainedBatch.db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
 
 #### `chainedBatch.clear()`
 
