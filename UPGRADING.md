@@ -11,7 +11,7 @@ This document describes breaking changes and how to upgrade. For a complete list
     - [1.1. Callbacks have been removed](#11-callbacks-have-been-removed)
     - [1.2. Not found](#12-not-found)
     - [1.3. Not ready](#13-not-ready)
-    - [1.4. Hooks](#14-hooks)
+    - [1.4. Slower nested sublevels](#14-slower-nested-sublevels)
     - [1.5. Open before creating a chained batch](#15-open-before-creating-a-chained-batch)
   - [2. Private API](#2-private-api)
     - [2.1. Promises all the way](#21-promises-all-the-way)
@@ -136,37 +136,21 @@ Or simply:
 await db.get('example')
 ```
 
-#### 1.4. Hooks
+#### 1.4. Slower nested sublevels
 
-This release adds [hooks](./README.md#hooks). To achieve this feature, two low-impact breaking changes have been made to nested sublevels. Nested sublevels, no matter their depth, were previously all connected to the same parent database rather than forming a tree. In the following example, the `colorIndex` sublevel would previously forward its operations directly to `db`:
+The internals of nested sublevels have been refactored for the benefit of [hooks](./README.md#hooks). Nested sublevels, no matter their depth, were previously all connected to the same parent database rather than forming a tree. In the following example, the `colorIndex` sublevel would previously forward its operations directly to `db`:
 
 ```js
 const indexes = db.sublevel('idx')
 const colorIndex = indexes.sublevel('colors')
 ```
 
-It will now forward its operations to `indexes`, which in turn forwards them to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels. This decreased performance is the first breaking change and mainly affects sublevels nested at a depth of more than 2.
+It will now forward its operations to `indexes`, which in turn forwards them to `db`. At each step, hooks and events are available to transform and react to data from a different perspective. Which comes at a (typically small) performance cost that increases with further nested sublevels.
 
-To optionally negate it, a new feature has been added to `db.sublevel(name)`: it now also accepts a `name` that is an array. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
+To optionally negate that cost, a new feature has been added to `db.sublevel(name)`: it now also accepts a `name` that is an array. If the `indexes` sublevel is only used to organize keys and not directly interfaced with, operations on `colorIndex` can be made faster by skipping `indexes`:
 
 ```js
 const colorIndex = db.sublevel(['idx', 'colors'])
-```
-
-The second breaking change is that if a `sublevel` is provided as an option to `db.batch()`, that sublevel must now be a descendant of `db`:
-
-```js
-const colorIndex = indexes.sublevel('colors')
-const flavorIndex = indexes.sublevel('flavors')
-
-// No longer works because colorIndex isn't a descendant of flavorIndex
-flavorIndex.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
-
-// OK
-indexes.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
-
-// OK
-db.batch([{ type: 'del', key: 'blue', sublevel: colorIndex }])
 ```
 
 #### 1.5. Open before creating a chained batch

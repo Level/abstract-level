@@ -13,7 +13,7 @@ const { DatabaseHooks } = require('./lib/hooks')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 const { EventMonitor } = require('./lib/event-monitor')
 const { getOptions, noop, emptyOptions, resolvedPromise } = require('./lib/common')
-const { prefixDescendantKey } = require('./lib/prefixes')
+const { prefixDescendantKey, isDescendant } = require('./lib/prefixes')
 const { DeferredQueue } = require('./lib/deferred-queue')
 const rangeOptions = require('./lib/range-options')
 
@@ -603,18 +603,26 @@ class AbstractLevel extends EventEmitter {
       }
 
       // Encode data for private API
-      // TODO: benchmark a try/catch around this
       const keyEncoding = op.keyEncoding
       const preencodedKey = keyEncoding.encode(op.key)
       const keyFormat = keyEncoding.format
-      const encodedKey = delegated ? prefixDescendantKey(preencodedKey, keyFormat, db, this) : preencodedKey
 
-      // Prevent double prefixing
-      if (delegated) op.sublevel = null
+      // If the sublevel is not a descendant then forward that option to the parent db
+      // so that we don't erroneously add our own prefix to the key of the operation.
+      const siblings = delegated && !isDescendant(op.sublevel, this) && op.sublevel !== this
+      const encodedKey = delegated && !siblings
+        ? prefixDescendantKey(preencodedKey, keyFormat, db, this)
+        : preencodedKey
+
+      // Only prefix once
+      if (delegated && !siblings) {
+        op.sublevel = null
+      }
 
       let publicOperation = null
 
-      if (enableWriteEvent) {
+      // If the sublevel is not a descendant then we shouldn't emit events
+      if (enableWriteEvent && !siblings) {
         // Clone op before we mutate it for the private API
         // TODO (future semver-major): consider sending this shape to private API too
         publicOperation = Object.assign({}, op)
@@ -629,7 +637,8 @@ class AbstractLevel extends EventEmitter {
         publicOperations[i] = publicOperation
       }
 
-      op.key = this.prefixKey(encodedKey, keyFormat, true)
+      // If we're forwarding the sublevel option then don't prefix the key yet
+      op.key = siblings ? encodedKey : this.prefixKey(encodedKey, keyFormat, true)
       op.keyEncoding = keyFormat
 
       if (isPut) {
@@ -640,7 +649,7 @@ class AbstractLevel extends EventEmitter {
         op.value = encodedValue
         op.valueEncoding = valueFormat
 
-        if (enableWriteEvent) {
+        if (enableWriteEvent && !siblings) {
           publicOperation.encodedValue = encodedValue
 
           if (delegated) {
