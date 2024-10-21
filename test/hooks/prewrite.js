@@ -769,6 +769,7 @@ module.exports = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
 
+    const textDecoder = new TextDecoder()
     const books = db.sublevel('books', { valueEncoding: 'json' })
     const index = db.sublevel('authors', {
       // Use JSON, which normally doesn't make sense for keys but
@@ -779,7 +780,14 @@ module.exports = function (test, testCommon) {
     db.on('write', (ops) => {
       // Check that data is written to correct sublevels, specifically
       // !authors!Hesse~12 rather than !books!!authors!Hesse~12.
-      t.same(ops.map(x => x.key), ['!books!12', '!authors!"Hesse~12"'])
+      t.same(ops.map(x => decode(x.key)), ['!books!12', '!authors!"Hesse~12"'])
+
+      // It's unfortunate DX but because the write is made via the sublevel, the
+      // format of keys depends on the supported encodings of db. For example on
+      // a MemoryLevel({ storeEncoding: 'buffer' }) the key will be a buffer.
+      function decode (key) {
+        return db.keyEncoding('utf8').format === 'utf8' ? key : textDecoder.decode(key)
+      }
     })
 
     books.on('write', (ops) => {
