@@ -2,6 +2,7 @@
 
 const { AbstractLevel, AbstractChainedBatch } = require('..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('..')
+const noop = function () {}
 
 exports.illegalKeys = [
   { name: 'null key', key: null },
@@ -51,6 +52,30 @@ exports.nullishEncoding = {
   decode (v) {
     return v === '\x00' ? null : v === '\xff' ? undefined : v
   }
+}
+
+// Replacement for sinon package (which breaks too often, on features we don't use)
+exports.createSpy = function (fn = noop) {
+  let calls = []
+
+  const spy = function (...args) {
+    const returnValue = fn(...args)
+    calls.push({ thisValue: this, args, returnValue })
+    spy.callCount++
+    return returnValue
+  }
+
+  spy.callCount = 0
+  spy.getCall = function (n) {
+    return calls[n]
+  }
+
+  spy.resetHistory = function () {
+    calls = []
+    spy.callCount = 0
+  }
+
+  return spy
 }
 
 const kEntries = Symbol('entries')

@@ -1,11 +1,10 @@
 'use strict'
 
 const test = require('tape')
-const sinon = require('sinon')
 const isBuffer = require('is-buffer')
 const { Buffer } = require('buffer')
 const { AbstractLevel, AbstractChainedBatch } = require('..')
-const { MinimalLevel } = require('./util')
+const { MinimalLevel, createSpy } = require('./util')
 const getRangeOptions = require('../lib/range-options')
 
 const testCommon = require('./common')({
@@ -55,7 +54,7 @@ test('manifest is required', function (t) {
 })
 
 test('test open() extensibility when new', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const expectedOptions = { createIfMissing: true, errorIfExists: false }
   const Test = implement(AbstractLevel, { _open: spy })
   const test = new Test({ encodings: { utf8: true } })
@@ -81,7 +80,7 @@ test('test open() extensibility when new', async function (t) {
 test('test open() extensibility when open', function (t) {
   t.plan(2)
 
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const Test = implement(AbstractLevel, { _open: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -97,7 +96,7 @@ test('test open() extensibility when open', function (t) {
 test('test opening explicitly gives a chance to capture an error', async function (t) {
   t.plan(3)
 
-  const spy = sinon.spy(async function (options) { throw new Error('_open error') })
+  const spy = createSpy(async function (options) { throw new Error('_open error') })
   const Test = implement(AbstractLevel, { _open: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -111,7 +110,7 @@ test('test opening explicitly gives a chance to capture an error', async functio
 })
 
 test('test constructor options are forwarded to open()', async function (t) {
-  const spy = sinon.spy(async function (options) { })
+  const spy = createSpy(async function (options) { })
   const Test = implement(AbstractLevel, { _open: spy })
   const test = new Test({ encodings: { utf8: true } }, {
     passive: true,
@@ -132,7 +131,7 @@ test('test constructor options are forwarded to open()', async function (t) {
 })
 
 test('test close() extensibility when open', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const Test = implement(AbstractLevel, { _close: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -145,7 +144,7 @@ test('test close() extensibility when open', async function (t) {
 })
 
 test('test close() extensibility when new', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const Test = implement(AbstractLevel, { _close: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -288,7 +287,7 @@ test('open() error is combined with resource error', async function (t) {
 })
 
 test('test get() extensibility', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const expectedOptions = { keyEncoding: 'utf8', valueEncoding: 'utf8' }
   const expectedKey = 'a key'
   const Test = implement(AbstractLevel, { _get: spy })
@@ -314,7 +313,7 @@ test('test get() extensibility', async function (t) {
 })
 
 test('test getMany() extensibility', async function (t) {
-  const spy = sinon.spy(async () => ['x'])
+  const spy = createSpy(async () => ['x'])
   const expectedOptions = { keyEncoding: 'utf8', valueEncoding: 'utf8' }
   const expectedKey = 'a key'
   const Test = implement(AbstractLevel, { _getMany: spy })
@@ -340,7 +339,7 @@ test('test getMany() extensibility', async function (t) {
 })
 
 test('test del() extensibility', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const expectedOptions = { options: 1, keyEncoding: 'utf8' }
   const expectedKey = 'a key'
   const Test = implement(AbstractLevel, { _del: spy })
@@ -365,7 +364,7 @@ test('test del() extensibility', async function (t) {
 })
 
 test('test put() extensibility', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const expectedOptions = { options: 1, keyEncoding: 'utf8', valueEncoding: 'utf8' }
   const expectedKey = 'a key'
   const expectedValue = 'a value'
@@ -393,7 +392,7 @@ test('test put() extensibility', async function (t) {
 })
 
 test('batch([]) extensibility', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const expectedOptions = { options: 1 }
   const expectedArray = [
     { type: 'put', key: '1', value: '1', keyEncoding: 'utf8', valueEncoding: 'utf8' },
@@ -431,7 +430,7 @@ test('batch([]) extensibility', async function (t) {
 test('batch([]) with empty array is a noop', function (t) {
   t.plan(1)
 
-  const spy = sinon.spy()
+  const spy = createSpy()
   const Test = implement(AbstractLevel, { _batch: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -443,7 +442,7 @@ test('batch([]) with empty array is a noop', function (t) {
 })
 
 test('test chained batch() extensibility', async function (t) {
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const expectedOptions = { options: 1 }
   const Test = implement(AbstractLevel, { _batch: spy })
   const test = new Test({ encodings: { utf8: true } })
@@ -473,7 +472,7 @@ test('test chained batch() extensibility', async function (t) {
 test('test chained batch() with no operations is a noop', function (t) {
   t.plan(1)
 
-  const spy = sinon.spy(async function () {})
+  const spy = createSpy(async function () {})
   const Test = implement(AbstractLevel, { _batch: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -485,7 +484,7 @@ test('test chained batch() with no operations is a noop', function (t) {
 })
 
 test('test chained batch() (custom _chainedBatch) extensibility', async function (t) {
-  const spy = sinon.spy()
+  const spy = createSpy()
   const Test = implement(AbstractLevel, { _chainedBatch: spy })
   const test = new Test({ encodings: { utf8: true } })
 
@@ -583,7 +582,7 @@ test('test AbstractChainedBatch#write() extensibility with options', async funct
 test('test AbstractChainedBatch#put() extensibility', function (t) {
   t.plan(8)
 
-  const spy = sinon.spy()
+  const spy = createSpy()
   const expectedKey = 'key'
   const expectedValue = 'value'
   const Test = implement(AbstractChainedBatch, { _put: spy })
@@ -610,7 +609,7 @@ test('test AbstractChainedBatch#put() extensibility', function (t) {
 test('test AbstractChainedBatch#del() extensibility', function (t) {
   t.plan(6)
 
-  const spy = sinon.spy()
+  const spy = createSpy()
   const expectedKey = 'key'
   const Test = implement(AbstractChainedBatch, { _del: spy })
   const db = testCommon.factory()
@@ -634,7 +633,7 @@ test('test AbstractChainedBatch#del() extensibility', function (t) {
 test('test AbstractChainedBatch#clear() extensibility', function (t) {
   t.plan(4)
 
-  const spy = sinon.spy()
+  const spy = createSpy()
   const Test = implement(AbstractChainedBatch, { _clear: spy })
   const db = testCommon.factory()
 
@@ -652,7 +651,7 @@ test('test AbstractChainedBatch#clear() extensibility', function (t) {
 test('test clear() extensibility', async function (t) {
   t.plan((7 * 4) - 3)
 
-  const spy = sinon.spy()
+  const spy = createSpy()
   const Test = implement(AbstractLevel, { _clear: spy })
   const db = new Test({ encodings: { utf8: true } })
 
@@ -685,7 +684,7 @@ test('test clear() extensibility', async function (t) {
 test.skip('test serialization extensibility (batch array is not mutated)', function (t) {
   t.plan(7)
 
-  const spy = sinon.spy()
+  const spy = createSpy()
   const Test = implement(AbstractLevel, {
     _batch: spy,
     _serializeKey: function (key) {
