@@ -2,47 +2,6 @@
 
 This document describes breaking changes and how to upgrade. For a complete list of changes including minor and patch releases, please refer to the [changelog](CHANGELOG.md).
 
-## Table of Contents
-
-<details><summary>Click to expand</summary>
-
-- [2.0.0](#200)
-  - [1. Public API](#1-public-api)
-    - [1.1. Callbacks have been removed](#11-callbacks-have-been-removed)
-    - [1.2. Not found](#12-not-found)
-    - [1.3. Not ready](#13-not-ready)
-    - [1.4. Slower nested sublevels](#14-slower-nested-sublevels)
-    - [1.5. Open before creating a chained batch](#15-open-before-creating-a-chained-batch)
-  - [2. Private API](#2-private-api)
-    - [2.1. Promises all the way](#21-promises-all-the-way)
-    - [2.2. Ticks](#22-ticks)
-    - [2.3. A new way to abort iterator work](#23-a-new-way-to-abort-iterator-work)
-    - [2.4. Snapshots must be synchronous](#24-snapshots-must-be-synchronous)
-- [1.0.0](#100)
-  - [1. API parity with `levelup`](#1-api-parity-with-levelup)
-    - [1.1. New: promises](#11-new-promises)
-    - [1.2. New: events](#12-new-events)
-    - [1.3. New: idempotent open](#13-new-idempotent-open)
-    - [1.4. New: deferred open](#14-new-deferred-open)
-    - [1.5. No constructor callback](#15-no-constructor-callback)
-    - [1.6. New: state checks](#16-new-state-checks)
-    - [1.7. New: chained batch length](#17-new-chained-batch-length)
-  - [2. API parity with `level`](#2-api-parity-with-level)
-    - [2.1. For consumers](#21-for-consumers)
-    - [2.2. For implementors](#22-for-implementors)
-    - [2.3. Other notable changes](#23-other-notable-changes)
-  - [3. Streams have moved](#3-streams-have-moved)
-  - [4. Zero-length keys and range options are now valid](#4-zero-length-keys-and-range-options-are-now-valid)
-  - [5. Resources are auto-closed](#5-resources-are-auto-closed)
-    - [5.1. Closing iterators is idempotent](#51-closing-iterators-is-idempotent)
-    - [5.2. Chained batch can be closed](#52-chained-batch-can-be-closed)
-  - [6. Errors now use codes](#6-errors-now-use-codes)
-  - [7. Semi-private properties have been removed](#7-semi-private-properties-have-been-removed)
-  - [8. Changes to test suite](#8-changes-to-test-suite)
-  - [9. Sublevels are builtin](#9-sublevels-are-builtin)
-
-</details>
-
 ## 2.0.0
 
 **This release adds [hooks](./README.md#hooks) and drops callbacks, not-found errors and support of Node.js < 16. The guide for this release consists of two sections. One for the public API, relevant to all consumers of `abstract-level` and implementations thereof (`level`, `classic-level`, `memory-level` et cetera) and another for the private API that only implementors should have to read.**
