@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.1] - 2024-10-21
+
+### Fixed
+
+- Generalize prewrite test for memory-level ([#90](https://github.com/Level/abstract-level/issues/90)) ([`9ea8770`](https://github.com/Level/abstract-level/commit/9ea8770)) (Vincent Weevers)
+
 ## [2.0.0] - 2024-02-03
 
 _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
@@ -63,6 +69,8 @@ _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[2.0.1]: https://github.com/Level/abstract-level/releases/tag/v2.0.1
 
 [2.0.0]: https://github.com/Level/abstract-level/releases/tag/v2.0.0
 
