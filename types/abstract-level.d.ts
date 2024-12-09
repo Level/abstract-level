@@ -71,22 +71,22 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   /**
    * Get a value from the database by {@link key}.
    */
-  get (key: KDefault): Promise<VDefault>
+  get (key: KDefault): Promise<VDefault | undefined>
 
   get<K = KDefault, V = VDefault> (
     key: K,
     options: AbstractGetOptions<K, V>
-  ): Promise<V>
+  ): Promise<V | undefined>
 
   /**
    * Get multiple values from the database by an array of {@link keys}.
    */
-  getMany (keys: KDefault[]): Promise<VDefault[]>
+  getMany (keys: KDefault[]): Promise<(VDefault | undefined)[]>
 
   getMany<K = KDefault, V = VDefault> (
     keys: K[],
     options: AbstractGetManyOptions<K, V>
-  ): Promise<V[]>
+  ): Promise<(V | undefined)[]>
 
   /**
    * Add a new entry or overwrite an existing entry.

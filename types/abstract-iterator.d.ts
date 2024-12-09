@@ -153,8 +153,8 @@ export class AbstractKeyIterator<TDatabase, K> extends CommonIterator<TDatabase,
    * @param size Get at most this many keys. Has a soft minimum of 1.
    * @param options Options (none at the moment, reserved for future use).
    */
-  nextv (size: number, options: {}): Promise<[K]>
-  nextv (size: number): Promise<[K]>
+  nextv (size: number, options: {}): Promise<K[]>
+  nextv (size: number): Promise<K[]>
 
   /**
    * Advance repeatedly and get all (remaining) keys as an array, automatically closing
@@ -165,8 +165,8 @@ export class AbstractKeyIterator<TDatabase, K> extends CommonIterator<TDatabase,
    *
    * @param options Options (none at the moment, reserved for future use).
    */
-  all (options: {}): Promise<[K]>
-  all (): Promise<[K]>
+  all (options: {}): Promise<K[]>
+  all (): Promise<K[]>
 
   /**
    * Seek to the key closest to {@link target}. Subsequent calls to {@link next()},
@@ -198,8 +198,8 @@ export class AbstractValueIterator<TDatabase, K, V> extends CommonIterator<TData
    * @param size Get at most this many values. Has a soft minimum of 1.
    * @param options Options (none at the moment, reserved for future use).
    */
-  nextv (size: number, options: {}): Promise<[V]>
-  nextv (size: number): Promise<[V]>
+  nextv (size: number, options: {}): Promise<V[]>
+  nextv (size: number): Promise<V[]>
 
   /**
    * Advance repeatedly and get all (remaining) values as an array, automatically closing
@@ -210,8 +210,8 @@ export class AbstractValueIterator<TDatabase, K, V> extends CommonIterator<TData
    *
    * @param options Options (none at the moment, reserved for future use).
    */
-  all (options: {}): Promise<[V]>
-  all (): Promise<[V]>
+  all (options: {}): Promise<V[]>
+  all (): Promise<V[]>
 
   /**
    * Seek to the key closest to {@link target}. Subsequent calls to {@link next()},
