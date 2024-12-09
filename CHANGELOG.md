@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.2] - 2024-12-09
+
+### Fixed
+
+- Fix TypeScript types of `get`, `getMany`, `nextv` and `all` ([#91](https://github.com/Level/abstract-level/issues/91)) ([`bbcfb04`](https://github.com/Level/abstract-level/commit/bbcfb04)) (Junxiao Shi)
+
 ## [2.0.1] - 2024-10-21
 
 ### Fixed
@@ -69,6 +75,8 @@ _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[2.0.2]: https://github.com/Level/abstract-level/releases/tag/v2.0.2
 
 [2.0.1]: https://github.com/Level/abstract-level/releases/tag/v2.0.1
 
