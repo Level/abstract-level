@@ -387,7 +387,7 @@ console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 
 ### `snapshot = db.snapshot()`
 
-**This is an experimental API and not widely supported at the time of writing.**
+**This is an experimental API and not widely supported at the time of writing ([Level/community#118](https://github.com/Level/community/issues/118)).**
 
 Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#errors) error if `db.supports.explicitSnapshots` is not true. For details, see [Reading From Snapshots](#reading-from-snapshots).
 
