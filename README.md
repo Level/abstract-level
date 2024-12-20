@@ -1232,7 +1232,7 @@ Most but not all `abstract-level` implementations support snapshots. They can be
 
 #### 1. Implementation does not support snapshots
 
-As indicated by `db.supports.snapshots` being false. In this case, operations read from the latest version of the database. This most noticeably affects iterators:
+As indicated by `db.supports.snapshots` being false. In this case, operations read from the latest version of the database. This most notably affects iterators:
 
 ```js
 await db.put('example', 'a')
