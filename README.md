@@ -129,7 +129,7 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
-- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.snapshots` is true, the database will create its own implicit snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
@@ -139,7 +139,7 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
-- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.snapshots` is true, the database will create its own implicit snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
@@ -235,7 +235,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to [abort read operations on the iterator](#aborting-iterators).
-- `snapshot`: explicit [snapshot](#snapshot) for the iterator to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.snapshots` is true, the database will create its own implicit snapshot before returning an iterator.
+- `snapshot`: explicit [snapshot](#snapshot) for the iterator to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot before returning an iterator.
 
 Lastly, an implementation is free to add its own options.
 
@@ -278,7 +278,7 @@ Delete all entries or a range. Not guaranteed to be atomic. Returns a promise. A
 - `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
 - `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
-- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.snapshots` is true, the database may create its own implicit snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
+- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
 
 The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted.
 
@@ -1223,7 +1223,7 @@ Removing this concern (if necessary) must be done on an application-level. For e
 
 A snapshot is a lightweight "token" that represents the version of a database at a particular point in time. This allows for reading data without seeing subsequent writes made on the database. It comes in two forms:
 
-1. Implicit snapshots: created internally by the database itself and not visible to the outside.
+1. Implicit snapshots: created internally by the database and not visible to the outside world.
 2. Explicit snapshots: created with `snapshot = db.snapshot()`. Because it acts as a token, `snapshot` has no methods of its own besides `snapshot.close()`. Instead the snapshot is to be passed to database (or [sublevel](#sublevel)) methods like `db.iterator()`.
 
 Use explicit snapshots wisely, because their lifetime must be managed manually. Implicit snapshots are typically more convenient and possibly more performant because they can handled natively and have their lifetime limited by the surrounding operation. That said, explicit snapshots can be useful to make multiple read operations that require a shared, consistent view of the data.
@@ -1232,7 +1232,7 @@ Most but not all `abstract-level` implementations support snapshots. They can be
 
 #### 1. Implementation does not support snapshots
 
-As indicated by `db.supports.snapshots` being false. In this case, operations read from the latest version of the database. This most notably affects iterators:
+As indicated by `db.supports.implicitSnapshots` and `db.supports.explicitSnapshots` being false. In this case, operations read from the latest version of the database. This most notably affects iterators:
 
 ```js
 await db.put('example', 'a')
@@ -1241,9 +1241,11 @@ await db.del('example')
 const entries = await it.all() // Likely an empty array
 ```
 
+The `db.supports.implicitSnapshots` property is aliased as `db.supports.snapshots` for backwards compatibility.
+
 #### 2. Implementation supports implicit snapshots
 
-As indicated by `db.supports.snapshots` being true. An iterator, upon creation, will synchronously create a snapshot and subsequently read from that snapshot rather than the latest version of the database. There are no actual numerical versions, but let's say there are in order to clarify the behavior:
+As indicated by `db.supports.implicitSnapshots` being true. An iterator, upon creation, will synchronously create a snapshot and subsequently read from that snapshot rather than the latest version of the database. There are no actual numerical versions, but let's say there are in order to clarify the behavior:
 
 ```js
 await db.put('example', 'a')   // Results in v1
@@ -1452,7 +1454,7 @@ The default `_close()` is an async noop. In native implementations (native addon
 
 Get a value by `key`. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with the value. If the `key` was not found then use `undefined` as value.
 
-If the database indicates support of snapshots via `db.supports.snapshots` then `db._get()` must read from a snapshot of the database. That snapshot (or similar mechanism) must be created synchronously when `db._get()` is called, before asynchronously reading the value. This means it should not see the data of write operations that are scheduled immediately after `db._get()`.
+If the database indicates support of snapshots via `db.supports.implicitSnapshots` then `db._get()` must read from a snapshot of the database. That snapshot (or similar mechanism) must be created synchronously when `db._get()` is called, before asynchronously reading the value. This means it should not see the data of write operations that are scheduled immediately after `db._get()`.
 
 The default `_get()` returns a promise for an `undefined` value. It must be overridden.
 
@@ -1804,7 +1806,7 @@ const { AbstractLevel } = require('abstract-level')
 
 class ExampleLevel extends AbstractLevel {
   constructor (location, options) {
-    super({ snapshots: false }, options)
+    super({ implicitSnapshots: false }, options)
   }
 }
 ```
