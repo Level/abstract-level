@@ -697,9 +697,9 @@ console.log(foo.path(true)) // ['example', 'nested', 'foo']
 
 ### `snapshot`
 
-#### `snapshot.close([callback])`
+#### `snapshot.close()`
 
-Free up underlying resources. Be sure to call this when the snapshot is no longer needed, because snapshots may cause the database to temporarily pause internal storage optimizations. The `callback` function will be called with no arguments. If no callback is provided, a promise is returned. Closing the snapshot is an idempotent operation, such that calling `snapshot.close()` more than once is allowed and makes no difference.
+Free up underlying resources. Be sure to call this when the snapshot is no longer needed, because snapshots may cause the database to temporarily pause internal storage optimizations. Returns a promise. Closing the snapshot is an idempotent operation, such that calling `snapshot.close()` more than once is allowed and makes no difference.
 
 After `snapshot.close()` has been called, no further operations are allowed. For example, `db.get(key, { snapshot })` will yield an error with code [`LEVEL_SNAPSHOT_NOT_OPEN`](#errors). Any unclosed iterators (that use this snapshot) will be closed by `snapshot.close()` and can then no longer be used.
 
@@ -1754,11 +1754,11 @@ The default `_close()` returns a resolved promise. Overriding is optional.
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `snapshot.db` which ensures that `db` will not be garbage collected in case there are no other references to it.
 
-#### `snapshot._close(callback)`
+#### `snapshot._close()`
 
-Free up underlying resources. This method is guaranteed to only be called once. Once closing is done, call `callback` without any arguments. It is not allowed to yield an error.
+Free up underlying resources. This method is guaranteed to only be called once. Must return a promise.
 
-The default `_close()` invokes `callback` on a next tick. Overriding is optional.
+The default `_close()` returns a resolved promise. Overriding is optional.
 
 ## Test Suite
 
