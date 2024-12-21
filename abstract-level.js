@@ -51,12 +51,16 @@ class AbstractLevel extends EventEmitter {
     this[kStatusChange] = null
     this[kStatusLocked] = false
 
+    // Aliased for backwards compatibility
+    const implicitSnapshots = manifest.snapshots !== false &&
+      manifest.implicitSnapshots !== false
+
     this.hooks = new DatabaseHooks()
     this.supports = supports(manifest, {
       deferredOpen: true,
 
       // TODO (next major): add seek
-      snapshots: manifest.snapshots !== false,
+      implicitSnapshots,
       permanence: manifest.permanence !== false,
 
       encodings: manifest.encodings || {},
@@ -107,6 +111,9 @@ class AbstractLevel extends EventEmitter {
       }),
       keyFormat: Object.freeze({
         keyEncoding: this[kKeyEncoding].format
+      }),
+      owner: Object.freeze({
+        owner: this
       })
     }
 
@@ -323,6 +330,7 @@ class AbstractLevel extends EventEmitter {
     const err = this._checkKey(key)
     if (err) throw err
 
+    const snapshot = options.snapshot != null ? options.snapshot : null
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const valueEncoding = this.valueEncoding(options.valueEncoding)
     const keyFormat = keyEncoding.format
@@ -335,7 +343,23 @@ class AbstractLevel extends EventEmitter {
     }
 
     const encodedKey = keyEncoding.encode(key)
-    const value = await this._get(this.prefixKey(encodedKey, keyFormat, true), options)
+    const mappedKey = this.prefixKey(encodedKey, keyFormat, true)
+
+    // Keep snapshot open during operation
+    if (snapshot !== null) {
+      snapshot.ref()
+    }
+
+    let value
+
+    try {
+      value = await this._get(mappedKey, options)
+    } finally {
+      // Release snapshot
+      if (snapshot !== null) {
+        snapshot.unref()
+      }
+    }
 
     try {
       return value === undefined ? value : valueEncoding.decode(value)
@@ -368,6 +392,7 @@ class AbstractLevel extends EventEmitter {
       return []
     }
 
+    const snapshot = options.snapshot != null ? options.snapshot : null
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const valueEncoding = this.valueEncoding(options.valueEncoding)
     const keyFormat = keyEncoding.format
@@ -388,7 +413,21 @@ class AbstractLevel extends EventEmitter {
       mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
     }
 
-    const values = await this._getMany(mappedKeys, options)
+    // Keep snapshot open during operation
+    if (snapshot !== null) {
+      snapshot.ref()
+    }
+
+    let values
+
+    try {
+      values = await this._getMany(mappedKeys, options)
+    } finally {
+      // Release snapshot
+      if (snapshot !== null) {
+        snapshot.unref()
+      }
+    }
 
     try {
       for (let i = 0; i < values.length; i++) {
@@ -716,12 +755,26 @@ class AbstractLevel extends EventEmitter {
 
     const original = options
     const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const snapshot = options.snapshot != null ? options.snapshot : null
 
     options = rangeOptions(options, keyEncoding)
     options.keyEncoding = keyEncoding.format
 
     if (options.limit !== 0) {
-      await this._clear(options)
+      // Keep snapshot open during operation
+      if (snapshot !== null) {
+        snapshot.ref()
+      }
+
+      try {
+        await this._clear(options)
+      } finally {
+        // Release snapshot
+        if (snapshot !== null) {
+          snapshot.unref()
+        }
+      }
+
       this.emit('clear', original)
     }
   }
@@ -807,6 +860,25 @@ class AbstractLevel extends EventEmitter {
 
   _values (options) {
     return new DefaultValueIterator(this, options)
+  }
+
+  snapshot (options) {
+    assertOpen(this)
+
+    // Owner is an undocumented option explained in AbstractSnapshot
+    if (typeof options !== 'object' || options === null) {
+      options = this[kDefaultOptions].owner
+    } else if (options.owner == null) {
+      options = { ...options, owner: this }
+    }
+
+    return this._snapshot(options)
+  }
+
+  _snapshot (options) {
+    throw new ModuleError('Database does not support explicit snapshots', {
+      code: 'LEVEL_NOT_SUPPORTED'
+    })
   }
 
   defer (fn, options) {

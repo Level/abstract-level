@@ -43,10 +43,14 @@ function suite (options) {
     require('./iterator-seek-test').all(test, testCommon)
   }
 
-  if (testCommon.supports.snapshots) {
+  if (testCommon.supports.implicitSnapshots) {
     require('./iterator-snapshot-test').all(test, testCommon)
   } else {
     require('./iterator-no-snapshot-test').all(test, testCommon)
+  }
+
+  if (testCommon.supports.explicitSnapshots) {
+    require('./iterator-explicit-snapshot-test').all(test, testCommon)
   }
 
   require('./clear-test').all(test, testCommon)

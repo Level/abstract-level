@@ -3,6 +3,7 @@ import * as Transcoder from 'level-transcoder'
 import { EventEmitter } from 'events'
 import { AbstractChainedBatch } from './abstract-chained-batch'
 import { AbstractSublevel, AbstractSublevelOptions } from './abstract-sublevel'
+import { AbstractSnapshot } from './abstract-snapshot'
 
 import {
   AbstractIterator,
@@ -234,6 +235,17 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * encoding interface.
    */
   valueEncoding (): Transcoder.Encoding<VDefault, TFormat, VDefault>
+
+  /**
+   * Create an explicit snapshot. Throws a `LEVEL_NOT_SUPPORTED` error if
+   * `db.supports.explicitSnapshots` is false.
+   *
+   * Don't forget to call `snapshot.close()` when done.
+   *
+   * @param options There are currently no options but specific implementations
+   * may add their own.
+   */
+  snapshot (options?: any | undefined): AbstractSnapshot
 
   /**
    * Call the function {@link fn} at a later time when {@link status} changes to

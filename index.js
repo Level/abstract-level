@@ -6,3 +6,4 @@ exports.AbstractIterator = require('./abstract-iterator').AbstractIterator
 exports.AbstractKeyIterator = require('./abstract-iterator').AbstractKeyIterator
 exports.AbstractValueIterator = require('./abstract-iterator').AbstractValueIterator
 exports.AbstractChainedBatch = require('./abstract-chained-batch').AbstractChainedBatch
+exports.AbstractSnapshot = require('./abstract-snapshot').AbstractSnapshot

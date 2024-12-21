@@ -38,4 +38,8 @@ export {
   AbstractSublevelOptions
 } from './types/abstract-sublevel'
 
+export {
+  AbstractSnapshot
+} from './types/abstract-snapshot'
+
 export * as Transcoder from 'level-transcoder'

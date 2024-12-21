@@ -1,6 +1,6 @@
 'use strict'
 
-const { AbstractLevel, AbstractChainedBatch } = require('..')
+const { AbstractLevel, AbstractChainedBatch, AbstractSnapshot } = require('..')
 const { AbstractIterator, AbstractKeyIterator, AbstractValueIterator } = require('..')
 const noop = function () {}
 
@@ -88,7 +88,12 @@ const kOptions = Symbol('options')
  */
 class MinimalLevel extends AbstractLevel {
   constructor (options) {
-    super({ encodings: { utf8: true }, seek: true }, options)
+    super({
+      encodings: { utf8: true },
+      seek: true,
+      explicitSnapshots: true
+    }, options)
+
     this[kEntries] = new Map()
   }
 
@@ -97,12 +102,15 @@ class MinimalLevel extends AbstractLevel {
   }
 
   async _get (key, options) {
+    const entries = (options.snapshot || this)[kEntries]
+
     // Is undefined if not found
-    return this[kEntries].get(key)
+    return entries.get(key)
   }
 
   async _getMany (keys, options) {
-    return keys.map(k => this[kEntries].get(k))
+    const entries = (options.snapshot || this)[kEntries]
+    return keys.map(k => entries.get(k))
   }
 
   async _del (key, options) {
@@ -110,7 +118,9 @@ class MinimalLevel extends AbstractLevel {
   }
 
   async _clear (options) {
-    for (const [k] of sliceEntries(this[kEntries], options, true)) {
+    const entries = (options.snapshot || this)[kEntries]
+
+    for (const [k] of sliceEntries(entries, options, true)) {
       this[kEntries].delete(k)
     }
   }
@@ -137,12 +147,24 @@ class MinimalLevel extends AbstractLevel {
   _values (options) {
     return new MinimalValueIterator(this, options)
   }
+
+  _snapshot (options) {
+    return new MinimalSnapshot(this, options)
+  }
+}
+
+class MinimalSnapshot extends AbstractSnapshot {
+  constructor (db, options) {
+    super(options)
+    this[kEntries] = new Map(db[kEntries])
+  }
 }
 
 class MinimalIterator extends AbstractIterator {
   constructor (db, options) {
     super(db, options)
-    this[kEntries] = sliceEntries(db[kEntries], options, false)
+    const entries = (options.snapshot || db)[kEntries]
+    this[kEntries] = sliceEntries(entries, options, false)
     this[kOptions] = options
     this[kPosition] = 0
   }
@@ -151,7 +173,8 @@ class MinimalIterator extends AbstractIterator {
 class MinimalKeyIterator extends AbstractKeyIterator {
   constructor (db, options) {
     super(db, options)
-    this[kEntries] = sliceEntries(db[kEntries], options, false)
+    const entries = (options.snapshot || db)[kEntries]
+    this[kEntries] = sliceEntries(entries, options, false)
     this[kOptions] = options
     this[kPosition] = 0
   }
@@ -160,7 +183,8 @@ class MinimalKeyIterator extends AbstractKeyIterator {
 class MinimalValueIterator extends AbstractValueIterator {
   constructor (db, options) {
     super(db, options)
-    this[kEntries] = sliceEntries(db[kEntries], options, false)
+    const entries = (options.snapshot || db)[kEntries]
+    this[kEntries] = sliceEntries(entries, options, false)
     this[kOptions] = options
     this[kPosition] = 0
   }

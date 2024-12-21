@@ -170,7 +170,7 @@ exports.seek = function (test, testCommon) {
       return db.close()
     })
 
-    if (testCommon.supports.snapshots) {
+    if (testCommon.supports.implicitSnapshots) {
       for (const reverse of [false, true]) {
         for (const deferred of [false, true]) {
           test(`${mode}().seek() respects snapshot (reverse: ${reverse}, deferred: ${deferred})`, async function (t) {

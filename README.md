@@ -127,7 +127,7 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
@@ -137,7 +137,7 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
@@ -233,7 +233,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to [abort read operations on the iterator](#aborting-iterators).
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) for the iterator to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot before returning an iterator.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) for the iterator to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot before returning an iterator.
 
 Lastly, an implementation is free to add its own options.
 
@@ -276,7 +276,7 @@ Delete all entries or a range. Not guaranteed to be atomic. Returns a promise. A
 - `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
 - `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) to read from, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
 
 The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted.
 
@@ -383,11 +383,15 @@ console.log(nested.prefixKey('a', 'utf8')) // '!example!!nested!a'
 console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 ```
 
-### `snapshot = db.snapshot()`
+### `snapshot = db.snapshot(options)`
 
-**This is an experimental API and not widely supported at the time of writing ([Level/community#118](https://github.com/Level/community/issues/118)).**
+**This is an experimental API ([Level/community#118](https://github.com/Level/community/issues/118)).**
 
-Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error if `db.supports.explicitSnapshots` is not true. For details, see [Reading From Snapshots](#reading-from-snapshots).
+Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error if `db.supports.explicitSnapshots` is false. For details, see [Reading From Snapshots](#reading-from-snapshots).
+
+There are currently no options but specific implementations may add their own.
+
+Don't forget to call `snapshot.close()` when done.
 
 ### `db.supports`
 
@@ -705,15 +709,21 @@ console.log(foo.path(true)) // ['example', 'nested', 'foo']
 
 ### `snapshot`
 
+#### `snapshot.ref()`
+
+Increment reference count, to register work that should delay closing until `snapshot.unref()` is called an equal amount of times. The promise that will be returned by `snapshot.close()` will not resolve until the reference count returns to 0. This prevents prematurely closing underlying resources while the snapshot is in use.
+
+It is normally not necessary to call `snapshot.ref()` and `snapshot.unref()` because builtin database methods automatically do.
+
+#### `snapshot.unref()`
+
+Decrement reference count, to indicate that the work has finished.
+
 #### `snapshot.close()`
 
 Free up underlying resources. Be sure to call this when the snapshot is no longer needed, because snapshots may cause the database to temporarily pause internal storage optimizations. Returns a promise. Closing the snapshot is an idempotent operation, such that calling `snapshot.close()` more than once is allowed and makes no difference.
 
-After `snapshot.close()` has been called, no further operations are allowed. For example, `db.get(key, { snapshot })` will yield an error with code [`LEVEL_SNAPSHOT_NOT_OPEN`](#level_snapshot_not_open). Any unclosed iterators (that use this snapshot) will be closed by `snapshot.close()` and can then no longer be used.
-
-#### `snapshot.db`
-
-A reference to the database that created this snapshot.
+After `snapshot.close()` has been called, no further operations are allowed. For example, `db.get(key, { snapshot })` will throw an error with code [`LEVEL_SNAPSHOT_NOT_OPEN`](#level_snapshot_not_open).
 
 ### Encodings
 
@@ -950,10 +960,10 @@ Removing this concern (if necessary) must be done on an application-level. For e
 
 ### Reading From Snapshots
 
-A snapshot is a lightweight "token" that represents the version of a database at a particular point in time. This allows for reading data without seeing subsequent writes made on the database. It comes in two forms:
+A snapshot is a lightweight "token" that represents a version of a database at a particular point in time. This allows for reading data without seeing subsequent writes made on the database. It comes in two forms:
 
 1. Implicit snapshots: created internally by the database and not visible to the outside world.
-2. Explicit snapshots: created with `snapshot = db.snapshot()`. Because it acts as a token, `snapshot` has no methods of its own besides `snapshot.close()`. Instead the snapshot is to be passed to database (or [sublevel](#sublevel)) methods like `db.iterator()`.
+2. Explicit snapshots: created with `snapshot = db.snapshot()`. Because it acts as a token, `snapshot` has no read methods of its own. Instead the snapshot is to be passed to database methods like `db.get()` and `db.iterator()`. This also works on sublevels.
 
 Use explicit snapshots wisely, because their lifetime must be managed manually. Implicit snapshots are typically more convenient and possibly more performant because they can handled natively and have their lifetime limited by the surrounding operation. That said, explicit snapshots can be useful to make multiple read operations that require a shared, consistent view of the data.
 
@@ -1004,6 +1014,7 @@ await db.put('example', 1)
 const snapshot = db.snapshot()
 db.put('example', 2)
 await db.get('example', { snapshot })) // Yields 1 (always)
+await snapshot.close()
 ```
 
 The main use case for explicit snapshots is retrieving data from an index.
@@ -1625,19 +1636,19 @@ class ExampleSublevel extends AbstractSublevel {
 }
 ```
 
-### `snapshot = db._snapshot()`
+### `snapshot = db._snapshot(options)`
 
-The default `_snapshot()` throws a [`LEVEL_NOT_SUPPORTED`](#errors) error. To implement this method, extend `AbstractSnapshot`, return an instance of this class in an overridden `_snapshot()` method and set `manifest.explicitSnapshots` to `true`:
+Create a snapshot. The `options` argument is guaranteed to be an object. There are currently no options but implementations may add their own.
+
+The default `_snapshot()` throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error. To implement this method, extend `AbstractSnapshot`, return an instance of this class in an overridden `_snapshot()` method and set `manifest.explicitSnapshots` to `true`:
 
 ```js
 const { AbstractSnapshot } = require('abstract-level')
 
 class ExampleSnapshot extends AbstractSnapshot {
-  constructor (db) {
-    super(db)
+  constructor (options) {
+    super(options)
   }
-
-  // ..
 }
 
 class ExampleLevel extends AbstractLevel {
@@ -1650,8 +1661,8 @@ class ExampleLevel extends AbstractLevel {
     super(manifest, options)
   }
 
-  _snapshot () {
-    return new ExampleSnapshot(this)
+  _snapshot (options) {
+    return new ExampleSnapshot(options)
   }
 }
 ```
@@ -1762,11 +1773,11 @@ The default `_close()` returns a resolved promise. Overriding is optional.
 
 ### `snapshot = new AbstractSnapshot(db)`
 
-The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `snapshot.db` which ensures that `db` will not be garbage collected in case there are no other references to it.
+The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation.
 
 #### `snapshot._close()`
 
-Free up underlying resources. This method is guaranteed to only be called once. Must return a promise.
+Free up underlying resources. This method is guaranteed to only be called once and will not be called while read operations like `db._get()` are inflight. Must return a promise.
 
 The default `_close()` returns a resolved promise. Overriding is optional.
 
