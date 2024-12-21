@@ -1,8 +1,8 @@
 # abstract-level
 
-**Abstract class for a lexicographically sorted key-value database.** Provides state, encodings, sublevels, events and hooks. If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md).
+**Abstract class for a lexicographically sorted key-value database.** Provides encodings, sublevels, events and hooks. If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md).
 
-> :pushpin: What happened to `levelup`? Head on over to [Frequently Asked Questions](https://github.com/Level/community#faq).
+> :pushpin: Wondering what happened to `levelup`? Visit [Frequently Asked Questions](https://github.com/Level/community#faq).
 
 [![level badge][level-badge]](https://github.com/Level/awesome)
 [![npm](https://img.shields.io/npm/v/abstract-level.svg)](https://www.npmjs.com/package/abstract-level)
@@ -15,7 +15,7 @@
 
 ## Usage
 
-This module exports an abstract class that should not be instantiated by end users. Instead use modules like [`level`](https://github.com/Level/level) that contain a concrete implementation and actual data storage. The purpose of the abstract class is to provide a common interface that looks like this:
+This module exports an abstract class. End users should instead use modules like [`level`](https://github.com/Level/level) that export a concrete implementation. The purpose of the abstract class is to provide a common interface that looks like this:
 
 ```js
 // Create a database
@@ -61,6 +61,14 @@ const xyz = db.sublevel<string, any>('xyz', { valueEncoding: 'json' })
 
 </details>
 
+## Install
+
+With [npm](https://npmjs.org) do:
+
+```shell
+npm install abstract-level
+```
+
 ## Supported Platforms
 
 We aim to support Active LTS and Current Node.js releases, as well as evergreen browsers that are based on Chromium, Firefox or Webkit. Features that the runtime must support include [`queueMicrotask`](https://developer.mozilla.org/en-US/docs/Web/API/queueMicrotask#browser_compatibility), [`Promise.allSettled()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled#browser_compatibility), [`globalThis`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/globalThis#browser_compatibility) and [async generators](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/async_function*#browser_compatibility). Supported runtimes may differ per implementation.
@@ -71,7 +79,7 @@ This module has a public API for consumers of a database and a [private API](#pr
 
 An `abstract-level` database is at its core a [key-value database](https://en.wikipedia.org/wiki/Key%E2%80%93value_database). A key-value pair is referred to as an _entry_ here and typically returned as an array, comparable to [`Object.entries()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/entries).
 
-### `db = new Constructor(...[, options])`
+### `db = new Level(...[, options])`
 
 Creating a database is done by calling a class constructor. Implementations export a class that extends the [`AbstractLevel`](./abstract-level.js) class and has its own constructor with an implementation-specific signature. All constructors should have an `options` argument as the last. Typically, constructors take a `location` as their first argument, pointing to where the data will be stored. That may be a file path, URL, something else or none at all, since not all implementations are disk-based or persistent. Others take another database rather than a location as their first argument.
 
@@ -84,7 +92,7 @@ See [Encodings](#encodings) for a full description of these options. Other `opti
 
 ### `db.status`
 
-Read-only getter that returns a string reflecting the current state of the database:
+Getter that returns a string reflecting the current state of the database:
 
 - `'opening'` - waiting for the database to be opened
 - `'open'` - successfully opened the database
@@ -113,23 +121,13 @@ A database may have associated resources like file handles and locks. When the d
 
 After `db.close()` has been called, no further read & write operations are allowed unless and until `db.open()` is called again. For example, `db.get(key)` will yield an error with code [`LEVEL_DATABASE_NOT_OPEN`](#errors). Any unclosed iterators, snapshots and chained batches will be closed by `db.close()` and can then no longer be used even when `db.open()` is called again.
 
-### `db.supports`
-
-A [manifest](https://github.com/Level/supports) describing the features supported by this database. Might be used like so:
-
-```js
-if (!db.supports.permanence) {
-  throw new Error('Persistent storage is required')
-}
-```
-
 ### `db.get(key[, options])`
 
 Get a value from the database by `key`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
-- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
@@ -139,7 +137,7 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
-- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
@@ -235,7 +233,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to [abort read operations on the iterator](#aborting-iterators).
-- `snapshot`: explicit [snapshot](#snapshot) for the iterator to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot before returning an iterator.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) for the iterator to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot before returning an iterator.
 
 Lastly, an implementation is free to add its own options.
 
@@ -278,7 +276,7 @@ Delete all entries or a range. Not guaranteed to be atomic. Returns a promise. A
 - `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
 - `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
-- `snapshot`: explicit [snapshot](#snapshot) to [read from](#reading-from-snapshots) assuming `db.supports.explicitSnapshots` is true, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshot) to read from, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
 
 The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted.
 
@@ -389,7 +387,17 @@ console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 
 **This is an experimental API and not widely supported at the time of writing ([Level/community#118](https://github.com/Level/community/issues/118)).**
 
-Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#errors) error if `db.supports.explicitSnapshots` is not true. For details, see [Reading From Snapshots](#reading-from-snapshots).
+Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error if `db.supports.explicitSnapshots` is not true. For details, see [Reading From Snapshots](#reading-from-snapshots).
+
+### `db.supports`
+
+A [manifest](https://github.com/Level/supports) describing the features supported by this database. Might be used like so:
+
+```js
+if (!db.supports.permanence) {
+  throw new Error('Persistent storage is required')
+}
+```
 
 ### `db.defer(fn[, options])`
 
@@ -429,47 +437,6 @@ The optional `options` object may contain:
 
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to abort the deferred operation. When aborted (now or later) the `fn` function will not be called, and the promise returned by `deferAsync()` will be rejected with a [`LEVEL_ABORTED`](#level_aborted) error.
 
-### `chainedBatch`
-
-#### `chainedBatch.put(key, value[, options])`
-
-Add a `put` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) or [`LEVEL_INVALID_VALUE`](#errors) error if `key` or `value` is invalid. The optional `options` object may contain:
-
-- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
-- `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
-- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `chainedBatch.db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
-
-#### `chainedBatch.del(key[, options])`
-
-Add a `del` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#errors) error if `key` is invalid. The optional `options` object may contain:
-
-- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
-- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `chainedBatch.db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
-
-#### `chainedBatch.clear()`
-
-Remove all operations from this chained batch, so that they will not be committed.
-
-#### `chainedBatch.write([options])`
-
-Commit the operations. Returns a promise. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
-
-There are no `options` by default but implementations may add theirs. Note that `write()` does not take encoding options. Those can only be set on `put()` and `del()` because implementations may synchronously forward such calls to an underlying store and thus need keys and values to be encoded at that point.
-
-After `write()` or `close()` has been called, no further operations are allowed.
-
-#### `chainedBatch.close()`
-
-Free up underlying resources. This should be done even if the chained batch has zero operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference. Returns a promise.
-
-#### `chainedBatch.length`
-
-The number of operations in this chained batch, including operations that were added by [`prewrite`](#hook--dbhooksprewrite) hook functions if any.
-
-#### `chainedBatch.db`
-
-A reference to the database that created this chained batch.
-
 ### `iterator`
 
 An iterator allows one to lazily read a range of entries stored in the database. The entries will be sorted by keys in [lexicographic order](https://en.wikipedia.org/wiki/Lexicographic_order) (in other words: byte order) which in short means key `'a'` comes before `'b'` and key `'10'` comes before `'2'`.
@@ -482,7 +449,7 @@ An iterator reaches its natural end in the following situations:
 - The end of the range has been reached
 - The last `iterator.seek()` was out of range.
 
-An iterator keeps track of calls that are in progress. It doesn't allow concurrent `next()`, `nextv()` or `all()` calls (including a combination thereof) and will throw an error with code [`LEVEL_ITERATOR_BUSY`](#errors) if that happens:
+An iterator keeps track of calls that are in progress. It doesn't allow concurrent `next()`, `nextv()` or `all()` calls (including a combination thereof) and will throw an error with code [`LEVEL_ITERATOR_BUSY`](#level_iterator_busy) if that happens:
 
 ```js
 // Not awaited
@@ -570,7 +537,7 @@ If range options like `gt` were passed to `db.iterator()` and `target` does not 
 
 Free up underlying resources. Returns a promise. Closing the iterator is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
 
-If a `next()` ,`nextv()` or `all()` call is in progress, closing will wait for that to finish. After `close()` has been called, further calls to `next()` ,`nextv()` or `all()` will yield an error with code [`LEVEL_ITERATOR_NOT_OPEN`](#errors).
+If a `next()` ,`nextv()` or `all()` call is in progress, closing will wait for that to finish. After `close()` has been called, further calls to `next()` ,`nextv()` or `all()` will yield an error with code [`LEVEL_ITERATOR_NOT_OPEN`](#level_iterator_not_open).
 
 #### `iterator.db`
 
@@ -637,9 +604,50 @@ A key iterator has the same interface as `iterator` except that its methods yiel
 
 A value iterator has the same interface as `iterator` except that its methods yield values instead of entries. Usage is otherwise the same.
 
+### `chainedBatch`
+
+#### `chainedBatch.put(key, value[, options])`
+
+Add a `put` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#level_invalid_key) or [`LEVEL_INVALID_VALUE`](#level_invalid_value) error if `key` or `value` is invalid. The optional `options` object may contain:
+
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `valueEncoding`: custom value encoding for this operation, used to encode the `value`.
+- `sublevel` (sublevel instance): act as though the `put` operation is performed on the given sublevel, to similar effect as `sublevel.batch().put(key, value)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `chainedBatch.db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` and `value` will be encoded by the sublevel (using the default encodings of the sublevel unless `keyEncoding` and / or `valueEncoding` are provided).
+
+#### `chainedBatch.del(key[, options])`
+
+Add a `del` operation to this chained batch, not committed until `write()` is called. This will throw a [`LEVEL_INVALID_KEY`](#level_invalid_key) error if `key` is invalid. The optional `options` object may contain:
+
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `sublevel` (sublevel instance): act as though the `del` operation is performed on the given sublevel, to similar effect as `sublevel.batch().del(key)`. This allows atomically committing data to multiple sublevels. The given `sublevel` must have the same _root_ (i.e. top-most) database as `chainedBatch.db`. The `key` will be prefixed with the prefix of the sublevel, and the `key` will be encoded by the sublevel (using the default key encoding of the sublevel unless `keyEncoding` is provided).
+
+#### `chainedBatch.clear()`
+
+Remove all operations from this chained batch, so that they will not be committed.
+
+#### `chainedBatch.write([options])`
+
+Commit the operations. Returns a promise. All operations will be written atomically, that is, they will either all succeed or fail with no partial commits.
+
+There are no `options` by default but implementations may add theirs. Note that `write()` does not take encoding options. Those can only be set on `put()` and `del()` because implementations may synchronously forward such calls to an underlying store and thus need keys and values to be encoded at that point.
+
+After `write()` or `close()` has been called, no further operations are allowed.
+
+#### `chainedBatch.close()`
+
+Free up underlying resources. This should be done even if the chained batch has zero operations. Automatically called by `write()` so normally not necessary to call, unless the intent is to discard a chained batch without committing it. Closing the batch is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference. Returns a promise.
+
+#### `chainedBatch.length`
+
+The number of operations in this chained batch, including operations that were added by [`prewrite`](#hook--dbhooksprewrite) hook functions if any.
+
+#### `chainedBatch.db`
+
+A reference to the database that created this chained batch.
+
 ### `sublevel`
 
-A sublevel is an instance of the `AbstractSublevel` class, which extends `AbstractLevel` and thus has the same API as documented above. Sublevels have a few additional properties and methods.
+A sublevel is an instance of the `AbstractSublevel` class, which extends `AbstractLevel` and thus has the same API. Sublevels have a few additional properties and methods.
 
 #### `sublevel.prefix`
 
@@ -701,151 +709,15 @@ console.log(foo.path(true)) // ['example', 'nested', 'foo']
 
 Free up underlying resources. Be sure to call this when the snapshot is no longer needed, because snapshots may cause the database to temporarily pause internal storage optimizations. Returns a promise. Closing the snapshot is an idempotent operation, such that calling `snapshot.close()` more than once is allowed and makes no difference.
 
-After `snapshot.close()` has been called, no further operations are allowed. For example, `db.get(key, { snapshot })` will yield an error with code [`LEVEL_SNAPSHOT_NOT_OPEN`](#errors). Any unclosed iterators (that use this snapshot) will be closed by `snapshot.close()` and can then no longer be used.
+After `snapshot.close()` has been called, no further operations are allowed. For example, `db.get(key, { snapshot })` will yield an error with code [`LEVEL_SNAPSHOT_NOT_OPEN`](#level_snapshot_not_open). Any unclosed iterators (that use this snapshot) will be closed by `snapshot.close()` and can then no longer be used.
 
 #### `snapshot.db`
 
 A reference to the database that created this snapshot.
 
-### Hooks
-
-**Hooks are experimental and subject to change without notice.**
-
-Hooks allow userland _hook functions_ to customize behavior of the database. Each hook is a different extension point, accessible via `db.hooks`. Some are shared between database methods to encapsulate common behavior. A hook is either synchronous or asynchronous, and functions added to a hook must respect that trait.
-
-#### `hook = db.hooks.prewrite`
-
-A synchronous hook for modifying or adding operations to [`db.batch([])`](#dbbatchoperations-options), [`db.batch().put()`](#chainedbatchputkey-value-options), [`db.batch().del()`](#chainedbatchdelkey-options), [`db.put()`](#dbputkey-value-options) and [`db.del()`](#dbdelkey-options) calls. It does not include [`db.clear()`](#dbclearoptions) because the entries deleted by such a call are not communicated back to `db`.
-
-Functions added to this hook will receive two arguments: `op` and `batch`.
-
-##### Example
-
-```js
-const charwise = require('charwise-compact')
-const books = db.sublevel('books', { valueEncoding: 'json' })
-const index = db.sublevel('authors', { keyEncoding: charwise })
-
-books.hooks.prewrite.add(function (op, batch) {
-  if (op.type === 'put') {
-    batch.add({
-      type: 'put',
-      key: [op.value.author, op.key],
-      value: '',
-      sublevel: index
-    })
-  }
-})
-
-// Will atomically commit it to the author index as well
-await books.put('12', { title: 'Siddhartha', author: 'Hesse' })
-```
-
-##### Arguments
-
-###### `op` (object)
-
-The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from [`db.batch([])`](#db_batchoperations-options)) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
-
-The `key` and `value` have not yet been encoded at this point. The `keyEncoding` and `valueEncoding` properties are always encoding objects (rather than encoding names like `'json'`) which means hook functions can call (for example) `op.keyEncoding.encode(123)`.
-
-Hook functions can modify the `key`, `value`, `keyEncoding` and `valueEncoding` properties, but not `type` or `sublevel`. If a hook function modifies `keyEncoding` or `valueEncoding` it can use either encoding names or encoding objects, which will subsequently be normalized to encoding objects. Hook functions can also add custom properties to `op` which will be visible to other hook functions, the private API of the database and in the [`write`](#write) event.
-
-###### `batch` (object)
-
-The `batch` argument of the hook function is an interface to add operations, to be committed in the same batch as the input operation(s). This also works if the originating call was a singular operation like `db.put()` because the presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch. For originating calls like [`db.batch([])`](#dbbatchoperations-options) that provide multiple input operations, operations will be added after the last input operation, rather than interleaving. The hook function will not be called for operations that were added by either itself or other hook functions.
-
-###### `batch = batch.add(op)`
-
-Add a batch operation, using the same format as the operations that [`db.batch([])`](#dbbatchoperations-options) takes. However, it is assumed that `op` can be freely mutated by `abstract-level`. Unlike input operations it will not be cloned before doing so. The `add` method returns `batch` which allows for chaining, similar to the [chained batch](#chainedbatch) API.
-
-For hook functions to be generic, it is recommended to explicitly define `keyEncoding` and `valueEncoding` properties on `op` (instead of relying on database defaults) or to use an isolated sublevel with known defaults.
-
-#### `hook = db.hooks.postopen`
-
-An asynchronous hook that runs after the database has succesfully opened, but before deferred operations are executed and before events are emitted. It thus allows for additional initialization, including reading and writing data that deferred operations might need. The postopen hook always runs before the prewrite hook.
-
-Functions added to this hook must return a promise and will receive one argument: `options`. If one of the hook functions yields an error then the database will be closed. In the rare event that closing also fails, which means there's no safe state to return to, the database will enter an internal locked state where `db.status` is `'closed'` and subsequent calls to `db.open()` or `db.close()` will be met with a [`LEVEL_STATUS_LOCKED`](#errors) error. This locked state is also used during the postopen hook itself, meaning hook functions are not allowed to call `db.open()` or `db.close()`.
-
-##### Example
-
-```js
-db.hooks.postopen.add(async function (options) {
-  // Can read and write like usual
-  return db.put('example', 123, {
-    valueEncoding: 'json'
-  })
-})
-```
-
-##### Arguments
-
-###### `options` (object)
-
-The `options` that were provided in the originating [`db.open(options)`](#dbopenoptions) call, merged with constructor options and defaults. Equivalent to what the private API received in [`db._open(options)`](#db_openoptions).
-
-#### `hook = db.hooks.newsub`
-
-A synchronous hook that runs when a `AbstractSublevel` instance has been created by [`db.sublevel(options)`](#sublevel--dbsublevelname-options). Functions added to this hook will receive two arguments: `sublevel` and `options`.
-
-##### Example
-
-This hook can be useful to hook into a database and any sublevels created on that database. Userland modules that act like plugins might like the following pattern:
-
-```js
-module.exports = function logger (db, options) {
-  // Recurse so that db.sublevel('foo', opts) will call logger(sublevel, opts)
-  db.hooks.newsub.add(logger)
-
-  db.hooks.prewrite.add(function (op, batch) {
-    console.log('writing', { db, op })
-  })
-}
-```
-
-##### Arguments
-
-###### `sublevel` (object)
-
-The `AbstractSublevel` instance that was created.
-
-###### `options` (object)
-
-The `options` that were provided in the originating `db.sublevel(options)` call, merged with defaults. Equivalent to what the private API received in [`db._sublevel(options)`](#sublevel--db_sublevelname-options).
-
-#### `hook`
-
-##### `hook.add(fn)`
-
-Add the given `fn` function to this hook, if it wasn't already added.
-
-##### `hook.delete(fn)`
-
-Remove the given `fn` function from this hook.
-
-#### Hook Error Handling
-
-If a hook function throws an error, it will be wrapped in an error with code [`LEVEL_HOOK_ERROR`](#errors) and abort the originating call:
-
-```js
-try {
-  await db.put('abc', 123)
-} catch (err) {
-  if (err.code === 'LEVEL_HOOK_ERROR') {
-    console.log(err.cause)
-  }
-}
-```
-
-As a result, other hook functions will not be called.
-
-#### Hooks On Sublevels
-
-On sublevels and their parent database(s), hooks are triggered in bottom-up order. For example, `db.sublevel('a').sublevel('b').batch(..)` will trigger the `prewrite` hook of sublevel `a`, then the `prewrite` hook of sublevel `b` and then of `db`. Only direct operations on a database will trigger hooks, not when a sublevel is provided as an option. This means `db.batch([{ sublevel, ... }])` will trigger the `prewrite` hook of `db` but not of `sublevel`. These behaviors are symmetrical to [events](#events): `db.batch([{ sublevel, ... }])` will only emit a `write` event from `db` while `db.sublevel(..).batch([{ ... }])` will emit a `write` event from the sublevel and then another from `db` (this time with fully-qualified keys).
-
 ### Encodings
 
-Any method that takes a `key` argument, `value` argument or range options like `gte`, hereby jointly referred to as `data`, runs that `data` through an _encoding_. This means to encode input `data` and decode output `data`.
+Any database method that takes a `key` argument, `value` argument or range options like `gte`, hereby jointly referred to as `data`, runs that `data` through an _encoding_. This means to encode input `data` and decode output `data`.
 
 [Several encodings](https://github.com/Level/transcoder#built-in-encodings) are builtin courtesy of [`level-transcoder`](https://github.com/Level/transcoder) and can be selected by a short name like `'utf8'` or `'json'`. The default encoding is `'utf8'` which ensures you'll always get back a string. Encodings can be specified for keys and values independently with `keyEncoding` and `valueEncoding` options, either in the database constructor or per method to apply an encoding selectively. For example:
 
@@ -1059,9 +931,255 @@ db.on('batch', function (operations) {
 })
 ```
 
+### Order Of Operations
+
+There is no defined order between parallel write operations. Consider:
+
+```js
+await Promise.all([
+  db.put('example', 1),
+  db.put('example', 2)
+])
+
+const result = await db.get('example')
+```
+
+The value of `result` could be either `1` or `2`, because the `db.put()` calls are asynchronous and awaited in parallel. Some implementations of `abstract-level` may unintentionally exhibit a "defined" order due to internal details. Implementations are free to change such details at any time, because per the asynchronous `abstract-level` interface that they follow, the order is theoretically random.
+
+Removing this concern (if necessary) must be done on an application-level. For example, the application could have a queue of operations, or per-key locks, or implement transactions on top of snapshots, or a versioning mechanism in its keyspace, or specialized data types like CRDT, or just say that conflicts are acceptable for that particular application, and so forth. The abundance of examples should explain why `abstract-level` itself doesn't enter this opinionated and application-specific problem space. Each solution has tradeoffs and `abstract-level`, being the core of a modular database, cannot decide which tradeoff to make.
+
+### Reading From Snapshots
+
+A snapshot is a lightweight "token" that represents the version of a database at a particular point in time. This allows for reading data without seeing subsequent writes made on the database. It comes in two forms:
+
+1. Implicit snapshots: created internally by the database and not visible to the outside world.
+2. Explicit snapshots: created with `snapshot = db.snapshot()`. Because it acts as a token, `snapshot` has no methods of its own besides `snapshot.close()`. Instead the snapshot is to be passed to database (or [sublevel](#sublevel)) methods like `db.iterator()`.
+
+Use explicit snapshots wisely, because their lifetime must be managed manually. Implicit snapshots are typically more convenient and possibly more performant because they can handled natively and have their lifetime limited by the surrounding operation. That said, explicit snapshots can be useful to make multiple read operations that require a shared, consistent view of the data.
+
+Most but not all `abstract-level` implementations support snapshots. They can be divided into three groups.
+
+#### 1. Implementation does not support snapshots
+
+As indicated by `db.supports.implicitSnapshots` and `db.supports.explicitSnapshots` being false. In this case, operations read from the latest version of the database. This most notably affects iterators:
+
+```js
+await db.put('example', 'a')
+const it = db.iterator()
+await db.del('example')
+const entries = await it.all() // Likely an empty array
+```
+
+The `db.supports.implicitSnapshots` property is aliased as `db.supports.snapshots` for backwards compatibility.
+
+#### 2. Implementation supports implicit snapshots
+
+As indicated by `db.supports.implicitSnapshots` being true. An iterator, upon creation, will synchronously create a snapshot and subsequently read from that snapshot rather than the latest version of the database. There are no actual numerical versions, but let's say there are in order to clarify the behavior:
+
+```js
+await db.put('example', 'a')   // Results in v1
+const it = db.iterator()       // Creates snapshot of v1
+await db.del('example')        // Results in v2
+const entries = await it.all() // Reads from snapshot and thus v1
+```
+
+The `entries` array thus includes the deleted entry, because the snapshot of the iterator represents the database version from before the entry was deleted.
+
+Other read operations like `db.get()` also use a snapshot. Such calls synchronously create a snapshot and then asynchronously read from it. This means a write operation (to the same key) may not be visible unless awaited:
+
+```js
+await db.put('example', 1) // Awaited
+db.put('example', 2)       // Not awaited
+await db.get('example')    // Yields 1 (typically)
+```
+
+In other words, once a write operation has _finished_ (including having communicated that to the main thread of JavaScript, i.e. by resolving the promise in the above example) subsequent reads are guaranteed to include that data. That's because those reads use a snapshot created in the main thread which is aware of the finished write at this point. Before that point, no guarantee can be given.
+
+#### 3. Implementation supports explicit snapshots
+
+As indicated by `db.supports.explicitSnapshots` being true. This is the most precise and flexible way to control the version of the data to read. The previous example can be modified to get a consistent result:
+
+```js
+await db.put('example', 1)
+const snapshot = db.snapshot()
+db.put('example', 2)
+await db.get('example', { snapshot })) // Yields 1 (always)
+```
+
+The main use case for explicit snapshots is retrieving data from an index.
+
+```js
+// We'll use charwise to encode "compound" keys
+const charwise = require('charwise-compact')
+const players = db.sublevel('players', { valueEncoding: 'json' })
+const index = db.sublevel('scores', { keyEncoding: charwise })
+
+// Write sample data (using an atomic batch so that the index remains in-sync)
+await db.batch()
+  .put('alice', { score: 620 }, { sublevel: players })
+  .put([620, 'alice'], '', { sublevel: index })
+  .write()
+
+// Iterate players that have a score higher than 100
+const snapshot = db.snapshot()
+const iterator = index.keys({ gt: [100, charwise.HI], snapshot })
+
+for await (const key of iterator) {
+  // Index key is [620, 'alice'] so key[1] gives us 'alice'
+  const player = await players.get(key[1], { snapshot })
+}
+
+// Don't forget to close (and try/catch/finally)
+await snapshot.close()
+```
+
+On implementations that support implicit but not explicit snapshots, some of the above can be simulated. In particular, to get multiple entries from a snapshot, one could create an iterator and then repeatedly `seek()` to the desired entries.
+
+### Hooks
+
+**Hooks are experimental and subject to change without notice.**
+
+Hooks allow userland _hook functions_ to customize behavior of the database. Each hook is a different extension point, accessible via `db.hooks`. Some are shared between database methods to encapsulate common behavior. A hook is either synchronous or asynchronous, and functions added to a hook must respect that trait.
+
+#### `hook = db.hooks.prewrite`
+
+A synchronous hook for modifying or adding operations to [`db.batch([])`](#dbbatchoperations-options), [`db.batch().put()`](#chainedbatchputkey-value-options), [`db.batch().del()`](#chainedbatchdelkey-options), [`db.put()`](#dbputkey-value-options) and [`db.del()`](#dbdelkey-options) calls. It does not include [`db.clear()`](#dbclearoptions) because the entries deleted by such a call are not communicated back to `db`.
+
+Functions added to this hook will receive two arguments: `op` and `batch`.
+
+##### Example
+
+```js
+const charwise = require('charwise-compact')
+const books = db.sublevel('books', { valueEncoding: 'json' })
+const index = db.sublevel('authors', { keyEncoding: charwise })
+
+books.hooks.prewrite.add(function (op, batch) {
+  if (op.type === 'put') {
+    batch.add({
+      type: 'put',
+      key: [op.value.author, op.key],
+      value: '',
+      sublevel: index
+    })
+  }
+})
+
+// Will atomically commit it to the author index as well
+await books.put('12', { title: 'Siddhartha', author: 'Hesse' })
+```
+
+##### Arguments
+
+###### `op` (object)
+
+The `op` argument reflects the input operation and has the following properties: `type`, `key`, `keyEncoding`, an optional `sublevel`, and if `type` is `'put'` then also `value` and `valueEncoding`. It can also include userland options, that were provided either in the input operation object (if it originated from [`db.batch([])`](#db_batchoperations-options)) or in the `options` argument of the originating call, for example the `options` in `db.del(key, options)`.
+
+The `key` and `value` have not yet been encoded at this point. The `keyEncoding` and `valueEncoding` properties are always encoding objects (rather than encoding names like `'json'`) which means hook functions can call (for example) `op.keyEncoding.encode(123)`.
+
+Hook functions can modify the `key`, `value`, `keyEncoding` and `valueEncoding` properties, but not `type` or `sublevel`. If a hook function modifies `keyEncoding` or `valueEncoding` it can use either encoding names or encoding objects, which will subsequently be normalized to encoding objects. Hook functions can also add custom properties to `op` which will be visible to other hook functions, the private API of the database and in the [`write`](#write) event.
+
+###### `batch` (object)
+
+The `batch` argument of the hook function is an interface to add operations, to be committed in the same batch as the input operation(s). This also works if the originating call was a singular operation like `db.put()` because the presence of one or more hook functions will change `db.put()` and `db.del()` to internally use a batch. For originating calls like [`db.batch([])`](#dbbatchoperations-options) that provide multiple input operations, operations will be added after the last input operation, rather than interleaving. The hook function will not be called for operations that were added by either itself or other hook functions.
+
+###### `batch = batch.add(op)`
+
+Add a batch operation, using the same format as the operations that [`db.batch([])`](#dbbatchoperations-options) takes. However, it is assumed that `op` can be freely mutated by `abstract-level`. Unlike input operations it will not be cloned before doing so. The `add` method returns `batch` which allows for chaining, similar to the [chained batch](#chainedbatch) API.
+
+For hook functions to be generic, it is recommended to explicitly define `keyEncoding` and `valueEncoding` properties on `op` (instead of relying on database defaults) or to use an isolated sublevel with known defaults.
+
+#### `hook = db.hooks.postopen`
+
+An asynchronous hook that runs after the database has succesfully opened, but before deferred operations are executed and before events are emitted. It thus allows for additional initialization, including reading and writing data that deferred operations might need. The postopen hook always runs before the prewrite hook.
+
+Functions added to this hook must return a promise and will receive one argument: `options`. If one of the hook functions yields an error then the database will be closed. In the rare event that closing also fails, which means there's no safe state to return to, the database will enter an internal locked state where `db.status` is `'closed'` and subsequent calls to `db.open()` or `db.close()` will be met with a [`LEVEL_STATUS_LOCKED`](#errors) error. This locked state is also used during the postopen hook itself, meaning hook functions are not allowed to call `db.open()` or `db.close()`.
+
+##### Example
+
+```js
+db.hooks.postopen.add(async function (options) {
+  // Can read and write like usual
+  return db.put('example', 123, {
+    valueEncoding: 'json'
+  })
+})
+```
+
+##### Arguments
+
+###### `options` (object)
+
+The `options` that were provided in the originating [`db.open(options)`](#dbopenoptions) call, merged with constructor options and defaults. Equivalent to what the private API received in [`db._open(options)`](#db_openoptions).
+
+#### `hook = db.hooks.newsub`
+
+A synchronous hook that runs when a `AbstractSublevel` instance has been created by [`db.sublevel(options)`](#sublevel--dbsublevelname-options). Functions added to this hook will receive two arguments: `sublevel` and `options`.
+
+##### Example
+
+This hook can be useful to hook into a database and any sublevels created on that database. Userland modules that act like plugins might like the following pattern:
+
+```js
+module.exports = function logger (db, options) {
+  // Recurse so that db.sublevel('foo', opts) will call logger(sublevel, opts)
+  db.hooks.newsub.add(logger)
+
+  db.hooks.prewrite.add(function (op, batch) {
+    console.log('writing', { db, op })
+  })
+}
+```
+
+##### Arguments
+
+###### `sublevel` (object)
+
+The `AbstractSublevel` instance that was created.
+
+###### `options` (object)
+
+The `options` that were provided in the originating `db.sublevel(options)` call, merged with defaults. Equivalent to what the private API received in [`db._sublevel(options)`](#sublevel--db_sublevelname-options).
+
+#### `hook`
+
+##### `hook.add(fn)`
+
+Add the given `fn` function to this hook, if it wasn't already added.
+
+##### `hook.delete(fn)`
+
+Remove the given `fn` function from this hook.
+
+#### Hook Error Handling
+
+If a hook function throws an error, it will be wrapped in an error with code [`LEVEL_HOOK_ERROR`](#level_hook_error) and abort the originating call:
+
+```js
+try {
+  await db.put('abc', 123)
+} catch (err) {
+  if (err.code === 'LEVEL_HOOK_ERROR') {
+    console.log(err.cause)
+  }
+}
+```
+
+As a result, other hook functions will not be called.
+
+#### Hooks On Sublevels
+
+On sublevels and their parent database(s), hooks are triggered in bottom-up order. For example, `db.sublevel('a').sublevel('b').batch(..)` will trigger the `prewrite` hook of sublevel `b`, then the `prewrite` hook of sublevel `a` and then of `db`. Only direct operations on a database will trigger hooks, not when a sublevel is provided as an option. This means `db.batch([{ sublevel, ... }])` will trigger the `prewrite` hook of `db` but not of `sublevel`. These behaviors are symmetrical to [events](#events): `db.batch([{ sublevel, ... }])` will only emit a `write` event from `db` while `db.sublevel(..).batch([{ ... }])` will emit a `write` event from the sublevel and then another from `db` (this time with fully-qualified keys).
+
+### Shared Access
+
+Unless documented otherwise, implementations of `abstract-level` do _not_ support accessing a database from multiple processes running in parallel. That includes Node.js clusters and Electron renderer processes.
+
+See [`Level/awesome`](https://github.com/Level/awesome#shared-access) for modules like [`many-level`](https://github.com/Level/many-level) and [`rave-level`](https://github.com/Level/rave-level) that allow a database to be shared across processes and/or machines.
+
 ### Errors
 
-Errors thrown or yielded from the methods above will have a `code` property that is an uppercase string. Error codes will not change between major versions, but error messages will. Messages may also differ between implementations; they are free and encouraged to tune messages.
+Errors thrown by an `abstract-level` database have a `code` property that is an uppercase string. Error codes will not change between major versions, but error messages will. Messages may also differ between implementations; they are free and encouraged to tune messages.
 
 A database may also throw [`TypeError`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/TypeError) errors (or other core error constructors in JavaScript) without a `code` and without any guarantee on the stability of error properties - because these errors indicate invalid arguments and other programming mistakes that should not be catched much less have associated logic.
 
@@ -1202,116 +1320,6 @@ When a database relies on a connection to a remote party and that connection has
 
 When a remote party encountered an unexpected condition that it can't reflect with a more specific code. Used by `many-level`.
 
-### Order Of Operations
-
-There is no defined order between parallel write operations. Consider:
-
-```js
-await Promise.all([
-  db.put('example', 1),
-  db.put('example', 2)
-])
-
-const result = await db.get('example')
-```
-
-The value of `result` could be either `1` or `2`, because the `db.put()` calls are asynchronous and awaited in parallel. Some implementations of `abstract-level` may unintentionally exhibit a "defined" order due to internal details. Implementations are free to change such details at any time, because per the asynchronous `abstract-level` interface that they follow, the order is theoretically random.
-
-Removing this concern (if necessary) must be done on an application-level. For example, the application could have a queue of operations, or per-key locks, or implement transactions on top of snapshots, or a versioning mechanism in its keyspace, or specialized data types like CRDT, or just say that conflicts are acceptable for that particular application, and so forth. The abundance of examples should explain why `abstract-level` itself doesn't enter this opinionated and application-specific problem space. Each solution has tradeoffs and `abstract-level`, being the core of a modular database, cannot decide which tradeoff to make.
-
-### Reading From Snapshots
-
-A snapshot is a lightweight "token" that represents the version of a database at a particular point in time. This allows for reading data without seeing subsequent writes made on the database. It comes in two forms:
-
-1. Implicit snapshots: created internally by the database and not visible to the outside world.
-2. Explicit snapshots: created with `snapshot = db.snapshot()`. Because it acts as a token, `snapshot` has no methods of its own besides `snapshot.close()`. Instead the snapshot is to be passed to database (or [sublevel](#sublevel)) methods like `db.iterator()`.
-
-Use explicit snapshots wisely, because their lifetime must be managed manually. Implicit snapshots are typically more convenient and possibly more performant because they can handled natively and have their lifetime limited by the surrounding operation. That said, explicit snapshots can be useful to make multiple read operations that require a shared, consistent view of the data.
-
-Most but not all `abstract-level` implementations support snapshots. They can be divided into three groups.
-
-#### 1. Implementation does not support snapshots
-
-As indicated by `db.supports.implicitSnapshots` and `db.supports.explicitSnapshots` being false. In this case, operations read from the latest version of the database. This most notably affects iterators:
-
-```js
-await db.put('example', 'a')
-const it = db.iterator()
-await db.del('example')
-const entries = await it.all() // Likely an empty array
-```
-
-The `db.supports.implicitSnapshots` property is aliased as `db.supports.snapshots` for backwards compatibility.
-
-#### 2. Implementation supports implicit snapshots
-
-As indicated by `db.supports.implicitSnapshots` being true. An iterator, upon creation, will synchronously create a snapshot and subsequently read from that snapshot rather than the latest version of the database. There are no actual numerical versions, but let's say there are in order to clarify the behavior:
-
-```js
-await db.put('example', 'a')   // Results in v1
-const it = db.iterator()       // Creates snapshot of v1
-await db.del('example')        // Results in v2
-const entries = await it.all() // Reads from snapshot and thus v1
-```
-
-The `entries` array thus includes the deleted entry, because the snapshot of the iterator represents the database version from before the entry was deleted.
-
-Other read operations like `db.get()` also use a snapshot. Such calls synchronously create a snapshot and then asynchronously read from it. This means a write operation (to the same key) may not be visible unless awaited:
-
-```js
-await db.put('example', 1) // Awaited
-db.put('example', 2)       // Not awaited
-await db.get('example')    // Yields 1 (typically)
-```
-
-In other words, once a write operation has _finished_ (including having communicated that to the main thread of JavaScript, i.e. by resolving the promise in the above example) subsequent reads are guaranteed to include that data. That's because those reads use a snapshot created in the main thread which is aware of the finished write at this point. Before that point, no guarantee can be given.
-
-#### 3. Implementation supports explicit snapshots
-
-As indicated by `db.supports.explicitSnapshots` being true. This is the most precise and flexible way to control the version of the data to read. The previous example can be modified to get a consistent result:
-
-```js
-await db.put('example', 1)
-const snapshot = db.snapshot()
-db.put('example', 2)
-await db.get('example', { snapshot })) // Yields 1 (always)
-```
-
-The main use case for explicit snapshots is retrieving data from an index.
-
-```js
-// We'll use charwise to encode "compound" keys
-const charwise = require('charwise-compact')
-const players = db.sublevel('players', { valueEncoding: 'json' })
-const index = db.sublevel('scores', { keyEncoding: charwise })
-
-// Write sample data (using an atomic batch so that the index remains in-sync)
-await db.batch()
-  .put('alice', { score: 620 }, { sublevel: players })
-  .put([620, 'alice'], '', { sublevel: index })
-  .write()
-
-// Iterate players that have a score higher than 100
-const snapshot = db.snapshot()
-const iterator = index.keys({ gt: [100, charwise.HI], snapshot })
-
-for await (const key of iterator) {
-  // Index key is [620, 'alice'] so key[1] gives us 'alice'
-  const player = await players.get(key[1], { snapshot })
-}
-
-// Don't forget to close (and try/catch/finally)
-await snapshot.close()
-```
-
-On implementations that support implicit but not explicit snapshots, some of the above can be simulated. In particular, to get multiple entries from a snapshot, one could create an iterator and then repeatedly `seek()` to the desired entries.
-
-### Shared Access
-
-Unless documented otherwise, implementations of `abstract-level` do _not_ support accessing a database from multiple processes running in parallel. That includes Node.js clusters and Electron renderer processes.
-
-See [`Level/awesome`](https://github.com/Level/awesome#shared-access) for modules like [`multileveldown`](https://github.com/Level/multileveldown) and [`level-party`](https://github.com/Level/party) that allow a database to be shared across processes and/or machines. Note: at the time of writing these modules are not yet ported to `abstract-level` and thus incompatible.
-
 ## Private API For Implementors
 
 To implement an `abstract-level` database, extend the [`AbstractLevel`](./abstract-level.js) class and override the private underscored versions of its methods. For example, to implement the public `put()` method, override the private `_put()` method. The same goes for other classes (some of which are optional to override). All classes can be found on the main export of the npm package:
@@ -1398,7 +1406,7 @@ console.log(value) // { a: 123 }
 
 See [`memory-level`](https://github.com/Level/memory-level) if you are looking for a complete in-memory implementation. The example above notably lacks iterator support and would not pass the [abstract test suite](#test-suite).
 
-### `db = AbstractLevel(manifest[, options])`
+### `db = new AbstractLevel(manifest[, options])`
 
 The database constructor. Sets the [`status`](#dbstatus) to `'opening'`. Takes a [manifest](https://github.com/Level/supports) object that the constructor will enrich with defaults. At minimum, the manifest must declare which `encodings` are supported in the private API. For example:
 
@@ -1650,7 +1658,7 @@ class ExampleLevel extends AbstractLevel {
 
 The snapshot of the underlying database (or other mechanisms to achieve the same effect) must be created synchronously, such that a call like `db.put()` made immediately after `db._snapshot()` will not affect the snapshot. As for previous write operations that are still in progress at the time that `db._snapshot()` is called: `db._snapshot()` does not have to (and should not) wait for such operations. Solving inconsistencies that may arise from this behavior is an application-level concern. To be clear, if the application awaits the write operations before calling `db.snapshot()` then the snapshot does need to reflect (include) those operations.
 
-### `iterator = AbstractIterator(db, options)`
+### `iterator = new AbstractIterator(db, options)`
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `iterator.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it. The `options` argument must be the original `options` object that was passed to `db._iterator()` and it is therefore not (publicly) possible to create an iterator via constructors alone.
 
@@ -1720,7 +1728,7 @@ The `options` argument must be the original `options` object that was passed to 
 
 A value iterator has the same interface and constructor arguments as `AbstractIterator` except that it must yields values instead of entries. For further details, see `keyIterator` above.
 
-### `chainedBatch = AbstractChainedBatch(db, options)`
+### `chainedBatch = new AbstractChainedBatch(db, options)`
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `chainedBatch.db` which is used (among other things) to access encodings and ensures that `db` will not be garbage collected in case there are no other references to it.
 
@@ -1752,7 +1760,7 @@ Free up underlying resources. This method is guaranteed to only be called once. 
 
 The default `_close()` returns a resolved promise. Overriding is optional.
 
-### `snapshot = AbstractSnapshot(db)`
+### `snapshot = new AbstractSnapshot(db)`
 
 The first argument to this constructor must be an instance of the relevant `AbstractLevel` implementation. The constructor will set `snapshot.db` which ensures that `db` will not be garbage collected in case there are no other references to it.
 
@@ -1853,14 +1861,6 @@ If you'd like to share your awesome implementation with the world, here's what y
 - Add an awesome badge to your `README`: `![level badge](https://leveljs.org/img/badge.svg)`
 - Publish your awesome module to [npm](https://npmjs.org)
 - Send a Pull Request to [Level/awesome](https://github.com/Level/awesome) to advertise your work!
-
-## Install
-
-With [npm](https://npmjs.org) do:
-
-```
-npm install abstract-level
-```
 
 ## Contributing
 
