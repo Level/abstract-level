@@ -17,22 +17,20 @@ const { prefixDescendantKey, isDescendant } = require('./lib/prefixes')
 const { DeferredQueue } = require('./lib/deferred-queue')
 const rangeOptions = require('./lib/range-options')
 
-const kResources = Symbol('resources')
-const kCloseResources = Symbol('closeResources')
-const kQueue = Symbol('queue')
-const kDeferOpen = Symbol('deferOpen')
-const kOptions = Symbol('options')
-const kStatus = Symbol('status')
-const kStatusChange = Symbol('statusChange')
-const kStatusLocked = Symbol('statusLocked')
-const kDefaultOptions = Symbol('defaultOptions')
-const kTranscoder = Symbol('transcoder')
-const kKeyEncoding = Symbol('keyEncoding')
-const kValueEncoding = Symbol('valueEncoding')
-const kEventMonitor = Symbol('eventMonitor')
-const kArrayBatch = Symbol('arrayBatch')
-
 class AbstractLevel extends EventEmitter {
+  #status = 'opening'
+  #deferOpen = true
+  #statusChange = null
+  #statusLocked = false
+  #resources
+  #queue
+  #options
+  #defaultOptions
+  #transcoder
+  #keyEncoding
+  #valueEncoding
+  #eventMonitor
+
   constructor (manifest, options) {
     super()
 
@@ -43,13 +41,9 @@ class AbstractLevel extends EventEmitter {
     options = getOptions(options)
     const { keyEncoding, valueEncoding, passive, ...forward } = options
 
-    this[kResources] = new Set()
-    this[kQueue] = new DeferredQueue()
-    this[kDeferOpen] = true
-    this[kOptions] = forward
-    this[kStatus] = 'opening'
-    this[kStatusChange] = null
-    this[kStatusLocked] = false
+    this.#resources = new Set()
+    this.#queue = new DeferredQueue()
+    this.#options = forward
 
     // Aliased for backwards compatibility
     const implicitSnapshots = manifest.snapshots !== false &&
@@ -78,39 +72,39 @@ class AbstractLevel extends EventEmitter {
     })
 
     // Monitor event listeners
-    this[kEventMonitor] = new EventMonitor(this, [
+    this.#eventMonitor = new EventMonitor(this, [
       { name: 'write' },
       { name: 'put', deprecated: true, alt: 'write' },
       { name: 'del', deprecated: true, alt: 'write' },
       { name: 'batch', deprecated: true, alt: 'write' }
     ])
 
-    this[kTranscoder] = new Transcoder(formats(this))
-    this[kKeyEncoding] = this[kTranscoder].encoding(keyEncoding || 'utf8')
-    this[kValueEncoding] = this[kTranscoder].encoding(valueEncoding || 'utf8')
+    this.#transcoder = new Transcoder(formats(this))
+    this.#keyEncoding = this.#transcoder.encoding(keyEncoding || 'utf8')
+    this.#valueEncoding = this.#transcoder.encoding(valueEncoding || 'utf8')
 
     // Add custom and transcoder encodings to manifest
-    for (const encoding of this[kTranscoder].encodings()) {
+    for (const encoding of this.#transcoder.encodings()) {
       if (!this.supports.encodings[encoding.commonName]) {
         this.supports.encodings[encoding.commonName] = true
       }
     }
 
-    this[kDefaultOptions] = {
+    this.#defaultOptions = {
       empty: emptyOptions,
       entry: Object.freeze({
-        keyEncoding: this[kKeyEncoding].commonName,
-        valueEncoding: this[kValueEncoding].commonName
+        keyEncoding: this.#keyEncoding.commonName,
+        valueEncoding: this.#valueEncoding.commonName
       }),
       entryFormat: Object.freeze({
-        keyEncoding: this[kKeyEncoding].format,
-        valueEncoding: this[kValueEncoding].format
+        keyEncoding: this.#keyEncoding.format,
+        valueEncoding: this.#valueEncoding.format
       }),
       key: Object.freeze({
-        keyEncoding: this[kKeyEncoding].commonName
+        keyEncoding: this.#keyEncoding.commonName
       }),
       keyFormat: Object.freeze({
-        keyEncoding: this[kKeyEncoding].format
+        keyEncoding: this.#keyEncoding.format
       }),
       owner: Object.freeze({
         owner: this
@@ -120,14 +114,14 @@ class AbstractLevel extends EventEmitter {
     // Before we start opening, let subclass finish its constructor
     // and allow events and postopen hook functions to be added.
     queueMicrotask(() => {
-      if (this[kDeferOpen]) {
+      if (this.#deferOpen) {
         this.open({ passive: false }).catch(noop)
       }
     })
   }
 
   get status () {
-    return this[kStatus]
+    return this.#status
   }
 
   get parent () {
@@ -135,15 +129,15 @@ class AbstractLevel extends EventEmitter {
   }
 
   keyEncoding (encoding) {
-    return this[kTranscoder].encoding(encoding != null ? encoding : this[kKeyEncoding])
+    return this.#transcoder.encoding(encoding ?? this.#keyEncoding)
   }
 
   valueEncoding (encoding) {
-    return this[kTranscoder].encoding(encoding != null ? encoding : this[kValueEncoding])
+    return this.#transcoder.encoding(encoding ?? this.#valueEncoding)
   }
 
   async open (options) {
-    options = { ...this[kOptions], ...getOptions(options) }
+    options = { ...this.#options, ...getOptions(options) }
 
     options.createIfMissing = options.createIfMissing !== false
     options.errorIfExists = !!options.errorIfExists
@@ -152,36 +146,36 @@ class AbstractLevel extends EventEmitter {
     const postopen = this.hooks.postopen.noop ? null : this.hooks.postopen.run
     const passive = options.passive
 
-    if (passive && this[kDeferOpen]) {
+    if (passive && this.#deferOpen) {
       // Wait a tick until constructor calls open() non-passively
       await undefined
     }
 
     // Wait for pending changes and check that opening is allowed
-    assertUnlocked(this)
-    while (this[kStatusChange] !== null) await this[kStatusChange].catch(noop)
-    assertUnlocked(this)
+    this.#assertUnlocked()
+    while (this.#statusChange !== null) await this.#statusChange.catch(noop)
+    this.#assertUnlocked()
 
     if (passive) {
-      if (this[kStatus] !== 'open') throw new NotOpenError()
-    } else if (this[kStatus] === 'closed' || this[kDeferOpen]) {
-      this[kDeferOpen] = false
-      this[kStatusChange] = resolvedPromise // TODO: refactor
-      this[kStatusChange] = (async () => {
-        this[kStatus] = 'opening'
+      if (this.#status !== 'open') throw new NotOpenError()
+    } else if (this.#status === 'closed' || this.#deferOpen) {
+      this.#deferOpen = false
+      this.#statusChange = resolvedPromise // TODO: refactor
+      this.#statusChange = (async () => {
+        this.#status = 'opening'
 
         try {
           this.emit('opening')
           await this._open(options)
         } catch (err) {
-          this[kStatus] = 'closed'
+          this.#status = 'closed'
 
           // Must happen before we close resources, in case their close() is waiting
           // on a deferred operation which in turn is waiting on db.open().
-          this[kQueue].drain()
+          this.#queue.drain()
 
           try {
-            await this[kCloseResources]()
+            await this.#closeResources()
           } catch (resourceErr) {
             // eslint-disable-next-line no-ex-assign
             err = combineErrors([err, resourceErr])
@@ -190,38 +184,38 @@ class AbstractLevel extends EventEmitter {
           throw new NotOpenError(err)
         }
 
-        this[kStatus] = 'open'
+        this.#status = 'open'
 
         if (postopen !== null) {
           let hookErr
 
           try {
             // Prevent deadlock
-            this[kStatusLocked] = true
+            this.#statusLocked = true
             await postopen(options)
           } catch (err) {
             hookErr = convertRejection(err)
           } finally {
-            this[kStatusLocked] = false
+            this.#statusLocked = false
           }
 
           // Revert
           if (hookErr) {
-            this[kStatus] = 'closing'
-            this[kQueue].drain()
+            this.#status = 'closing'
+            this.#queue.drain()
 
             try {
-              await this[kCloseResources]()
+              await this.#closeResources()
               await this._close()
             } catch (closeErr) {
               // There's no safe state to return to. Can't return to 'open' because
               // postopen hook failed. Can't return to 'closed' (with the ability to
               // reopen) because the underlying database is potentially still open.
-              this[kStatusLocked] = true
+              this.#statusLocked = true
               hookErr = combineErrors([hookErr, closeErr])
             }
 
-            this[kStatus] = 'closed'
+            this.#status = 'closed'
 
             throw new ModuleError('The postopen hook failed on open()', {
               code: 'LEVEL_HOOK_ERROR',
@@ -230,16 +224,16 @@ class AbstractLevel extends EventEmitter {
           }
         }
 
-        this[kQueue].drain()
+        this.#queue.drain()
         this.emit('open')
       })()
 
       try {
-        await this[kStatusChange]
+        await this.#statusChange
       } finally {
-        this[kStatusChange] = null
+        this.#statusChange = null
       }
-    } else if (this[kStatus] !== 'open') {
+    } else if (this.#status !== 'open') {
       /* istanbul ignore next: should not happen */
       throw new NotOpenError()
     }
@@ -249,53 +243,53 @@ class AbstractLevel extends EventEmitter {
 
   async close () {
     // Wait for pending changes and check that closing is allowed
-    assertUnlocked(this)
-    while (this[kStatusChange] !== null) await this[kStatusChange].catch(noop)
-    assertUnlocked(this)
+    this.#assertUnlocked()
+    while (this.#statusChange !== null) await this.#statusChange.catch(noop)
+    this.#assertUnlocked()
 
-    if (this[kStatus] === 'open' || this[kDeferOpen]) {
+    if (this.#status === 'open' || this.#deferOpen) {
       // If close() was called after constructor, we didn't open yet
-      const fromInitial = this[kDeferOpen]
+      const fromInitial = this.#deferOpen
 
-      this[kDeferOpen] = false
-      this[kStatusChange] = resolvedPromise
-      this[kStatusChange] = (async () => {
-        this[kStatus] = 'closing'
-        this[kQueue].drain()
+      this.#deferOpen = false
+      this.#statusChange = resolvedPromise
+      this.#statusChange = (async () => {
+        this.#status = 'closing'
+        this.#queue.drain()
 
         try {
           this.emit('closing')
-          await this[kCloseResources]()
+          await this.#closeResources()
           if (!fromInitial) await this._close()
         } catch (err) {
-          this[kStatus] = 'open'
-          this[kQueue].drain()
+          this.#status = 'open'
+          this.#queue.drain()
           throw new NotClosedError(err)
         }
 
-        this[kStatus] = 'closed'
-        this[kQueue].drain()
+        this.#status = 'closed'
+        this.#queue.drain()
         this.emit('closed')
       })()
 
       try {
-        await this[kStatusChange]
+        await this.#statusChange
       } finally {
-        this[kStatusChange] = null
+        this.#statusChange = null
       }
-    } else if (this[kStatus] !== 'closed') {
+    } else if (this.#status !== 'closed') {
       /* istanbul ignore next: should not happen */
       throw new NotClosedError()
     }
   }
 
-  async [kCloseResources] () {
-    if (this[kResources].size === 0) {
+  async #closeResources () {
+    if (this.#resources.size === 0) {
       return
     }
 
     // In parallel so that all resources know they are closed
-    const resources = Array.from(this[kResources])
+    const resources = Array.from(this.#resources)
     const promises = resources.map(closeResource)
 
     // TODO: async/await
@@ -304,7 +298,7 @@ class AbstractLevel extends EventEmitter {
 
       for (let i = 0; i < results.length; i++) {
         if (results[i].status === 'fulfilled') {
-          this[kResources].delete(resources[i])
+          this.#resources.delete(resources[i])
         } else {
           errors.push(convertRejection(results[i].reason))
         }
@@ -319,18 +313,18 @@ class AbstractLevel extends EventEmitter {
   async _close () {}
 
   async get (key, options) {
-    options = getOptions(options, this[kDefaultOptions].entry)
+    options = getOptions(options, this.#defaultOptions.entry)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.get(key, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     const err = this._checkKey(key)
     if (err) throw err
 
-    const snapshot = options.snapshot != null ? options.snapshot : null
+    const snapshot = options.snapshot
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const valueEncoding = this.valueEncoding(options.valueEncoding)
     const keyFormat = keyEncoding.format
@@ -346,9 +340,7 @@ class AbstractLevel extends EventEmitter {
     const mappedKey = this.prefixKey(encodedKey, keyFormat, true)
 
     // Keep snapshot open during operation
-    if (snapshot !== null) {
-      snapshot.ref()
-    }
+    snapshot?.ref()
 
     let value
 
@@ -356,9 +348,7 @@ class AbstractLevel extends EventEmitter {
       value = await this._get(mappedKey, options)
     } finally {
       // Release snapshot
-      if (snapshot !== null) {
-        snapshot.unref()
-      }
+      snapshot?.unref()
     }
 
     try {
@@ -376,13 +366,13 @@ class AbstractLevel extends EventEmitter {
   }
 
   async getMany (keys, options) {
-    options = getOptions(options, this[kDefaultOptions].entry)
+    options = getOptions(options, this.#defaultOptions.entry)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.getMany(keys, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     if (!Array.isArray(keys)) {
       throw new TypeError("The first argument 'keys' must be an array")
@@ -392,7 +382,7 @@ class AbstractLevel extends EventEmitter {
       return []
     }
 
-    const snapshot = options.snapshot != null ? options.snapshot : null
+    const snapshot = options.snapshot
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const valueEncoding = this.valueEncoding(options.valueEncoding)
     const keyFormat = keyEncoding.format
@@ -414,9 +404,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     // Keep snapshot open during operation
-    if (snapshot !== null) {
-      snapshot.ref()
-    }
+    snapshot?.ref()
 
     let values
 
@@ -424,9 +412,7 @@ class AbstractLevel extends EventEmitter {
       values = await this._getMany(mappedKeys, options)
     } finally {
       // Release snapshot
-      if (snapshot !== null) {
-        snapshot.unref()
-      }
+      snapshot?.unref()
     }
 
     try {
@@ -450,26 +436,26 @@ class AbstractLevel extends EventEmitter {
   }
 
   async has (key, options) {
-    options = getOptions(options, this[kDefaultOptions].key)
+    options = getOptions(options, this.#defaultOptions.key)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.has(key, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     // TODO (next major): change this to an assert
     const err = this._checkKey(key)
     if (err) throw err
 
-    const snapshot = options.snapshot != null ? options.snapshot : null
+    const snapshot = options.snapshot
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
 
     // Forward encoding options to the underlying store
-    if (options === this[kDefaultOptions].key) {
+    if (options === this.#defaultOptions.key) {
       // Avoid Object.assign() for default options
-      options = this[kDefaultOptions].keyFormat
+      options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
       // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
       options = Object.assign({}, options, { keyEncoding: keyFormat })
@@ -479,17 +465,13 @@ class AbstractLevel extends EventEmitter {
     const mappedKey = this.prefixKey(encodedKey, keyFormat, true)
 
     // Keep snapshot open during operation
-    if (snapshot !== null) {
-      snapshot.ref()
-    }
+    snapshot?.ref()
 
     try {
       return this._has(mappedKey, options)
     } finally {
       // Release snapshot
-      if (snapshot !== null) {
-        snapshot.unref()
-      }
+      snapshot?.unref()
     }
   }
 
@@ -500,13 +482,13 @@ class AbstractLevel extends EventEmitter {
   }
 
   async hasMany (keys, options) {
-    options = getOptions(options, this[kDefaultOptions].entry)
+    options = getOptions(options, this.#defaultOptions.entry)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.hasMany(keys, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     if (!Array.isArray(keys)) {
       throw new TypeError("The first argument 'keys' must be an array")
@@ -516,14 +498,14 @@ class AbstractLevel extends EventEmitter {
       return []
     }
 
-    const snapshot = options.snapshot != null ? options.snapshot : null
+    const snapshot = options.snapshot
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
 
     // Forward encoding options to the underlying store
-    if (options === this[kDefaultOptions].key) {
+    if (options === this.#defaultOptions.key) {
       // Avoid Object.assign() for default options
-      options = this[kDefaultOptions].keyFormat
+      options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
       // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
       options = Object.assign({}, options, { keyEncoding: keyFormat })
@@ -540,17 +522,13 @@ class AbstractLevel extends EventEmitter {
     }
 
     // Keep snapshot open during operation
-    if (snapshot !== null) {
-      snapshot.ref()
-    }
+    snapshot?.ref()
 
     try {
       return this._hasMany(mappedKeys, options)
     } finally {
       // Release snapshot
-      if (snapshot !== null) {
-        snapshot.unref()
-      }
+      snapshot?.unref()
     }
   }
 
@@ -568,13 +546,13 @@ class AbstractLevel extends EventEmitter {
       return this.batch([{ type: 'put', key, value }], options)
     }
 
-    options = getOptions(options, this[kDefaultOptions].entry)
+    options = getOptions(options, this.#defaultOptions.entry)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.put(key, value, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     const err = this._checkKey(key) || this._checkValue(value)
     if (err) throw err
@@ -584,13 +562,13 @@ class AbstractLevel extends EventEmitter {
     const valueEncoding = this.valueEncoding(options.valueEncoding)
     const keyFormat = keyEncoding.format
     const valueFormat = valueEncoding.format
-    const enableWriteEvent = this[kEventMonitor].write
+    const enableWriteEvent = this.#eventMonitor.write
     const original = options
 
     // Avoid Object.assign() for default options
     // TODO: also apply this tweak to get() and getMany()
-    if (options === this[kDefaultOptions].entry) {
-      options = this[kDefaultOptions].entryFormat
+    if (options === this.#defaultOptions.entry) {
+      options = this.#defaultOptions.entryFormat
     } else if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
       options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
     }
@@ -627,13 +605,13 @@ class AbstractLevel extends EventEmitter {
       return this.batch([{ type: 'del', key }], options)
     }
 
-    options = getOptions(options, this[kDefaultOptions].key)
+    options = getOptions(options, this.#defaultOptions.key)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.del(key, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     const err = this._checkKey(key)
     if (err) throw err
@@ -641,12 +619,12 @@ class AbstractLevel extends EventEmitter {
     // Encode data for private API
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
-    const enableWriteEvent = this[kEventMonitor].write
+    const enableWriteEvent = this.#eventMonitor.write
     const original = options
 
     // Avoid Object.assign() for default options
-    if (options === this[kDefaultOptions].key) {
-      options = this[kDefaultOptions].keyFormat
+    if (options === this.#defaultOptions.key) {
+      options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
       options = Object.assign({}, options, { keyEncoding: keyFormat })
     }
@@ -678,22 +656,22 @@ class AbstractLevel extends EventEmitter {
   // of classic-level, that should not be copied to individual operations.
   batch (operations, options) {
     if (!arguments.length) {
-      assertOpen(this)
+      this.#assertOpen()
       return this._chainedBatch()
     }
 
-    options = getOptions(options, this[kDefaultOptions].empty)
-    return this[kArrayBatch](operations, options)
+    options = getOptions(options, this.#defaultOptions.empty)
+    return this.#arrayBatch(operations, options)
   }
 
   // Wrapped for async error handling
-  async [kArrayBatch] (operations, options) {
+  async #arrayBatch (operations, options) {
     // TODO (not urgent): freeze prewrite hook and write event
-    if (this[kStatus] === 'opening') {
-      return this.deferAsync(() => this[kArrayBatch](operations, options))
+    if (this.#status === 'opening') {
+      return this.deferAsync(() => this.#arrayBatch(operations, options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     if (!Array.isArray(operations)) {
       throw new TypeError("The first argument 'operations' must be an array")
@@ -705,7 +683,7 @@ class AbstractLevel extends EventEmitter {
 
     const length = operations.length
     const enablePrewriteHook = !this.hooks.prewrite.noop
-    const enableWriteEvent = this[kEventMonitor].write
+    const enableWriteEvent = this.#eventMonitor.write
     const publicOperations = enableWriteEvent ? new Array(length) : null
     const privateOperations = new Array(length)
     const prewriteBatch = enablePrewriteHook
@@ -856,34 +834,30 @@ class AbstractLevel extends EventEmitter {
   }
 
   async clear (options) {
-    options = getOptions(options, this[kDefaultOptions].empty)
+    options = getOptions(options, this.#defaultOptions.empty)
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return this.deferAsync(() => this.clear(options))
     }
 
-    assertOpen(this)
+    this.#assertOpen()
 
     const original = options
     const keyEncoding = this.keyEncoding(options.keyEncoding)
-    const snapshot = options.snapshot != null ? options.snapshot : null
+    const snapshot = options.snapshot
 
     options = rangeOptions(options, keyEncoding)
     options.keyEncoding = keyEncoding.format
 
     if (options.limit !== 0) {
       // Keep snapshot open during operation
-      if (snapshot !== null) {
-        snapshot.ref()
-      }
+      snapshot?.ref()
 
       try {
         await this._clear(options)
       } finally {
         // Release snapshot
-        if (snapshot !== null) {
-          snapshot.unref()
-        }
+        snapshot?.unref()
       }
 
       this.emit('clear', original)
@@ -893,8 +867,8 @@ class AbstractLevel extends EventEmitter {
   async _clear (options) {}
 
   iterator (options) {
-    const keyEncoding = this.keyEncoding(options && options.keyEncoding)
-    const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+    const keyEncoding = this.keyEncoding(options?.keyEncoding)
+    const valueEncoding = this.valueEncoding(options?.valueEncoding)
 
     options = rangeOptions(options, keyEncoding)
     options.keys = options.keys !== false
@@ -908,11 +882,11 @@ class AbstractLevel extends EventEmitter {
     options.keyEncoding = keyEncoding.format
     options.valueEncoding = valueEncoding.format
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return new DeferredIterator(this, options)
     }
 
-    assertOpen(this)
+    this.#assertOpen()
     return this._iterator(options)
   }
 
@@ -922,8 +896,8 @@ class AbstractLevel extends EventEmitter {
 
   keys (options) {
     // Also include valueEncoding (though unused) because we may fallback to _iterator()
-    const keyEncoding = this.keyEncoding(options && options.keyEncoding)
-    const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+    const keyEncoding = this.keyEncoding(options?.keyEncoding)
+    const valueEncoding = this.valueEncoding(options?.valueEncoding)
 
     options = rangeOptions(options, keyEncoding)
 
@@ -935,11 +909,11 @@ class AbstractLevel extends EventEmitter {
     options.keyEncoding = keyEncoding.format
     options.valueEncoding = valueEncoding.format
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return new DeferredKeyIterator(this, options)
     }
 
-    assertOpen(this)
+    this.#assertOpen()
     return this._keys(options)
   }
 
@@ -948,8 +922,8 @@ class AbstractLevel extends EventEmitter {
   }
 
   values (options) {
-    const keyEncoding = this.keyEncoding(options && options.keyEncoding)
-    const valueEncoding = this.valueEncoding(options && options.valueEncoding)
+    const keyEncoding = this.keyEncoding(options?.keyEncoding)
+    const valueEncoding = this.valueEncoding(options?.valueEncoding)
 
     options = rangeOptions(options, keyEncoding)
 
@@ -961,11 +935,11 @@ class AbstractLevel extends EventEmitter {
     options.keyEncoding = keyEncoding.format
     options.valueEncoding = valueEncoding.format
 
-    if (this[kStatus] === 'opening') {
+    if (this.#status === 'opening') {
       return new DeferredValueIterator(this, options)
     }
 
-    assertOpen(this)
+    this.#assertOpen()
     return this._values(options)
   }
 
@@ -974,11 +948,11 @@ class AbstractLevel extends EventEmitter {
   }
 
   snapshot (options) {
-    assertOpen(this)
+    this.#assertOpen()
 
     // Owner is an undocumented option explained in AbstractSnapshot
     if (typeof options !== 'object' || options === null) {
-      options = this[kDefaultOptions].owner
+      options = this.#defaultOptions.owner
     } else if (options.owner == null) {
       options = { ...options, owner: this }
     }
@@ -997,7 +971,7 @@ class AbstractLevel extends EventEmitter {
       throw new TypeError('The first argument must be a function')
     }
 
-    this[kQueue].add(function (abortError) {
+    this.#queue.add(function (abortError) {
       if (!abortError) fn()
     }, options)
   }
@@ -1008,7 +982,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     return new Promise((resolve, reject) => {
-      this[kQueue].add(function (abortError) {
+      this.#queue.add(function (abortError) {
         if (abortError) reject(abortError)
         else fn().then(resolve, reject)
       }, options)
@@ -1022,12 +996,12 @@ class AbstractLevel extends EventEmitter {
       throw new TypeError('The first argument must be a resource object')
     }
 
-    this[kResources].add(resource)
+    this.#resources.add(resource)
   }
 
   // TODO: docs and types
   detachResource (resource) {
-    this[kResources].delete(resource)
+    this.#resources.delete(resource)
   }
 
   _chainedBatch () {
@@ -1049,6 +1023,22 @@ class AbstractLevel extends EventEmitter {
       })
     }
   }
+
+  #assertOpen () {
+    if (this.#status !== 'open') {
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
+  }
+
+  #assertUnlocked () {
+    if (this.#statusLocked) {
+      throw new ModuleError('Database status is locked', {
+        code: 'LEVEL_STATUS_LOCKED'
+      })
+    }
+  }
 }
 
 const { AbstractSublevel } = require('./lib/abstract-sublevel')({ AbstractLevel })
@@ -1059,22 +1049,6 @@ exports.AbstractSublevel = AbstractSublevel
 if (typeof Symbol.asyncDispose === 'symbol') {
   AbstractLevel.prototype[Symbol.asyncDispose] = async function () {
     return this.close()
-  }
-}
-
-const assertOpen = function (db) {
-  if (db[kStatus] !== 'open') {
-    throw new ModuleError('Database is not open', {
-      code: 'LEVEL_DATABASE_NOT_OPEN'
-    })
-  }
-}
-
-const assertUnlocked = function (db) {
-  if (db[kStatusLocked]) {
-    throw new ModuleError('Database status is locked', {
-      code: 'LEVEL_STATUS_LOCKED'
-    })
   }
 }
 

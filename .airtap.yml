@@ -12,3 +12,8 @@ presets:
       - airtap-electron
     browsers:
       - name: electron
+
+# Until airtap switches to rollup
+browserify:
+  - transform: babelify
+    presets: ["@babel/preset-env"]

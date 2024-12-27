@@ -5,24 +5,23 @@ const combineErrors = require('maybe-combine-errors')
 const { getOptions, emptyOptions, noop } = require('./lib/common')
 const { AbortError } = require('./lib/errors')
 
-const kWorking = Symbol('working')
 const kDecodeOne = Symbol('decodeOne')
 const kDecodeMany = Symbol('decodeMany')
-const kSignal = Symbol('signal')
-const kPendingClose = Symbol('pendingClose')
-const kClosingPromise = Symbol('closingPromise')
 const kKeyEncoding = Symbol('keyEncoding')
 const kValueEncoding = Symbol('valueEncoding')
-const kKeys = Symbol('keys')
-const kValues = Symbol('values')
-const kLimit = Symbol('limit')
-const kCount = Symbol('count')
-const kEnded = Symbol('ended')
-const kSnapshot = Symbol('snapshot')
 
 // This class is an internal utility for common functionality between AbstractIterator,
 // AbstractKeyIterator and AbstractValueIterator. It's not exported.
 class CommonIterator {
+  #working = false
+  #pendingClose = null
+  #closingPromise = null
+  #count = 0
+  #signal
+  #limit
+  #ended
+  #snapshot
+
   constructor (db, options) {
     if (typeof db !== 'object' || db === null) {
       const hint = db === null ? 'null' : typeof db
@@ -33,45 +32,42 @@ class CommonIterator {
       throw new TypeError('The second argument must be an options object')
     }
 
-    this[kWorking] = false
-    this[kPendingClose] = null
-    this[kClosingPromise] = null
     this[kKeyEncoding] = options[kKeyEncoding]
     this[kValueEncoding] = options[kValueEncoding]
-    this[kLimit] = Number.isInteger(options.limit) && options.limit >= 0 ? options.limit : Infinity
-    this[kCount] = 0
-    this[kSignal] = options.signal != null ? options.signal : null
-    this[kSnapshot] = options.snapshot != null ? options.snapshot : null
+
+    this.#limit = Number.isInteger(options.limit) && options.limit >= 0 ? options.limit : Infinity
+    this.#signal = options.signal != null ? options.signal : null
+    this.#snapshot = options.snapshot != null ? options.snapshot : null
 
     // Ending means reaching the natural end of the data and (unlike closing) that can
     // be reset by seek(), unless the limit was reached.
-    this[kEnded] = false
+    this.#ended = false
 
     this.db = db
     this.db.attachResource(this)
   }
 
   get count () {
-    return this[kCount]
+    return this.#count
   }
 
   get limit () {
-    return this[kLimit]
+    return this.#limit
   }
 
   async next () {
-    startWork(this)
+    this.#startWork()
 
     try {
-      if (this[kEnded] || this[kCount] >= this[kLimit]) {
-        this[kEnded] = true
+      if (this.#ended || this.#count >= this.#limit) {
+        this.#ended = true
         return undefined
       }
 
       let item = await this._next()
 
       if (item === undefined) {
-        this[kEnded] = true
+        this.#ended = true
         return undefined
       }
 
@@ -81,10 +77,10 @@ class CommonIterator {
         throw new IteratorDecodeError(err)
       }
 
-      this[kCount]++
+      this.#count++
       return item
     } finally {
-      endWork(this)
+      this.#endWork()
     }
   }
 
@@ -98,20 +94,20 @@ class CommonIterator {
     options = getOptions(options, emptyOptions)
 
     if (size < 1) size = 1
-    if (this[kLimit] < Infinity) size = Math.min(size, this[kLimit] - this[kCount])
+    if (this.#limit < Infinity) size = Math.min(size, this.#limit - this.#count)
 
-    startWork(this)
+    this.#startWork()
 
     try {
-      if (this[kEnded] || size <= 0) {
-        this[kEnded] = true
+      if (this.#ended || size <= 0) {
+        this.#ended = true
         return []
       }
 
       const items = await this._nextv(size, options)
 
       if (items.length === 0) {
-        this[kEnded] = true
+        this.#ended = true
         return items
       }
 
@@ -121,10 +117,10 @@ class CommonIterator {
         throw new IteratorDecodeError(err)
       }
 
-      this[kCount] += items.length
+      this.#count += items.length
       return items
     } finally {
-      endWork(this)
+      this.#endWork()
     }
   }
 
@@ -138,7 +134,7 @@ class CommonIterator {
         acc.push(item)
       } else {
         // Must track this here because we're directly calling _next()
-        this[kEnded] = true
+        this.#ended = true
         break
       }
     }
@@ -148,10 +144,10 @@ class CommonIterator {
 
   async all (options) {
     options = getOptions(options, emptyOptions)
-    startWork(this)
+    this.#startWork()
 
     try {
-      if (this[kEnded] || this[kCount] >= this[kLimit]) {
+      if (this.#ended || this.#count >= this.#limit) {
         return []
       }
 
@@ -163,16 +159,16 @@ class CommonIterator {
         throw new IteratorDecodeError(err)
       }
 
-      this[kCount] += items.length
+      this.#count += items.length
       return items
     } catch (err) {
-      endWork(this)
-      await destroy(this, err)
+      this.#endWork()
+      await this.#destroy(err)
     } finally {
-      this[kEnded] = true
+      this.#ended = true
 
-      if (this[kWorking]) {
-        endWork(this)
+      if (this.#working) {
+        this.#endWork()
         await this.close()
       }
     }
@@ -180,13 +176,13 @@ class CommonIterator {
 
   async _all (options) {
     // Must count here because we're directly calling _nextv()
-    let count = this[kCount]
+    let count = this.#count
 
     const acc = []
 
     while (true) {
       // Not configurable, because implementations should optimize _all().
-      const size = this[kLimit] < Infinity ? Math.min(1e3, this[kLimit] - count) : 1e3
+      const size = this.#limit < Infinity ? Math.min(1e3, this.#limit - count) : 1e3
 
       if (size <= 0) {
         return acc
@@ -206,10 +202,10 @@ class CommonIterator {
   seek (target, options) {
     options = getOptions(options, emptyOptions)
 
-    if (this[kClosingPromise] !== null) {
+    if (this.#closingPromise !== null) {
       // Don't throw here, to be kind to implementations that wrap
       // another db and don't necessarily control when the db is closed
-    } else if (this[kWorking]) {
+    } else if (this.#working) {
       throw new ModuleError('Iterator is busy: cannot call seek() until next() has completed', {
         code: 'LEVEL_ITERATOR_BUSY'
       })
@@ -225,7 +221,7 @@ class CommonIterator {
       this._seek(mapped, options)
 
       // If _seek() was successfull, more data may be available.
-      this[kEnded] = false
+      this.#ended = false
     }
   }
 
@@ -236,25 +232,25 @@ class CommonIterator {
   }
 
   async close () {
-    if (this[kClosingPromise] !== null) {
+    if (this.#closingPromise !== null) {
       // First caller of close() is responsible for error
-      return this[kClosingPromise].catch(noop)
+      return this.#closingPromise.catch(noop)
     }
 
     // Wrap to avoid race issues on recursive calls
-    this[kClosingPromise] = new Promise((resolve, reject) => {
-      this[kPendingClose] = () => {
-        this[kPendingClose] = null
-        privateClose(this).then(resolve, reject)
+    this.#closingPromise = new Promise((resolve, reject) => {
+      this.#pendingClose = () => {
+        this.#pendingClose = null
+        this.#privateClose().then(resolve, reject)
       }
     })
 
     // If working we'll delay closing, but still handle the close error (if any) here
-    if (!this[kWorking]) {
-      this[kPendingClose]()
+    if (!this.#working) {
+      this.#pendingClose()
     }
 
-    return this[kClosingPromise]
+    return this.#closingPromise
   }
 
   async _close () {}
@@ -267,10 +263,49 @@ class CommonIterator {
         yield item
       }
     } catch (err) {
-      await destroy(this, err)
+      await this.#destroy(err)
     } finally {
       await this.close()
     }
+  }
+
+  #startWork () {
+    if (this.#closingPromise !== null) {
+      throw new ModuleError('Iterator is not open: cannot read after close()', {
+        code: 'LEVEL_ITERATOR_NOT_OPEN'
+      })
+    } else if (this.#working) {
+      throw new ModuleError('Iterator is busy: cannot read until previous read has completed', {
+        code: 'LEVEL_ITERATOR_BUSY'
+      })
+    } else if (this.#signal?.aborted) {
+      throw new AbortError()
+    }
+
+    // Keep snapshot open during operation
+    this.#snapshot?.ref()
+    this.#working = true
+  }
+
+  #endWork () {
+    this.#working = false
+    this.#pendingClose?.()
+    this.#snapshot?.unref()
+  }
+
+  async #privateClose () {
+    await this._close()
+    this.db.detachResource(this)
+  }
+
+  async #destroy (err) {
+    try {
+      await this.close()
+    } catch (closeErr) {
+      throw combineErrors([err, closeErr])
+    }
+
+    throw err
   }
 }
 
@@ -282,10 +317,13 @@ if (typeof Symbol.asyncDispose === 'symbol') {
 
 // For backwards compatibility this class is not (yet) called AbstractEntryIterator.
 class AbstractIterator extends CommonIterator {
+  #keys
+  #values
+
   constructor (db, options) {
     super(db, options)
-    this[kKeys] = options.keys !== false
-    this[kValues] = options.values !== false
+    this.#keys = options.keys !== false
+    this.#values = options.values !== false
   }
 
   [kDecodeOne] (entry) {
@@ -293,11 +331,11 @@ class AbstractIterator extends CommonIterator {
     const value = entry[1]
 
     if (key !== undefined) {
-      entry[0] = this[kKeys] ? this[kKeyEncoding].decode(key) : undefined
+      entry[0] = this.#keys ? this[kKeyEncoding].decode(key) : undefined
     }
 
     if (value !== undefined) {
-      entry[1] = this[kValues] ? this[kValueEncoding].decode(value) : undefined
+      entry[1] = this.#values ? this[kValueEncoding].decode(value) : undefined
     }
 
     return entry
@@ -311,8 +349,8 @@ class AbstractIterator extends CommonIterator {
       const key = entry[0]
       const value = entry[1]
 
-      if (key !== undefined) entry[0] = this[kKeys] ? keyEncoding.decode(key) : undefined
-      if (value !== undefined) entry[1] = this[kValues] ? valueEncoding.decode(value) : undefined
+      if (key !== undefined) entry[0] = this.#keys ? keyEncoding.decode(key) : undefined
+      if (value !== undefined) entry[1] = this.#values ? valueEncoding.decode(value) : undefined
     }
   }
 }
@@ -355,55 +393,6 @@ class IteratorDecodeError extends ModuleError {
       cause
     })
   }
-}
-
-const startWork = function (iterator) {
-  if (iterator[kClosingPromise] !== null) {
-    throw new ModuleError('Iterator is not open: cannot read after close()', {
-      code: 'LEVEL_ITERATOR_NOT_OPEN'
-    })
-  } else if (iterator[kWorking]) {
-    throw new ModuleError('Iterator is busy: cannot read until previous read has completed', {
-      code: 'LEVEL_ITERATOR_BUSY'
-    })
-  } else if (iterator[kSignal] !== null && iterator[kSignal].aborted) {
-    throw new AbortError()
-  }
-
-  iterator[kWorking] = true
-
-  // Keep snapshot open during operation
-  if (iterator[kSnapshot] !== null) {
-    iterator[kSnapshot].ref()
-  }
-}
-
-const endWork = function (iterator) {
-  iterator[kWorking] = false
-
-  if (iterator[kPendingClose] !== null) {
-    iterator[kPendingClose]()
-  }
-
-  // Release snapshot
-  if (iterator[kSnapshot] !== null) {
-    iterator[kSnapshot].unref()
-  }
-}
-
-const privateClose = async function (iterator) {
-  await iterator._close()
-  iterator.db.detachResource(iterator)
-}
-
-const destroy = async function (iterator, err) {
-  try {
-    await iterator.close()
-  } catch (closeErr) {
-    throw combineErrors([err, closeErr])
-  }
-
-  throw err
 }
 
 // Exposed so that AbstractLevel can set these options
