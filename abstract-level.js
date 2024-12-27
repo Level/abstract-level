@@ -449,6 +449,117 @@ class AbstractLevel extends EventEmitter {
     return new Array(keys.length).fill(undefined)
   }
 
+  async has (key, options) {
+    options = getOptions(options, this[kDefaultOptions].key)
+
+    if (this[kStatus] === 'opening') {
+      return this.deferAsync(() => this.has(key, options))
+    }
+
+    assertOpen(this)
+
+    // TODO (next major): change this to an assert
+    const err = this._checkKey(key)
+    if (err) throw err
+
+    const snapshot = options.snapshot != null ? options.snapshot : null
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const keyFormat = keyEncoding.format
+
+    // Forward encoding options to the underlying store
+    if (options === this[kDefaultOptions].key) {
+      // Avoid Object.assign() for default options
+      options = this[kDefaultOptions].keyFormat
+    } else if (options.keyEncoding !== keyFormat) {
+      // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
+      options = Object.assign({}, options, { keyEncoding: keyFormat })
+    }
+
+    const encodedKey = keyEncoding.encode(key)
+    const mappedKey = this.prefixKey(encodedKey, keyFormat, true)
+
+    // Keep snapshot open during operation
+    if (snapshot !== null) {
+      snapshot.ref()
+    }
+
+    try {
+      return this._has(mappedKey, options)
+    } finally {
+      // Release snapshot
+      if (snapshot !== null) {
+        snapshot.unref()
+      }
+    }
+  }
+
+  async _has (key, options) {
+    throw new ModuleError('Database does not support has()', {
+      code: 'LEVEL_NOT_SUPPORTED'
+    })
+  }
+
+  async hasMany (keys, options) {
+    options = getOptions(options, this[kDefaultOptions].entry)
+
+    if (this[kStatus] === 'opening') {
+      return this.deferAsync(() => this.hasMany(keys, options))
+    }
+
+    assertOpen(this)
+
+    if (!Array.isArray(keys)) {
+      throw new TypeError("The first argument 'keys' must be an array")
+    }
+
+    if (keys.length === 0) {
+      return []
+    }
+
+    const snapshot = options.snapshot != null ? options.snapshot : null
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const keyFormat = keyEncoding.format
+
+    // Forward encoding options to the underlying store
+    if (options === this[kDefaultOptions].key) {
+      // Avoid Object.assign() for default options
+      options = this[kDefaultOptions].keyFormat
+    } else if (options.keyEncoding !== keyFormat) {
+      // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
+      options = Object.assign({}, options, { keyEncoding: keyFormat })
+    }
+
+    const mappedKeys = new Array(keys.length)
+
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i]
+      const err = this._checkKey(key)
+      if (err) throw err
+
+      mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
+    }
+
+    // Keep snapshot open during operation
+    if (snapshot !== null) {
+      snapshot.ref()
+    }
+
+    try {
+      return this._hasMany(mappedKeys, options)
+    } finally {
+      // Release snapshot
+      if (snapshot !== null) {
+        snapshot.unref()
+      }
+    }
+  }
+
+  async _hasMany (keys, options) {
+    throw new ModuleError('Database does not support hasMany()', {
+      code: 'LEVEL_NOT_SUPPORTED'
+    })
+  }
+
   async put (key, value, options) {
     if (!this.hooks.prewrite.noop) {
       // Forward to batch() which will run the hook
