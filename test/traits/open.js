@@ -1,7 +1,13 @@
 'use strict'
 
-module.exports = function (name, testCommon, run) {
+module.exports = function (name, testCommon, options, run) {
+  if (typeof options === 'function') {
+    run = options
+    options = {}
+  }
+
   const test = testCommon.test
+  const deferred = options.deferred !== false
 
   test(`${name} on open db`, async function (t) {
     const db = testCommon.factory()
@@ -15,7 +21,7 @@ module.exports = function (name, testCommon, run) {
     return db.close()
   })
 
-  test(`${name} on opening db`, async function (t) {
+  deferred && test(`${name} on opening db`, async function (t) {
     const db = testCommon.factory()
     t.is(db.status, 'opening')
     await run(t, db)
@@ -38,7 +44,7 @@ module.exports = function (name, testCommon, run) {
     return db.close()
   })
 
-  test(`${name} on reopening db`, async function (t) {
+  deferred && test(`${name} on reopening db`, async function (t) {
     const db = testCommon.factory()
 
     await db.close()

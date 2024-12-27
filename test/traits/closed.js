@@ -18,7 +18,7 @@ module.exports = function (name, testCommon, run) {
         error = err
       }
 
-      t.is(error.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.is(error && error.code, 'LEVEL_DATABASE_NOT_OPEN')
     })
 
     test(`${name} on closing db fails (deferred open: ${deferred})`, async function (t) {
@@ -36,7 +36,7 @@ module.exports = function (name, testCommon, run) {
       }
 
       await promise
-      t.is(error.code, 'LEVEL_DATABASE_NOT_OPEN')
+      t.is(error && error.code, 'LEVEL_DATABASE_NOT_OPEN')
     })
   }
 }

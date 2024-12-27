@@ -18,6 +18,7 @@ const kValues = Symbol('values')
 const kLimit = Symbol('limit')
 const kCount = Symbol('count')
 const kEnded = Symbol('ended')
+const kSnapshot = Symbol('snapshot')
 
 // This class is an internal utility for common functionality between AbstractIterator,
 // AbstractKeyIterator and AbstractValueIterator. It's not exported.
@@ -40,6 +41,7 @@ class CommonIterator {
     this[kLimit] = Number.isInteger(options.limit) && options.limit >= 0 ? options.limit : Infinity
     this[kCount] = 0
     this[kSignal] = options.signal != null ? options.signal : null
+    this[kSnapshot] = options.snapshot != null ? options.snapshot : null
 
     // Ending means reaching the natural end of the data and (unlike closing) that can
     // be reset by seek(), unless the limit was reached.
@@ -363,6 +365,11 @@ const startWork = function (iterator) {
   }
 
   iterator[kWorking] = true
+
+  // Keep snapshot open during operation
+  if (iterator[kSnapshot] !== null) {
+    iterator[kSnapshot].ref()
+  }
 }
 
 const endWork = function (iterator) {
@@ -370,6 +377,11 @@ const endWork = function (iterator) {
 
   if (iterator[kPendingClose] !== null) {
     iterator[kPendingClose]()
+  }
+
+  // Release snapshot
+  if (iterator[kSnapshot] !== null) {
+    iterator[kSnapshot].unref()
   }
 }
 

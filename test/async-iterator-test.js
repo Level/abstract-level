@@ -53,7 +53,7 @@ exports.asyncIterator = function (test, testCommon) {
       await db.close()
     })
 
-    testCommon.supports.snapshots && test(`for await...of ${mode}() (deferred, with snapshot)`, async function (t) {
+    testCommon.supports.implicitSnapshots && test(`for await...of ${mode}() (deferred, with snapshot)`, async function (t) {
       t.plan(2)
 
       const db = testCommon.factory()

@@ -16,6 +16,7 @@
     "abstract-chained-batch.js",
     "abstract-iterator.js",
     "abstract-level.js",
+    "abstract-snapshot.js",
     "index.js",
     "index.d.ts",
     "lib",
@@ -27,7 +28,7 @@
   "dependencies": {
     "buffer": "^6.0.3",
     "is-buffer": "^2.0.5",
-    "level-supports": "^6.0.0",
+    "level-supports": "^6.1.1",
     "level-transcoder": "^1.0.1",
     "maybe-combine-errors": "^1.0.0",
     "module-error": "^1.0.1"
