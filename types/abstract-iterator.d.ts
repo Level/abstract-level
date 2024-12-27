@@ -60,7 +60,7 @@ export interface AbstractValueIteratorOptions<K, V> extends RangeOptions<K>, Com
  * @template TDatabase Type of the database that created this iterator.
  * @template T Type of items yielded. Items can be entries, keys or values.
  */
-declare class CommonIterator<TDatabase, T> {
+declare class CommonIterator<TDatabase, T> implements AsyncDisposable {
   /**
    * A reference to the database that created this iterator.
    */
@@ -87,6 +87,11 @@ declare class CommonIterator<TDatabase, T> {
    * [1]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/for-await...of
    */
   close (): Promise<void>
+
+  /**
+   * Close the iterator.
+   */
+  [Symbol.asyncDispose](): Promise<void>
 }
 
 export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase, [K, V]> {

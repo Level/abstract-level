@@ -70,6 +70,12 @@ class AbstractSnapshot {
   async _close () {}
 }
 
+if (typeof Symbol.asyncDispose === 'symbol') {
+  AbstractSnapshot.prototype[Symbol.asyncDispose] = async function () {
+    return this.close()
+  }
+}
+
 const privateClose = async function (snapshot, owner) {
   await snapshot._close()
   owner.detachResource(snapshot)

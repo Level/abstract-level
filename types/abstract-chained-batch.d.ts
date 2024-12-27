@@ -1,7 +1,8 @@
 import * as Transcoder from 'level-transcoder'
 import { AbstractSublevel } from './abstract-sublevel'
 
-export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
+export class AbstractChainedBatch<TDatabase, KDefault, VDefault>
+  implements AsyncDisposable {
   constructor (db: TDatabase)
 
   /**
@@ -53,6 +54,11 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault> {
    * committing it.
    */
   close (): Promise<void>
+
+  /**
+   * Close the batch.
+   */
+  [Symbol.asyncDispose](): Promise<void>
 }
 
 /**

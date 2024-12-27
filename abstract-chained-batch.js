@@ -358,6 +358,12 @@ class AbstractChainedBatch {
   async _close () {}
 }
 
+if (typeof Symbol.asyncDispose === 'symbol') {
+  AbstractChainedBatch.prototype[Symbol.asyncDispose] = async function () {
+    return this.close()
+  }
+}
+
 const prepareClose = function (batch) {
   let close
 

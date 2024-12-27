@@ -274,6 +274,12 @@ class CommonIterator {
   }
 }
 
+if (typeof Symbol.asyncDispose === 'symbol') {
+  CommonIterator.prototype[Symbol.asyncDispose] = async function () {
+    return this.close()
+  }
+}
+
 // For backwards compatibility this class is not (yet) called AbstractEntryIterator.
 class AbstractIterator extends CommonIterator {
   constructor (db, options) {

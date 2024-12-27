@@ -308,10 +308,24 @@ exports.tearDown = function (test, testCommon) {
   })
 }
 
+exports.dispose = function (test, testCommon) {
+  // Can't use the syntax yet (https://github.com/tc39/proposal-explicit-resource-management)
+  Symbol.asyncDispose && test('Symbol.asyncDispose', async function (t) {
+    const db = testCommon.factory()
+    await db.open()
+
+    const batch = db.batch()
+    await batch[Symbol.asyncDispose]()
+
+    return db.close()
+  })
+}
+
 exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)
   exports.batch(test, testCommon)
   exports.events(test, testCommon)
   exports.tearDown(test, testCommon)
+  exports.dispose(test, testCommon)
 }

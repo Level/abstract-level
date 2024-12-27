@@ -945,6 +945,12 @@ const { AbstractSublevel } = require('./lib/abstract-sublevel')({ AbstractLevel 
 exports.AbstractLevel = AbstractLevel
 exports.AbstractSublevel = AbstractSublevel
 
+if (typeof Symbol.asyncDispose === 'symbol') {
+  AbstractLevel.prototype[Symbol.asyncDispose] = async function () {
+    return this.close()
+  }
+}
+
 const assertOpen = function (db) {
   if (db[kStatus] !== 'open') {
     throw new ModuleError('Database is not open', {
