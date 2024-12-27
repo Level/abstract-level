@@ -303,6 +303,19 @@ exports.cleanup = function (test, testCommon) {
   })
 }
 
+exports.dispose = function (test, testCommon) {
+  // Can't use the syntax yet (https://github.com/tc39/proposal-explicit-resource-management)
+  Symbol.asyncDispose && test('Symbol.asyncDispose', async function (t) {
+    const db = testCommon.factory()
+    await db.open()
+
+    const snapshot = db.snapshot()
+    await snapshot[Symbol.asyncDispose]()
+
+    return db.close()
+  })
+}
+
 exports.all = function (test, testCommon) {
   exports.traits(test, testCommon)
   exports.get(test, testCommon)
@@ -310,6 +323,7 @@ exports.all = function (test, testCommon) {
   exports.iterator(test, testCommon)
   exports.clear(test, testCommon)
   exports.cleanup(test, testCommon)
+  exports.dispose(test, testCommon)
 }
 
 function testFactory (test, testCommon) {

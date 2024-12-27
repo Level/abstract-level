@@ -597,6 +597,19 @@ exports.tearDown = function (test, testCommon) {
   })
 }
 
+exports.dispose = function (test, testCommon) {
+  // Can't use the syntax yet (https://github.com/tc39/proposal-explicit-resource-management)
+  Symbol.asyncDispose && test('Symbol.asyncDispose', async function (t) {
+    const db = testCommon.factory()
+    await db.open()
+
+    const iterator = db.iterator()
+    await iterator[Symbol.asyncDispose]()
+
+    return db.close()
+  })
+}
+
 exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)
@@ -604,4 +617,5 @@ exports.all = function (test, testCommon) {
   exports.iterator(test, testCommon)
   exports.decode(test, testCommon)
   exports.tearDown(test, testCommon)
+  exports.dispose(test, testCommon)
 }

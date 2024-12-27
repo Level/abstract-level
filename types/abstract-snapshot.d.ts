@@ -2,7 +2,7 @@
  * A lightweight token that represents a version of a database at a particular point in
  * time.
  */
-export class AbstractSnapshot {
+export class AbstractSnapshot implements AsyncDisposable {
   /**
    * Increment reference count, to register work that should delay closing until
    * {@link unref} is called an equal amount of times. The promise that will be returned
@@ -20,4 +20,9 @@ export class AbstractSnapshot {
    * Close the snapshot.
    */
   close (): Promise<void>
+
+  /**
+   * Close the snapshot.
+   */
+  [Symbol.asyncDispose](): Promise<void>
 }

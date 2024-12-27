@@ -61,6 +61,33 @@ const xyz = db.sublevel<string, any>('xyz', { valueEncoding: 'json' })
 
 </details>
 
+TypeScript users can benefit from the `using` keyword because `abstract-level` implements [`Symbol.asyncDispose`](https://github.com/tc39/proposal-explicit-resource-management) on its resources. For example:
+
+<details><summary>Using example</summary>
+
+```ts
+await db.put('example', 'before')
+await using snapshot = db.snapshot()
+await db.put('example', 'after')
+await db.get('example', { snapshot })) // Returns 'before'
+```
+
+The equivalent in JavaScript would be:
+
+```js
+await db.put('example', 'before')
+const snapshot = db.snapshot()
+
+try {
+  await db.put('example', 'after')
+  await db.get('example', { snapshot })) // Returns 'before'
+} finally {
+  await snapshot.close()
+}
+```
+
+</details>
+
 ## Install
 
 With [npm](https://npmjs.org) do:

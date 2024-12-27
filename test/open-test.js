@@ -248,6 +248,14 @@ exports.open = function (test, testCommon) {
     await new Promise((resolve) => db.once('open', resolve))
     return db.close()
   })
+
+  // Can't use the syntax yet (https://github.com/tc39/proposal-explicit-resource-management)
+  Symbol.asyncDispose && test('Symbol.asyncDispose', async function (t) {
+    const db = testCommon.factory()
+    await db.open()
+    await db[Symbol.asyncDispose]()
+    t.is(db.status, 'closed')
+  })
 }
 
 exports.all = function (test, testCommon) {

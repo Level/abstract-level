@@ -24,7 +24,7 @@ import { RangeOptions } from './interfaces'
  * @template VDefault The default type of values if not overridden on operations.
  */
 declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
-  extends EventEmitter {
+  extends EventEmitter implements AsyncDisposable {
   /**
    * Private database constructor.
    *
@@ -68,6 +68,11 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Close the database.
    */
   close (): Promise<void>
+
+  /**
+   * Close the database.
+   */
+  [Symbol.asyncDispose](): Promise<void>
 
   /**
    * Get a value from the database by {@link key}.
