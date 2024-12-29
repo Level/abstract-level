@@ -95,6 +95,35 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   ): Promise<(V | undefined)[]>
 
   /**
+   * Check if the database has an entry with the given {@link key}.
+   *
+   * @returns A promise for a boolean that will be true if the entry exists.
+   *
+   * @example
+   * ```js
+   * if (await db.has('fruit')) {
+   *   console.log('We have fruit')
+   * }
+   * ```
+   */
+  has (key: KDefault): Promise<boolean>
+  has<K = KDefault> (key: K, options: AbstractHasOptions<K>): Promise<boolean>
+
+  /**
+   * Check if the database has entries with the given {@link keys}.
+   *
+   * @returns A promise for an array of booleans with the same order as {@link keys}.
+   *
+   * @example
+   * ```js
+   * await db.put('a', '123')
+   * await db.hasMany(['a', 'b']) // [true, false]
+   * ```
+   */
+  hasMany (keys: KDefault[]): Promise<boolean[]>
+  hasMany<K = KDefault> (keys: K[], options: AbstractHasManyOptions<K>): Promise<boolean[]>
+
+  /**
    * Add a new entry or overwrite an existing entry.
    */
   put (key: KDefault, value: VDefault): Promise<void>
@@ -347,6 +376,26 @@ export interface AbstractGetManyOptions<K, V> {
    * Custom value encoding for this operation, used to decode values.
    */
   valueEncoding?: string | Transcoder.PartialDecoder<V> | undefined
+}
+
+/**
+ * Options for the {@link AbstractLevel.has} method.
+ */
+export interface AbstractHasOptions<K> {
+  /**
+   * Custom key encoding for this operation, used to encode the `key`.
+   */
+  keyEncoding?: string | Transcoder.PartialEncoder<K> | undefined
+}
+
+/**
+ * Options for the {@link AbstractLevel.hasMany} method.
+ */
+export interface AbstractHasManyOptions<K> {
+  /**
+   * Custom key encoding for this operation, used to encode the `keys`.
+   */
+  keyEncoding?: string | Transcoder.PartialEncoder<K> | undefined
 }
 
 /**

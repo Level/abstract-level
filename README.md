@@ -168,6 +168,45 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
+### `db.has(key[, options])`
+
+Check if the database has an entry with the given `key`. The optional `options` object may contain:
+
+- `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+
+Returns a promise for a boolean. For example:
+
+```js
+if (await db.has('fruit')) {
+  console.log('We have fruit')
+}
+```
+
+If the value of the entry is needed, instead do:
+
+```js
+const value = await db.get('fruit')
+
+if (value !== undefined) {
+  console.log('We have fruit: %o', value)
+}
+```
+
+### `db.hasMany(keys[, options])`
+
+Check if the database has entries with the given keys. The `keys` argument must be an array. The optional `options` object may contain:
+
+- `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+
+Returns a promise for an array of booleans with the same order as `keys`. For example:
+
+```js
+await db.put('a', '123')
+await db.hasMany(['a', 'b']) // [true, false]
+```
+
 ### `db.put(key, value[, options])`
 
 Add a new entry or overwrite an existing entry. The optional `options` object may contain:

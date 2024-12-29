@@ -91,6 +91,7 @@ class MinimalLevel extends AbstractLevel {
     super({
       encodings: { utf8: true },
       seek: true,
+      has: true,
       explicitSnapshots: true
     }, options)
 
@@ -111,6 +112,16 @@ class MinimalLevel extends AbstractLevel {
   async _getMany (keys, options) {
     const entries = (options.snapshot || this)[kEntries]
     return keys.map(k => entries.get(k))
+  }
+
+  async _has (key, options) {
+    const entries = (options.snapshot || this)[kEntries]
+    return entries.has(key)
+  }
+
+  async _hasMany (keys, options) {
+    const entries = (options.snapshot || this)[kEntries]
+    return keys.map(k => entries.has(k))
   }
 
   async _del (key, options) {
