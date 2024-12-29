@@ -1,7 +1,7 @@
 import * as Transcoder from 'level-transcoder'
-import { RangeOptions } from './interfaces'
+import { AbstractReadOptions, RangeOptions } from './interfaces'
 
-declare interface CommonIteratorOptions {
+declare interface CommonIteratorOptions extends AbstractReadOptions {
   /**
    * An [`AbortSignal`][1] to abort read operations on the iterator.
    *
