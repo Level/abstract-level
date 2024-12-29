@@ -55,8 +55,8 @@ for (const mode of ['iterator', 'keys', 'values']) {
   })
 
   // NOTE: adapted from deferred-leveldown
-  test(`deferred ${mode}(): non-deferred operations`, function (t) {
-    t.plan(4)
+  test(`deferred ${mode}(): non-deferred operations`, async function (t) {
+    t.plan(3)
 
     class MockIterator extends RealCtor {
       _seek (target) {
@@ -74,17 +74,14 @@ for (const mode of ['iterator', 'keys', 'values']) {
       }
     })
 
-    // TODO: async/await
-    db.open().then(function () {
-      it.seek(123)
-      it.next().then(function (item) {
-        t.is(item, nextArg)
-        it.close().then(t.pass.bind(t, 'closed'))
-      })
-    })
-
     const it = db[publicMethod]({ gt: 'foo' })
     t.ok(it instanceof DeferredCtor)
+
+    await db.open()
+    it.seek(123)
+    t.is(await it.next(), nextArg)
+
+    return it.close()
   })
 
   // NOTE: adapted from deferred-leveldown
@@ -127,7 +124,7 @@ for (const mode of ['iterator', 'keys', 'values']) {
   })
 
   for (const method of ['next', 'nextv', 'all']) {
-    test(`deferred ${mode}(): closed upon failed open, verified by ${method}()`, function (t) {
+    test(`deferred ${mode}(): closed upon failed open, verified by ${method}()`, async function (t) {
       t.plan(5)
 
       const db = mockLevel({
@@ -152,11 +149,11 @@ for (const mode of ['iterator', 'keys', 'values']) {
         return original.call(this, ...args)
       }
 
-      verifyClosed(t, it, method, () => {})
+      return verifyClosed(t, it, method)
     })
 
-    test(`deferred ${mode}(): deferred and real iterators are closed on db.close(), verified by ${method}()`, function (t) {
-      t.plan(8)
+    test(`deferred ${mode}(): deferred and real iterators are closed on db.close(), verified by ${method}()`, async function (t) {
+      t.plan(7)
 
       class MockIterator extends RealCtor {
         async _close () {
@@ -179,17 +176,16 @@ for (const mode of ['iterator', 'keys', 'values']) {
         return original.call(this, ...args)
       }
 
-      // TODO: async/await
-      db.open().then(() => db.close()).then(function () {
-        verifyClosed(t, it, method, function () {
-          db.open().then(function () {
-            // Should still be closed
-            verifyClosed(t, it, method, function () {
-              db.close().then(t.pass.bind(t))
-            })
-          })
-        })
-      })
+      await db.open()
+      await db.close()
+
+      await verifyClosed(t, it, method)
+      await db.open()
+
+      // Should still be closed
+      await verifyClosed(t, it, method)
+
+      return db.close()
     })
   }
 
@@ -298,18 +294,21 @@ for (const mode of ['iterator', 'keys', 'values']) {
     })
   })
 
-  // TODO: async/await
-  const verifyClosed = function (t, it, method, cb) {
+  const verifyClosed = async function (t, it, method) {
     const requiredArgs = method === 'nextv' ? [10] : []
 
-    it[method](...requiredArgs).then(t.fail.bind(t, 'should not succeed'), function (err) {
-      t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN', `correct error on first ${method}()`)
+    try {
+      await it[method](...requiredArgs)
+      t.fail('should not succeed')
+    } catch (err) {
+      t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN', `correct error on first ${method}()`)
+    }
 
-      // Should account for userland code that ignores errors
-      it[method](...requiredArgs).then(t.fail.bind(t, 'should not succeed'), function (err) {
-        t.is(err && err.code, 'LEVEL_ITERATOR_NOT_OPEN', `correct error on second ${method}()`)
-        cb()
-      })
-    })
+    try {
+      await it[method](...requiredArgs)
+      t.fail('should not succeed')
+    } catch (err) {
+      t.is(err.code, 'LEVEL_ITERATOR_NOT_OPEN', `correct error on second ${method}()`)
+    }
   }
 }

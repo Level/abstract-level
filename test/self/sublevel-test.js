@@ -69,27 +69,25 @@ test('sublevel is extensible', function (t) {
 })
 
 // NOTE: adapted from subleveldown
-test('sublevel prefix and options', function (t) {
-  // TODO: rename "prefix" to "name" where appropriate. E.g. this test should be
-  // called 'empty name' rather than 'empty prefix'.
-  t.test('empty prefix', function (t) {
+test('sublevel name and options', function (t) {
+  t.test('empty name', function (t) {
     const sub = new NoopLevel().sublevel('')
     t.is(sub.prefix, '!!')
     t.same(sub.path(), [''])
     t.end()
   })
 
-  t.test('prefix without options', function (t) {
-    const sub = new NoopLevel().sublevel('prefix')
-    t.is(sub.prefix, '!prefix!')
-    t.same(sub.path(), ['prefix'])
+  t.test('name without options', function (t) {
+    const sub = new NoopLevel().sublevel('name')
+    t.is(sub.prefix, '!name!')
+    t.same(sub.path(), ['name'])
     t.end()
   })
 
-  t.test('prefix and separator option', function (t) {
-    const sub = new NoopLevel().sublevel('prefix', { separator: '%' })
-    t.is(sub.prefix, '%prefix%')
-    t.same(sub.path(), ['prefix'])
+  t.test('name and separator option', function (t) {
+    const sub = new NoopLevel().sublevel('name', { separator: '%' })
+    t.is(sub.prefix, '%name%')
+    t.same(sub.path(), ['name'])
     t.end()
   })
 
@@ -140,22 +138,22 @@ test('sublevel prefix and options', function (t) {
     t.end()
   })
 
-  t.test('separator is trimmed from prefix', function (t) {
-    const sub1 = new NoopLevel().sublevel('!prefix')
-    t.is(sub1.prefix, '!prefix!')
-    t.same(sub1.path(), ['prefix'])
+  t.test('separator is trimmed from name', function (t) {
+    const sub1 = new NoopLevel().sublevel('!name')
+    t.is(sub1.prefix, '!name!')
+    t.same(sub1.path(), ['name'])
 
-    const sub2 = new NoopLevel().sublevel('prefix!')
-    t.is(sub2.prefix, '!prefix!')
-    t.same(sub2.path(), ['prefix'])
+    const sub2 = new NoopLevel().sublevel('name!')
+    t.is(sub2.prefix, '!name!')
+    t.same(sub2.path(), ['name'])
 
-    const sub3 = new NoopLevel().sublevel('!!prefix!!')
-    t.is(sub3.prefix, '!prefix!')
-    t.same(sub3.path(), ['prefix'])
+    const sub3 = new NoopLevel().sublevel('!!name!!')
+    t.is(sub3.prefix, '!name!')
+    t.same(sub3.path(), ['name'])
 
-    const sub4 = new NoopLevel().sublevel('@prefix@', { separator: '@' })
-    t.is(sub4.prefix, '@prefix@')
-    t.same(sub4.path(), ['prefix'])
+    const sub4 = new NoopLevel().sublevel('@name@', { separator: '@' })
+    t.is(sub4.prefix, '@name@')
+    t.same(sub4.path(), ['name'])
 
     const sub5 = new NoopLevel().sublevel(['!!!a', 'b!!!'])
     t.is(sub5.prefix, '!a!!b!')
@@ -615,7 +613,7 @@ test('sublevel operations are prefixed', function (t) {
 
 test('sublevel encodings', function (t) {
   // NOTE: adapted from subleveldown
-  t.test('different sublevels can have different encodings', function (t) {
+  t.test('different sublevels can have different encodings', async function (t) {
     t.plan(6)
 
     const puts = []
@@ -636,41 +634,37 @@ test('sublevel encodings', function (t) {
     const sub1 = db.sublevel('test1', { valueEncoding: 'json' })
     const sub2 = db.sublevel('test2', { keyEncoding: 'buffer', valueEncoding: 'buffer' })
 
-    // TODO: async/await
-    sub1.put('foo', { some: 'json' }).then(function () {
-      t.same(puts, [{
-        key: '!test1!foo',
-        value: '{"some":"json"}',
-        keyEncoding: 'utf8',
-        valueEncoding: 'utf8'
-      }])
+    await sub1.put('foo', { some: 'json' })
 
-      sub1.get('foo').then(function (value) {
-        t.same(value, { some: 'json' })
-        t.same(gets.shift(), {
-          key: '!test1!foo',
-          keyEncoding: 'utf8',
-          valueEncoding: 'utf8'
-        })
+    t.same(puts, [{
+      key: '!test1!foo',
+      value: '{"some":"json"}',
+      keyEncoding: 'utf8',
+      valueEncoding: 'utf8'
+    }])
 
-        sub2.put(Buffer.from([1, 2]), Buffer.from([3])).then(function () {
-          t.same(puts, [{
-            key: Buffer.from('!test2!\x01\x02'),
-            value: Buffer.from([3]),
-            keyEncoding: 'buffer',
-            valueEncoding: 'buffer'
-          }])
+    t.same(await sub1.get('foo'), { some: 'json' })
+    t.same(gets.shift(), {
+      key: '!test1!foo',
+      keyEncoding: 'utf8',
+      valueEncoding: 'utf8'
+    })
 
-          sub2.get(Buffer.from([1, 2])).then(function (value) {
-            t.same(value, Buffer.from([3]))
-            t.same(gets.shift(), {
-              key: Buffer.from('!test2!\x01\x02'),
-              keyEncoding: 'buffer',
-              valueEncoding: 'buffer'
-            })
-          })
-        })
-      })
+    await sub2.put(Buffer.from([1, 2]), Buffer.from([3]))
+
+    t.same(puts, [{
+      key: Buffer.from('!test2!\x01\x02'),
+      value: Buffer.from([3]),
+      keyEncoding: 'buffer',
+      valueEncoding: 'buffer'
+    }])
+
+    t.same(await sub2.get(Buffer.from([1, 2])), Buffer.from([3]))
+
+    t.same(gets.shift(), {
+      key: Buffer.from('!test2!\x01\x02'),
+      keyEncoding: 'buffer',
+      valueEncoding: 'buffer'
     })
   })
 

@@ -41,10 +41,25 @@ exports.sequence = function (test, testCommon) {
 
 exports.seek = function (test, testCommon) {
   const testData = () => [
+    // Note that 'three' sorts before 'two'
     { type: 'put', key: 'one', value: '1' },
     { type: 'put', key: 'two', value: '2' },
     { type: 'put', key: 'three', value: '3' }
   ]
+
+  const bufferTestData = () => [
+    // Note that 'b9' sorts before 'c0'
+    { type: 'put', key: Buffer.from('80', 'hex'), value: '1', keyEncoding: 'buffer' },
+    { type: 'put', key: Buffer.from('c0', 'hex'), value: '2', keyEncoding: 'buffer' },
+    { type: 'put', key: Buffer.from('b9', 'hex'), value: '3', keyEncoding: 'buffer' }
+  ]
+
+  test('prepare byte-aware tests', function (t) {
+    const data = bufferTestData()
+    t.ok(data[0].key.toString() === data[1].key.toString(), 'would be equal when not byte-aware')
+    t.ok(data[0].key.compare(data[1].key) < 0, 'but less than when byte-aware')
+    t.end()
+  })
 
   for (const mode of ['iterator', 'keys', 'values']) {
     const mapEntry = mode === 'iterator' ? e => e : mode === 'keys' ? e => e[0] : e => e[1]
@@ -63,15 +78,17 @@ exports.seek = function (test, testCommon) {
     })
 
     if (testCommon.supports.encodings.buffer) {
-      // TODO: make this test meaningful, with bytes outside the utf8 range
       test(`${mode}().seek() to buffer target`, async function (t) {
+        // For this test to be meaningful it must use bytes outside the utf8 range
+        const data = bufferTestData()
         const db = testCommon.factory()
-        await db.batch(testData())
+        await db.batch(data)
         const it = db[mode]({ keyEncoding: 'buffer' })
 
-        it.seek(Buffer.from('two'))
+        // Seek to second key
+        it.seek(data[1].key)
 
-        t.same(await it.next(), mapEntry([Buffer.from('two'), '2']), 'match')
+        t.same(await it.next(), mapEntry([data[1].key, '2']), 'match')
         t.same(await it.next(), undefined, 'end of iterator')
 
         return db.close()
