@@ -14,7 +14,7 @@ import {
   AbstractValueIteratorOptions
 } from './abstract-iterator'
 
-import { RangeOptions } from './interfaces'
+import { AbstractReadOptions, RangeOptions } from './interfaces'
 
 /**
  * Abstract class for a lexicographically sorted key-value database.
@@ -272,12 +272,20 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
 
   /**
    * Create an explicit snapshot. Throws a `LEVEL_NOT_SUPPORTED` error if
-   * `db.supports.explicitSnapshots` is false.
-   *
-   * Don't forget to call `snapshot.close()` when done.
+   * `db.supports.explicitSnapshots` is false ([Level/community#118][1]).
    *
    * @param options There are currently no options but specific implementations
    * may add their own.
+   *
+   * @example
+   * ```ts
+   * await db.put('example', 'before')
+   * await using snapshot = db.snapshot()
+   * await db.put('example', 'after')
+   * await db.get('example', { snapshot })) // Returns 'before'
+   * ```
+   *
+   * [1]: https://github.com/Level/community/issues/118
    */
   snapshot (options?: any | undefined): AbstractSnapshot
 
@@ -351,7 +359,7 @@ export interface AbstractOpenOptions {
 /**
  * Options for the {@link AbstractLevel.get} method.
  */
-export interface AbstractGetOptions<K, V> {
+export interface AbstractGetOptions<K, V> extends AbstractReadOptions {
   /**
    * Custom key encoding for this operation, used to encode the `key`.
    */
@@ -366,7 +374,7 @@ export interface AbstractGetOptions<K, V> {
 /**
  * Options for the {@link AbstractLevel.getMany} method.
  */
-export interface AbstractGetManyOptions<K, V> {
+export interface AbstractGetManyOptions<K, V> extends AbstractReadOptions {
   /**
    * Custom key encoding for this operation, used to encode the `keys`.
    */
@@ -381,7 +389,7 @@ export interface AbstractGetManyOptions<K, V> {
 /**
  * Options for the {@link AbstractLevel.has} method.
  */
-export interface AbstractHasOptions<K> {
+export interface AbstractHasOptions<K> extends AbstractReadOptions {
   /**
    * Custom key encoding for this operation, used to encode the `key`.
    */
@@ -391,7 +399,7 @@ export interface AbstractHasOptions<K> {
 /**
  * Options for the {@link AbstractLevel.hasMany} method.
  */
-export interface AbstractHasManyOptions<K> {
+export interface AbstractHasManyOptions<K> extends AbstractReadOptions {
   /**
    * Custom key encoding for this operation, used to encode the `keys`.
    */
@@ -515,6 +523,12 @@ export interface AbstractClearOptions<K> extends RangeOptions<K> {
    * Custom key encoding for this operation, used to encode range options.
    */
   keyEncoding?: string | Transcoder.PartialEncoding<K> | undefined
+
+  /**
+   * Explicit snapshot to read from, such that entries not present in the snapshot will
+   * not be deleted.
+   */
+  snapshot?: AbstractSnapshot | undefined
 }
 
 /**

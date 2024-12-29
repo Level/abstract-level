@@ -4,6 +4,8 @@ export {
   AbstractOpenOptions,
   AbstractGetOptions,
   AbstractGetManyOptions,
+  AbstractHasOptions,
+  AbstractHasManyOptions,
   AbstractPutOptions,
   AbstractDelOptions,
   AbstractBatchOptions,
@@ -41,5 +43,9 @@ export {
 export {
   AbstractSnapshot
 } from './types/abstract-snapshot'
+
+export {
+  AbstractReadOptions
+} from './types/interfaces'
 
 export * as Transcoder from 'level-transcoder'

@@ -154,7 +154,7 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
 - `valueEncoding`: custom value encoding for this operation, used to decode the value.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from.
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
@@ -164,7 +164,7 @@ Get multiple values from the database by an array of `keys`. The optional `optio
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
 - `valueEncoding`: custom value encoding for this operation, used to decode values.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from.
 
 Returns a promise for an array of values with the same order as `keys`. If a key was not found, the relevant value will be `undefined`.
 
@@ -173,7 +173,7 @@ Returns a promise for an array of values with the same order as `keys`. If a key
 Check if the database has an entry with the given `key`. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `key`.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from.
 
 Returns a promise for a boolean. For example:
 
@@ -198,7 +198,7 @@ if (value !== undefined) {
 Check if the database has entries with the given keys. The `keys` argument must be an array. The optional `options` object may contain:
 
 - `keyEncoding`: custom key encoding for this operation, used to encode the `keys`.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot for this operation.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from.
 
 Returns a promise for an array of booleans with the same order as `keys`. For example:
 
@@ -299,7 +299,7 @@ The `gte` and `lte` range options take precedence over `gt` and `lt` respectivel
 - `keyEncoding`: custom key encoding for this iterator, used to encode range options, to encode `seek()` targets and to decode keys.
 - `valueEncoding`: custom value encoding for this iterator, used to decode values.
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to [abort read operations on the iterator](#aborting-iterators).
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) for the iterator to read from. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database will create its own internal snapshot before returning an iterator.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from.
 
 Lastly, an implementation is free to add its own options.
 
@@ -342,7 +342,7 @@ Delete all entries or a range. Not guaranteed to be atomic. Returns a promise. A
 - `reverse` (boolean, default: `false`): delete entries in reverse order. Only effective in combination with `limit`, to delete the last N entries.
 - `limit` (number, default: `Infinity`): limit the number of entries to be deleted. This number represents a _maximum_ number of entries and will not be reached if the end of the range is reached first. A value of `Infinity` or `-1` means there is no limit. When `reverse` is true the entries with the highest keys will be deleted instead of the lowest keys.
 - `keyEncoding`: custom key encoding for this operation, used to encode range options.
-- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided and `db.supports.implicitSnapshots` is true, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
+- `snapshot`: explicit [snapshot](#snapshot--dbsnapshotoptions) to read from, such that entries not present in the snapshot will not be deleted. If no `snapshot` is provided, the database may create its own internal snapshot but (unlike on other methods) this is currently not a hard requirement for implementations.
 
 The `gte` and `lte` range options take precedence over `gt` and `lt` respectively. If no options are provided, all entries will be deleted.
 
@@ -451,13 +451,9 @@ console.log(nested.prefixKey('a', 'utf8', true)) // '!nested!a'
 
 ### `snapshot = db.snapshot(options)`
 
-**This is an experimental API ([Level/community#118](https://github.com/Level/community/issues/118)).**
-
-Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error if `db.supports.explicitSnapshots` is false. For details, see [Reading From Snapshots](#reading-from-snapshots).
+Create an explicit [snapshot](#snapshot). Throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error if `db.supports.explicitSnapshots` is false ([Level/community#118](https://github.com/Level/community/issues/118)). For details, see [Reading From Snapshots](#reading-from-snapshots).
 
 There are currently no options but specific implementations may add their own.
-
-Don't forget to call `snapshot.close()` when done.
 
 ### `db.supports`
 
