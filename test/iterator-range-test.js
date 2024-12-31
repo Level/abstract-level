@@ -38,7 +38,7 @@ exports.range = function (test, testCommon) {
     // Test the documented promise that in reverse mode,
     // "the returned entries are the same, but in reverse".
     if (!opts.reverse && !('limit' in opts)) {
-      const reverseOpts = Object.assign({}, opts, { reverse: true })
+      const reverseOpts = { ...opts, reverse: true }
 
       rangeTest(
         name + ' (flipped)',
