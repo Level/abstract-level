@@ -6,18 +6,20 @@ const { getOptions, emptyOptions, noop } = require('./lib/common')
 const { prefixDescendantKey, isDescendant } = require('./lib/prefixes')
 const { PrewriteBatch } = require('./lib/prewrite-batch')
 
-const kStatus = Symbol('status')
 const kPublicOperations = Symbol('publicOperations')
-const kLegacyOperations = Symbol('legacyOperations')
 const kPrivateOperations = Symbol('privateOperations')
-const kClosePromise = Symbol('closePromise')
-const kLength = Symbol('length')
-const kPrewriteRun = Symbol('prewriteRun')
-const kPrewriteBatch = Symbol('prewriteBatch')
-const kPrewriteData = Symbol('prewriteData')
-const kAddMode = Symbol('addMode')
 
 class AbstractChainedBatch {
+  #status = 'open'
+  #length = 0
+  #closePromise = null
+  #publicOperations
+  #legacyOperations
+  #prewriteRun
+  #prewriteBatch
+  #prewriteData
+  #addMode
+
   constructor (db, options) {
     if (typeof db !== 'object' || db === null) {
       const hint = db === null ? 'null' : typeof db
@@ -29,17 +31,14 @@ class AbstractChainedBatch {
 
     // Operations for write event. We can skip populating this array (and cloning of
     // operations, which is the expensive part) if there are 0 write event listeners.
-    this[kPublicOperations] = enableWriteEvent ? [] : null
+    this.#publicOperations = enableWriteEvent ? [] : null
 
     // Operations for legacy batch event. If user opted-in to write event or prewrite
     // hook, skip legacy batch event. We can't skip the batch event based on listener
     // count, because a listener may be added between put() or del() and write().
-    this[kLegacyOperations] = enableWriteEvent || enablePrewriteHook ? null : []
+    this.#legacyOperations = enableWriteEvent || enablePrewriteHook ? null : []
 
-    this[kLength] = 0
-    this[kStatus] = 'open'
-    this[kClosePromise] = null
-    this[kAddMode] = getOptions(options, emptyOptions).add === true
+    this.#addMode = getOptions(options, emptyOptions).add === true
 
     if (enablePrewriteHook) {
       // Use separate arrays to collect operations added by hook functions, because
@@ -47,13 +46,13 @@ class AbstractChainedBatch {
       // exists to separate internal data from the public PrewriteBatch interface.
       const data = new PrewriteData([], enableWriteEvent ? [] : null)
 
-      this[kPrewriteData] = data
-      this[kPrewriteBatch] = new PrewriteBatch(db, data[kPrivateOperations], data[kPublicOperations])
-      this[kPrewriteRun] = db.hooks.prewrite.run // TODO: document why
+      this.#prewriteData = data
+      this.#prewriteBatch = new PrewriteBatch(db, data[kPrivateOperations], data[kPublicOperations])
+      this.#prewriteRun = db.hooks.prewrite.run // TODO: document why
     } else {
-      this[kPrewriteData] = null
-      this[kPrewriteBatch] = null
-      this[kPrewriteRun] = null
+      this.#prewriteData = null
+      this.#prewriteBatch = null
+      this.#prewriteRun = null
     }
 
     this.db = db
@@ -61,15 +60,15 @@ class AbstractChainedBatch {
   }
 
   get length () {
-    if (this[kPrewriteData] !== null) {
-      return this[kLength] + this[kPrewriteData].length
+    if (this.#prewriteData !== null) {
+      return this.#length + this.#prewriteData.length
     } else {
-      return this[kLength]
+      return this.#length
     }
   }
 
   put (key, value, options) {
-    assertStatus(this)
+    this.#assertStatus()
     options = getOptions(options, emptyOptions)
 
     const delegated = options.sublevel != null
@@ -90,7 +89,7 @@ class AbstractChainedBatch {
       valueEncoding: db.valueEncoding(options.valueEncoding)
     })
 
-    if (this[kPrewriteRun] !== null) {
+    if (this.#prewriteRun !== null) {
       try {
         // Note: we could have chosen to recurse here so that prewriteBatch.put() would
         // call this.put(). But then operations added by hook functions would be inserted
@@ -99,7 +98,7 @@ class AbstractChainedBatch {
         // chained batch though, which is that it avoids blocking the event loop with
         // more than one operation at a time. On the other hand, if operations added by
         // hook functions are adjacent (i.e. sorted) committing them should be faster.
-        this[kPrewriteRun](op, this[kPrewriteBatch])
+        this.#prewriteRun(op, this.#prewriteBatch)
 
         // Normalize encodings again in case they were modified
         op.keyEncoding = db.keyEncoding(op.keyEncoding)
@@ -134,7 +133,7 @@ class AbstractChainedBatch {
     }
 
     // If the sublevel is not a descendant then we shouldn't emit events
-    if (this[kPublicOperations] !== null && !siblings) {
+    if (this.#publicOperations !== null && !siblings) {
       // Clone op before we mutate it for the private API
       const publicOperation = Object.assign({}, op)
       publicOperation.encodedKey = encodedKey
@@ -148,15 +147,15 @@ class AbstractChainedBatch {
         publicOperation.valueEncoding = this.db.valueEncoding(valueFormat)
       }
 
-      this[kPublicOperations].push(publicOperation)
-    } else if (this[kLegacyOperations] !== null && !siblings) {
+      this.#publicOperations.push(publicOperation)
+    } else if (this.#legacyOperations !== null && !siblings) {
       const legacyOperation = Object.assign({}, original)
 
       legacyOperation.type = 'put'
       legacyOperation.key = key
       legacyOperation.value = value
 
-      this[kLegacyOperations].push(legacyOperation)
+      this.#legacyOperations.push(legacyOperation)
     }
 
     // If we're forwarding the sublevel option then don't prefix the key yet
@@ -165,7 +164,7 @@ class AbstractChainedBatch {
     op.keyEncoding = keyFormat
     op.valueEncoding = valueFormat
 
-    if (this[kAddMode]) {
+    if (this.#addMode) {
       this._add(op)
     } else {
       // This "operation as options" trick avoids further cloning
@@ -173,14 +172,14 @@ class AbstractChainedBatch {
     }
 
     // Increment only on success
-    this[kLength]++
+    this.#length++
     return this
   }
 
   _put (key, value, options) {}
 
   del (key, options) {
-    assertStatus(this)
+    this.#assertStatus()
     options = getOptions(options, emptyOptions)
 
     const delegated = options.sublevel != null
@@ -197,9 +196,9 @@ class AbstractChainedBatch {
       keyEncoding: db.keyEncoding(options.keyEncoding)
     })
 
-    if (this[kPrewriteRun] !== null) {
+    if (this.#prewriteRun !== null) {
       try {
-        this[kPrewriteRun](op, this[kPrewriteBatch])
+        this.#prewriteRun(op, this.#prewriteBatch)
 
         // Normalize encoding again in case it was modified
         op.keyEncoding = db.keyEncoding(op.keyEncoding)
@@ -220,7 +219,7 @@ class AbstractChainedBatch {
     // Prevent double prefixing
     if (delegated) op.sublevel = null
 
-    if (this[kPublicOperations] !== null) {
+    if (this.#publicOperations !== null) {
       // Clone op before we mutate it for the private API
       const publicOperation = Object.assign({}, op)
       publicOperation.encodedKey = encodedKey
@@ -231,20 +230,20 @@ class AbstractChainedBatch {
         publicOperation.keyEncoding = this.db.keyEncoding(keyFormat)
       }
 
-      this[kPublicOperations].push(publicOperation)
-    } else if (this[kLegacyOperations] !== null) {
+      this.#publicOperations.push(publicOperation)
+    } else if (this.#legacyOperations !== null) {
       const legacyOperation = Object.assign({}, original)
 
       legacyOperation.type = 'del'
       legacyOperation.key = key
 
-      this[kLegacyOperations].push(legacyOperation)
+      this.#legacyOperations.push(legacyOperation)
     }
 
     op.key = this.db.prefixKey(encodedKey, keyFormat, true)
     op.keyEncoding = keyFormat
 
-    if (this[kAddMode]) {
+    if (this.#addMode) {
       this._add(op)
     } else {
       // This "operation as options" trick avoids further cloning
@@ -252,7 +251,7 @@ class AbstractChainedBatch {
     }
 
     // Increment only on success
-    this[kLength]++
+    this.#length++
     return this
   }
 
@@ -261,37 +260,37 @@ class AbstractChainedBatch {
   _add (op) {}
 
   clear () {
-    assertStatus(this)
+    this.#assertStatus()
     this._clear()
 
-    if (this[kPublicOperations] !== null) this[kPublicOperations] = []
-    if (this[kLegacyOperations] !== null) this[kLegacyOperations] = []
-    if (this[kPrewriteData] !== null) this[kPrewriteData].clear()
+    if (this.#publicOperations !== null) this.#publicOperations = []
+    if (this.#legacyOperations !== null) this.#legacyOperations = []
+    if (this.#prewriteData !== null) this.#prewriteData.clear()
 
-    this[kLength] = 0
+    this.#length = 0
     return this
   }
 
   _clear () {}
 
   async write (options) {
-    assertStatus(this)
+    this.#assertStatus()
     options = getOptions(options)
 
-    if (this[kLength] === 0) {
+    if (this.#length === 0) {
       return this.close()
     } else {
-      this[kStatus] = 'writing'
+      this.#status = 'writing'
 
       // Prepare promise in case close() is called in the mean time
-      const close = prepareClose(this)
+      const close = this.#prepareClose()
 
       try {
         // Process operations added by prewrite hook functions
-        if (this[kPrewriteData] !== null) {
-          const publicOperations = this[kPrewriteData][kPublicOperations]
-          const privateOperations = this[kPrewriteData][kPrivateOperations]
-          const length = this[kPrewriteData].length
+        if (this.#prewriteData !== null) {
+          const publicOperations = this.#prewriteData[kPublicOperations]
+          const privateOperations = this.#prewriteData[kPrivateOperations]
+          const length = this.#prewriteData.length
 
           for (let i = 0; i < length; i++) {
             const op = privateOperations[i]
@@ -300,7 +299,7 @@ class AbstractChainedBatch {
             // status isn't exposed to the private API, so there's no difference in state
             // from that perspective, unless an implementation overrides the public write()
             // method at its own risk.
-            if (this[kAddMode]) {
+            if (this.#addMode) {
               this._add(op)
             } else if (op.type === 'put') {
               this._put(op.key, op.value, op)
@@ -310,7 +309,7 @@ class AbstractChainedBatch {
           }
 
           if (publicOperations !== null && length !== 0) {
-            this[kPublicOperations] = this[kPublicOperations].concat(publicOperations)
+            this.#publicOperations = this.#publicOperations.concat(publicOperations)
           }
         }
 
@@ -319,7 +318,7 @@ class AbstractChainedBatch {
         close()
 
         try {
-          await this[kClosePromise]
+          await this.#closePromise
         } catch (closeErr) {
           // eslint-disable-next-line no-ex-assign
           err = combineErrors([err, closeErr])
@@ -332,54 +331,73 @@ class AbstractChainedBatch {
 
       // Emit after initiating the closing, because event may trigger a
       // db close which in turn triggers (idempotently) closing this batch.
-      if (this[kPublicOperations] !== null) {
-        this.db.emit('write', this[kPublicOperations])
-      } else if (this[kLegacyOperations] !== null) {
-        this.db.emit('batch', this[kLegacyOperations])
+      if (this.#publicOperations !== null) {
+        this.db.emit('write', this.#publicOperations)
+      } else if (this.#legacyOperations !== null) {
+        this.db.emit('batch', this.#legacyOperations)
       }
 
-      return this[kClosePromise]
+      return this.#closePromise
     }
   }
 
   async _write (options) {}
 
   async close () {
-    if (this[kClosePromise] !== null) {
+    if (this.#closePromise !== null) {
       // First caller of close() or write() is responsible for error
-      return this[kClosePromise].catch(noop)
+      return this.#closePromise.catch(noop)
     } else {
       // Wrap promise to avoid race issues on recursive calls
-      prepareClose(this)()
-      return this[kClosePromise]
+      this.#prepareClose()()
+      return this.#closePromise
     }
   }
 
   async _close () {}
+
+  #assertStatus () {
+    if (this.#status !== 'open') {
+      throw new ModuleError('Batch is not open: cannot change operations after write() or close()', {
+        code: 'LEVEL_BATCH_NOT_OPEN'
+      })
+    }
+
+    // Can technically be removed, because it's no longer possible to call db.batch() when
+    // status is not 'open', and db.close() closes the batch. Keep for now, in case of
+    // unforseen userland behaviors.
+    if (this.db.status !== 'open') {
+      /* istanbul ignore next */
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
+  }
+
+  #prepareClose () {
+    let close
+
+    this.#closePromise = new Promise((resolve, reject) => {
+      close = () => {
+        this.#privateClose().then(resolve, reject)
+      }
+    })
+
+    return close
+  }
+
+  async #privateClose () {
+    // TODO: should we not set status earlier?
+    this.#status = 'closing'
+    await this._close()
+    this.db.detachResource(this)
+  }
 }
 
 if (typeof Symbol.asyncDispose === 'symbol') {
   AbstractChainedBatch.prototype[Symbol.asyncDispose] = async function () {
     return this.close()
   }
-}
-
-const prepareClose = function (batch) {
-  let close
-
-  batch[kClosePromise] = new Promise((resolve, reject) => {
-    close = () => {
-      privateClose(batch).then(resolve, reject)
-    }
-  })
-
-  return close
-}
-
-const privateClose = async function (batch) {
-  batch[kStatus] = 'closing'
-  await batch._close()
-  batch.db.detachResource(batch)
 }
 
 class PrewriteData {
@@ -402,24 +420,6 @@ class PrewriteData {
         ops.splice(0, ops.length)
       }
     }
-  }
-}
-
-const assertStatus = function (batch) {
-  if (batch[kStatus] !== 'open') {
-    throw new ModuleError('Batch is not open: cannot change operations after write() or close()', {
-      code: 'LEVEL_BATCH_NOT_OPEN'
-    })
-  }
-
-  // Can technically be removed, because it's no longer possible to call db.batch() when
-  // status is not 'open', and db.close() closes the batch. Keep for now, in case of
-  // unforseen userland behaviors.
-  if (batch.db.status !== 'open') {
-    /* istanbul ignore next */
-    throw new ModuleError('Database is not open', {
-      code: 'LEVEL_DATABASE_NOT_OPEN'
-    })
   }
 }
 

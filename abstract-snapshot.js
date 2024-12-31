@@ -38,8 +38,8 @@ class AbstractSnapshot {
   }
 
   unref () {
-    if (--this.#referenceCount === 0 && this.#pendingClose !== null) {
-      this.#pendingClose()
+    if (--this.#referenceCount === 0) {
+      this.#pendingClose?.()
     }
   }
 

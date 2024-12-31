@@ -34,11 +34,13 @@
     "module-error": "^1.0.1"
   },
   "devDependencies": {
+    "@babel/preset-env": "^7.26.0",
     "@types/node": "^22.7.7",
     "@voxpelli/tsconfig": "^15.0.0",
     "airtap": "^4.0.4",
     "airtap-electron": "^1.0.0",
     "airtap-playwright": "^1.0.1",
+    "babelify": "^10.0.0",
     "electron": "^30.5.1",
     "hallmark": "^5.0.1",
     "nyc": "^15.1.0",
