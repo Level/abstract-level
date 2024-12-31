@@ -392,7 +392,7 @@ The optional `options` object may contain:
 
 The `keyEncoding` and `valueEncoding` options are forwarded to the `AbstractLevel` constructor and work the same, as if a new, separate database was created. They default to `'utf8'` regardless of the encodings configured on `db`. Other options are forwarded too but `abstract-level` has no relevant options at the time of writing. For example, setting the `createIfMissing` option will have no effect. Why is that?
 
-Like regular databases, sublevels open themselves but they do not affect the state of the parent database. This means a sublevel can be individually closed and (re)opened. If the sublevel is created while the parent database is opening, it will wait for that to finish. If the parent database is closed, then opening the sublevel will fail and subsequent operations on the sublevel will yield errors with code [`LEVEL_DATABASE_NOT_OPEN`](#errors).
+Like regular databases, sublevels open themselves, but they do not affect the state of the parent database. This means a sublevel can be individually closed and (re)opened. If the sublevel is created while the parent database is opening, it will wait for that to finish. Closing the parent database will automatically close the sublevel, along with other resources like iterators.
 
 Lastly, the `name` argument can be an array as a shortcut to create nested sublevels. Those are normally created like so:
 
