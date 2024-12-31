@@ -320,9 +320,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     this.#assertOpen()
-
-    const err = this._checkKey(key)
-    if (err) throw err
+    this._assertValidKey(key)
 
     const snapshot = options.snapshot
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -397,9 +395,7 @@ class AbstractLevel extends EventEmitter {
 
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]
-      const err = this._checkKey(key)
-      if (err) throw err
-
+      this._assertValidKey(key)
       mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
     }
 
@@ -443,10 +439,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     this.#assertOpen()
-
-    // TODO (next major): change this to an assert
-    const err = this._checkKey(key)
-    if (err) throw err
+    this._assertValidKey(key)
 
     const snapshot = options.snapshot
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -515,9 +508,7 @@ class AbstractLevel extends EventEmitter {
 
     for (let i = 0; i < keys.length; i++) {
       const key = keys[i]
-      const err = this._checkKey(key)
-      if (err) throw err
-
+      this._assertValidKey(key)
       mappedKeys[i] = this.prefixKey(keyEncoding.encode(key), keyFormat, true)
     }
 
@@ -554,8 +545,8 @@ class AbstractLevel extends EventEmitter {
 
     this.#assertOpen()
 
-    const err = this._checkKey(key) || this._checkValue(value)
-    if (err) throw err
+    this._assertValidKey(key)
+    this._assertValidValue(value)
 
     // Encode data for private API
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -612,9 +603,7 @@ class AbstractLevel extends EventEmitter {
     }
 
     this.#assertOpen()
-
-    const err = this._checkKey(key)
-    if (err) throw err
+    this._assertValidKey(key)
 
     // Encode data for private API
     const keyEncoding = this.keyEncoding(options.keyEncoding)
@@ -701,15 +690,12 @@ class AbstractLevel extends EventEmitter {
       const delegated = op.sublevel != null
       const db = delegated ? op.sublevel : this
 
-      const keyError = db._checkKey(op.key)
-      if (keyError != null) throw keyError
+      db._assertValidKey(op.key)
 
       op.keyEncoding = db.keyEncoding(op.keyEncoding)
 
       if (isPut) {
-        const valueError = db._checkValue(op.value)
-        if (valueError != null) throw valueError
-
+        db._assertValidValue(op.value)
         op.valueEncoding = db.valueEncoding(op.valueEncoding)
       } else if (op.type !== 'del') {
         throw new TypeError("A batch operation must have a type property that is 'put' or 'del'")
@@ -1008,17 +994,17 @@ class AbstractLevel extends EventEmitter {
     return new DefaultChainedBatch(this)
   }
 
-  _checkKey (key) {
+  _assertValidKey (key) {
     if (key === null || key === undefined) {
-      return new ModuleError('Key cannot be null or undefined', {
+      throw new ModuleError('Key cannot be null or undefined', {
         code: 'LEVEL_INVALID_KEY'
       })
     }
   }
 
-  _checkValue (value) {
+  _assertValidValue (value) {
     if (value === null || value === undefined) {
-      return new ModuleError('Value cannot be null or undefined', {
+      throw new ModuleError('Value cannot be null or undefined', {
         code: 'LEVEL_INVALID_VALUE'
       })
     }
