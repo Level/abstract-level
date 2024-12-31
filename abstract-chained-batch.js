@@ -74,11 +74,9 @@ class AbstractChainedBatch {
     const delegated = options.sublevel != null
     const db = delegated ? options.sublevel : this.db
     const original = options
-    const keyError = db._checkKey(key)
-    const valueError = db._checkValue(value)
 
-    if (keyError != null) throw keyError
-    if (valueError != null) throw valueError
+    db._assertValidKey(key)
+    db._assertValidValue(value)
 
     const op = {
       ...options,
@@ -185,9 +183,8 @@ class AbstractChainedBatch {
     const delegated = options.sublevel != null
     const db = delegated ? options.sublevel : this.db
     const original = options
-    const keyError = db._checkKey(key)
 
-    if (keyError != null) throw keyError
+    db._assertValidKey(key)
 
     const op = {
       ...options,
