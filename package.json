@@ -37,7 +37,7 @@
     "@babel/preset-env": "^7.26.0",
     "@types/node": "^22.7.7",
     "@voxpelli/tsconfig": "^15.0.0",
-    "airtap": "^4.0.4",
+    "airtap": "^5.0.0",
     "airtap-electron": "^1.0.0",
     "airtap-playwright": "^1.0.1",
     "babelify": "^10.0.0",
