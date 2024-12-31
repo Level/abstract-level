@@ -331,8 +331,10 @@ class AbstractLevel extends EventEmitter {
     const keyFormat = keyEncoding.format
     const valueFormat = valueEncoding.format
 
-    // Forward encoding options to the underlying store
-    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+    // Forward encoding options. Avoid cloning if possible.
+    if (options === this.#defaultOptions.entry) {
+      options = this.#defaultOptions.entryFormat
+    } else if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
       options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
     }
 
@@ -388,8 +390,10 @@ class AbstractLevel extends EventEmitter {
     const keyFormat = keyEncoding.format
     const valueFormat = valueEncoding.format
 
-    // Forward encoding options
-    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+    // Forward encoding options. Avoid cloning if possible.
+    if (options === this.#defaultOptions.entry) {
+      options = this.#defaultOptions.entryFormat
+    } else if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
       options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
     }
 
@@ -452,9 +456,8 @@ class AbstractLevel extends EventEmitter {
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
 
-    // Forward encoding options to the underlying store
+    // Forward encoding options. Avoid cloning if possible.
     if (options === this.#defaultOptions.key) {
-      // Avoid cloning for default options
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
       options = { ...options, keyEncoding: keyFormat }
@@ -481,7 +484,7 @@ class AbstractLevel extends EventEmitter {
   }
 
   async hasMany (keys, options) {
-    options = getOptions(options, this.#defaultOptions.entry)
+    options = getOptions(options, this.#defaultOptions.key)
 
     if (this.#status === 'opening') {
       return this.deferAsync(() => this.hasMany(keys, options))
@@ -501,9 +504,8 @@ class AbstractLevel extends EventEmitter {
     const keyEncoding = this.keyEncoding(options.keyEncoding)
     const keyFormat = keyEncoding.format
 
-    // Forward encoding options to the underlying store
+    // Forward encoding options. Avoid cloning if possible.
     if (options === this.#defaultOptions.key) {
-      // Avoid cloning for default options
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
       options = { ...options, keyEncoding: keyFormat }
@@ -563,8 +565,7 @@ class AbstractLevel extends EventEmitter {
     const enableWriteEvent = this.#eventMonitor.write
     const original = options
 
-    // Avoid cloning for default options
-    // TODO: also apply this tweak to get() and getMany()
+    // Forward encoding options. Avoid cloning if possible.
     if (options === this.#defaultOptions.entry) {
       options = this.#defaultOptions.entryFormat
     } else if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
@@ -621,7 +622,7 @@ class AbstractLevel extends EventEmitter {
     const enableWriteEvent = this.#eventMonitor.write
     const original = options
 
-    // Avoid cloning for default options
+    // Forward encoding options. Avoid cloning if possible.
     if (options === this.#defaultOptions.key) {
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
