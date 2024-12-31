@@ -36,6 +36,7 @@ function suite (options) {
   require('./iterator-test').all(test, testCommon)
   require('./iterator-range-test').all(test, testCommon)
   require('./async-iterator-test').all(test, testCommon)
+  require('./iterator-seek-test').all(test, testCommon)
 
   require('./deferred-open-test').all(test, testCommon)
   require('./encoding-test').all(test, testCommon)
@@ -43,10 +44,6 @@ function suite (options) {
   require('./encoding-custom-test').all(test, testCommon)
   require('./encoding-buffer-test').all(test, testCommon)
   require('./encoding-decode-error-test').all(test, testCommon)
-
-  if (testCommon.supports.seek) {
-    require('./iterator-seek-test').all(test, testCommon)
-  }
 
   if (testCommon.supports.implicitSnapshots) {
     require('./iterator-snapshot-test').all(test, testCommon)
