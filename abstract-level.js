@@ -291,23 +291,20 @@ class AbstractLevel extends EventEmitter {
     // In parallel so that all resources know they are closed
     const resources = Array.from(this.#resources)
     const promises = resources.map(closeResource)
+    const results = await Promise.allSettled(promises)
+    const errors = []
 
-    // TODO: async/await
-    return Promise.allSettled(promises).then(async (results) => {
-      const errors = []
-
-      for (let i = 0; i < results.length; i++) {
-        if (results[i].status === 'fulfilled') {
-          this.#resources.delete(resources[i])
-        } else {
-          errors.push(convertRejection(results[i].reason))
-        }
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === 'fulfilled') {
+        this.#resources.delete(resources[i])
+      } else {
+        errors.push(convertRejection(results[i].reason))
       }
+    }
 
-      if (errors.length > 0) {
-        throw combineErrors(errors)
-      }
-    })
+    if (errors.length > 0) {
+      throw combineErrors(errors)
+    }
   }
 
   async _close () {}
