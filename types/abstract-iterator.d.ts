@@ -1,5 +1,5 @@
 import * as Transcoder from 'level-transcoder'
-import { AbstractReadOptions, RangeOptions } from './interfaces'
+import { AbstractReadOptions, AbstractResource, RangeOptions } from './interfaces'
 
 declare interface CommonIteratorOptions extends AbstractReadOptions {
   /**
@@ -60,7 +60,7 @@ export interface AbstractValueIteratorOptions<K, V> extends RangeOptions<K>, Com
  * @template TDatabase Type of the database that created this iterator.
  * @template T Type of items yielded. Items can be entries, keys or values.
  */
-declare class CommonIterator<TDatabase, T> implements AsyncDisposable {
+declare class CommonIterator<TDatabase, T> implements AbstractResource {
   /**
    * A reference to the database that created this iterator.
    */

@@ -14,7 +14,7 @@ import {
   AbstractValueIteratorOptions
 } from './abstract-iterator'
 
-import { AbstractReadOptions, RangeOptions } from './interfaces'
+import { AbstractReadOptions, AbstractResource, RangeOptions } from './interfaces'
 
 /**
  * Abstract class for a lexicographically sorted key-value database.
@@ -24,7 +24,7 @@ import { AbstractReadOptions, RangeOptions } from './interfaces'
  * @template VDefault The default type of values if not overridden on operations.
  */
 declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
-  extends EventEmitter implements AsyncDisposable {
+  extends EventEmitter implements AbstractResource {
   /**
    * Private database constructor.
    *
@@ -307,6 +307,24 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * @returns A promise for the result of {@link fn}.
    */
   deferAsync<T> (fn: () => Promise<T>, options?: AbstractDeferOptions | undefined): Promise<T>
+
+  /**
+   * Keep track of the given {@link resource} in order to call its `close()` method when
+   * the database is closed. Once successfully closed, the resource will no longer be
+   * tracked, to the same effect as manually calling {@link detachResource}. When given
+   * multiple resources, the database will close them in parallel. Resources are kept in
+   * a {@link Set} so that the same object will not be attached (and closed) twice.
+   *
+   * Intended for objects that rely on an open database. Used internally for built-in
+   * resources like iterators and sublevels, and is publicly exposed for custom
+   * resources.
+   */
+  attachResource(resource: AbstractResource): void
+
+  /**
+   * Stop tracking the given {@link resource}.
+   */
+  detachResource(resource: AbstractResource): void
 }
 
 export { AbstractLevel }

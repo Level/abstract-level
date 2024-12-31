@@ -1,8 +1,10 @@
+import { AbstractResource } from './interfaces'
+
 /**
  * A lightweight token that represents a version of a database at a particular point in
  * time.
  */
-export class AbstractSnapshot implements AsyncDisposable {
+export class AbstractSnapshot implements AbstractResource {
   /**
    * Increment reference count, to register work that should delay closing until
    * {@link unref} is called an equal amount of times. The promise that will be returned

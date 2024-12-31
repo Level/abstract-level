@@ -972,7 +972,6 @@ class AbstractLevel extends EventEmitter {
     })
   }
 
-  // TODO: docs and types
   attachResource (resource) {
     if (typeof resource !== 'object' || resource === null ||
       typeof resource.close !== 'function') {
@@ -982,7 +981,6 @@ class AbstractLevel extends EventEmitter {
     this.#resources.add(resource)
   }
 
-  // TODO: docs and types
   detachResource (resource) {
     this.#resources.delete(resource)
   }
