@@ -239,6 +239,3 @@ export interface AbstractSeekOptions<K> {
    */
   keyEncoding?: string | Transcoder.PartialEncoder<K> | undefined
 }
-
-declare type NextCallback<K, V> =
-  (err: Error | undefined | null, key?: K | undefined, value?: V | undefined) => void
