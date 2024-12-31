@@ -454,7 +454,7 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options to the underlying store
     if (options === this.#defaultOptions.key) {
-      // Avoid cloining for default options
+      // Avoid cloning for default options
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
       options = { ...options, keyEncoding: keyFormat }
