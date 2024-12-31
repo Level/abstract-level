@@ -65,21 +65,11 @@ class AbstractLevel extends EventEmitter {
         closing: true,
         closed: true,
         write: true,
-        put: true,
-        del: true,
-        batch: true,
         clear: true
       }
     })
 
-    // Monitor event listeners
-    this.#eventMonitor = new EventMonitor(this, [
-      { name: 'write' },
-      { name: 'put', deprecated: true, alt: 'write' },
-      { name: 'del', deprecated: true, alt: 'write' },
-      { name: 'batch', deprecated: true, alt: 'write' }
-    ])
-
+    this.#eventMonitor = new EventMonitor(this, [{ name: 'write' }])
     this.#transcoder = new Transcoder(formats(this))
     this.#keyEncoding = this.#transcoder.encoding(keyEncoding || 'utf8')
     this.#valueEncoding = this.#transcoder.encoding(valueEncoding || 'utf8')
@@ -579,9 +569,6 @@ class AbstractLevel extends EventEmitter {
       }
 
       this.emit('write', [op])
-    } else {
-      // TODO (semver-major): remove
-      this.emit('put', key, value)
     }
   }
 
@@ -630,9 +617,6 @@ class AbstractLevel extends EventEmitter {
       }
 
       this.emit('write', [op])
-    } else {
-      // TODO (semver-major): remove
-      this.emit('del', key)
     }
   }
 
@@ -783,9 +767,6 @@ class AbstractLevel extends EventEmitter {
 
     if (enableWriteEvent) {
       this.emit('write', publicOperations)
-    } else if (!enablePrewriteHook) {
-      // TODO (semver-major): remove
-      this.emit('batch', operations)
     }
   }
 

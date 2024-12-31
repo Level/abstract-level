@@ -56,20 +56,6 @@ exports.put = function (test, testCommon) {
   })
 }
 
-exports.events = function (test, testCommon) {
-  test('put() emits put event', async function (t) {
-    t.plan(3)
-    t.ok(db.supports.events.put)
-
-    db.on('put', function (key, value) {
-      t.is(key, 123)
-      t.is(value, 'b')
-    })
-
-    await db.put(123, 'b')
-  })
-}
-
 exports.tearDown = function (test, testCommon) {
   test('put() teardown', async function (t) {
     return db.close()
@@ -80,6 +66,5 @@ exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)
   exports.put(test, testCommon)
-  exports.events(test, testCommon)
   exports.tearDown(test, testCommon)
 }

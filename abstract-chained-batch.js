@@ -14,7 +14,6 @@ class AbstractChainedBatch {
   #length = 0
   #closePromise = null
   #publicOperations
-  #legacyOperations
   #prewriteRun
   #prewriteBatch
   #prewriteData
@@ -32,11 +31,6 @@ class AbstractChainedBatch {
     // Operations for write event. We can skip populating this array (and cloning of
     // operations, which is the expensive part) if there are 0 write event listeners.
     this.#publicOperations = enableWriteEvent ? [] : null
-
-    // Operations for legacy batch event. If user opted-in to write event or prewrite
-    // hook, skip legacy batch event. We can't skip the batch event based on listener
-    // count, because a listener may be added between put() or del() and write().
-    this.#legacyOperations = enableWriteEvent || enablePrewriteHook ? null : []
 
     this.#addMode = getOptions(options, emptyOptions).add === true
 
@@ -73,7 +67,6 @@ class AbstractChainedBatch {
 
     const delegated = options.sublevel != null
     const db = delegated ? options.sublevel : this.db
-    const original = options
 
     db._assertValidKey(key)
     db._assertValidValue(value)
@@ -146,14 +139,6 @@ class AbstractChainedBatch {
       }
 
       this.#publicOperations.push(publicOperation)
-    } else if (this.#legacyOperations !== null && !siblings) {
-      const legacyOperation = { ...original }
-
-      legacyOperation.type = 'put'
-      legacyOperation.key = key
-      legacyOperation.value = value
-
-      this.#legacyOperations.push(legacyOperation)
     }
 
     // If we're forwarding the sublevel option then don't prefix the key yet
@@ -182,7 +167,6 @@ class AbstractChainedBatch {
 
     const delegated = options.sublevel != null
     const db = delegated ? options.sublevel : this.db
-    const original = options
 
     db._assertValidKey(key)
 
@@ -228,13 +212,6 @@ class AbstractChainedBatch {
       }
 
       this.#publicOperations.push(publicOperation)
-    } else if (this.#legacyOperations !== null) {
-      const legacyOperation = { ...original }
-
-      legacyOperation.type = 'del'
-      legacyOperation.key = key
-
-      this.#legacyOperations.push(legacyOperation)
     }
 
     op.key = this.db.prefixKey(encodedKey, keyFormat, true)
@@ -261,7 +238,6 @@ class AbstractChainedBatch {
     this._clear()
 
     if (this.#publicOperations !== null) this.#publicOperations = []
-    if (this.#legacyOperations !== null) this.#legacyOperations = []
     if (this.#prewriteData !== null) this.#prewriteData.clear()
 
     this.#length = 0
@@ -330,8 +306,6 @@ class AbstractChainedBatch {
       // db close which in turn triggers (idempotently) closing this batch.
       if (this.#publicOperations !== null) {
         this.db.emit('write', this.#publicOperations)
-      } else if (this.#legacyOperations !== null) {
-        this.db.emit('batch', this.#legacyOperations)
       }
 
       return this.#closePromise

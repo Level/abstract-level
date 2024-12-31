@@ -128,59 +128,5 @@ module.exports = function (test, testCommon) {
         return db.close()
       })
     }
-
-    for (const method of allMethods) {
-      test(`db emits write event for ${method} operation in favor of deprecated events (deferred: ${deferred})`, async function (t) {
-        t.plan(5)
-
-        const keys = []
-        const db = testCommon.factory()
-        if (!deferred) await db.open()
-
-        db.on('write', function (ops) {
-          keys.push(...ops.map(op => op.key))
-        })
-
-        db.on('batch', function () {
-          t.fail('should not get batch event')
-        })
-
-        db.on('put', function () {
-          t.fail('should not get put event')
-        })
-
-        db.on('del', function () {
-          t.fail('should not get del event')
-        })
-
-        // Once we remove the deprecated events, this test would still pass, but we should then remove it.
-        t.ok(db.supports.events.batch, 'supports batch event')
-        t.ok(db.supports.events.put, 'supports put event')
-        t.ok(db.supports.events.del, 'supports del event')
-
-        switch (method) {
-          case 'batch':
-            await db.batch([{ type: 'put', key: 'a', value: 'a' }])
-            t.is(keys.pop(), 'a', 'got write event for batch put')
-            await db.batch([{ type: 'del', key: 'b' }])
-            t.is(keys.pop(), 'b', 'got write event for batch del')
-            break
-          case 'chained batch':
-            await db.batch().put('c', 'c').write()
-            t.is(keys.pop(), 'c', 'got write event for chained batch put')
-            await db.batch().del('d').write()
-            t.is(keys.pop(), 'd', 'got write event for chained batch del')
-            break
-          case 'singular':
-            await db.put('e', 'e')
-            t.is(keys.pop(), 'e', 'got write event for put')
-            await db.del('f')
-            t.is(keys.pop(), 'f', 'got write event for del')
-            break
-        }
-
-        return db.close()
-      })
-    }
   }
 }

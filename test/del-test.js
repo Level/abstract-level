@@ -41,31 +41,13 @@ exports.del = function (test, testCommon) {
 
   traits.open('del()', testCommon, async function (t, db) {
     let emitted = false
-    db.once('del', () => { emitted = true })
-    t.is(await assertPromise(db.del('foo')), undefined, 'void promise')
-    t.ok(emitted)
+    db.once('write', () => { emitted = true })
+    t.is(await db.del('foo'), undefined, 'void promise')
+    t.ok(emitted) // Not sure what the purpose of this test is
   })
 
   traits.closed('del()', testCommon, async function (t, db) {
     return db.del('foo')
-  })
-}
-
-exports.events = function (test, testCommon) {
-  test('del() emits del event', async function (t) {
-    t.plan(2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    t.ok(db.supports.events.del)
-
-    db.on('del', function (key) {
-      t.is(key, 456)
-    })
-
-    await db.del(456)
-    return db.close()
   })
 }
 
@@ -79,6 +61,5 @@ exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)
   exports.del(test, testCommon)
-  exports.events(test, testCommon)
   exports.tearDown(test, testCommon)
 }
