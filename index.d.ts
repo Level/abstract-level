@@ -45,7 +45,8 @@ export {
 } from './types/abstract-snapshot'
 
 export {
-  AbstractReadOptions
+  AbstractReadOptions,
+  AbstractResource
 } from './types/interfaces'
 
 export * as Transcoder from 'level-transcoder'

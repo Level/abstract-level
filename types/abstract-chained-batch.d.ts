@@ -1,8 +1,9 @@
 import * as Transcoder from 'level-transcoder'
 import { AbstractSublevel } from './abstract-sublevel'
+import { AbstractResource } from './interfaces'
 
 export class AbstractChainedBatch<TDatabase, KDefault, VDefault>
-  implements AsyncDisposable {
+  implements AbstractResource {
   constructor (db: TDatabase)
 
   /**

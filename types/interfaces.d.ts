@@ -20,3 +20,23 @@ export interface AbstractReadOptions {
    */
   snapshot?: AbstractSnapshot | undefined
 }
+
+/**
+ * Represents a stateful resource that can be closed.
+ */
+export interface AbstractResource extends AsyncDisposable {
+  /**
+   * Close the resource.
+   *
+   * Note for implementors: if the resource is exposed to the user and can also be closed
+   * in an automated fashion - through `db.attachResource()` or other - then the
+   * `close()` method should be idempotent such that calling it twice will make no
+   * difference.
+   */
+  close (): Promise<void>
+
+  /**
+   * Close the resource. Identical in functionality to {@link close}.
+   */
+  [Symbol.asyncDispose](): Promise<void>
+}

@@ -503,6 +503,16 @@ The optional `options` object may contain:
 
 - `signal`: an [`AbortSignal`](https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal) to abort the deferred operation. When aborted (now or later) the `fn` function will not be called, and the promise returned by `deferAsync()` will be rejected with a [`LEVEL_ABORTED`](#level_aborted) error.
 
+### `db.attachResource(resource)`
+
+Keep track of the given `resource` in order to call its `close()` method when the database is closed. Once successfully closed, the resource will no longer be tracked, to the same effect as manually calling [`db.detachResource()`](#dbdetachresourceresource). When given multiple resources, the database will close them in parallel. Resources are kept in a [set](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set) so that the same object will not be attached (and closed) twice.
+
+Intended for objects that rely on an open database. Used internally for built-in resources like iterators and sublevels, and is publicly exposed for custom resources.
+
+### `db.detachResource(resource)`
+
+Stop tracking the given `resource`.
+
 ### `iterator`
 
 An iterator allows one to lazily read a range of entries stored in the database. The entries will be sorted by keys in [lexicographic order](https://en.wikipedia.org/wiki/Lexicographic_order) (in other words: byte order) which in short means key `'a'` comes before `'b'` and key `'10'` comes before `'2'`.
