@@ -52,8 +52,7 @@ class AbstractLevel extends EventEmitter {
     this.hooks = new DatabaseHooks()
     this.supports = supports(manifest, {
       deferredOpen: true,
-
-      // TODO (next major): add seek
+      seek: true,
       implicitSnapshots,
       permanence: manifest.permanence !== false,
 

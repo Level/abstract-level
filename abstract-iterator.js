@@ -226,7 +226,7 @@ class CommonIterator {
   }
 
   _seek (target, options) {
-    throw new ModuleError('Iterator does not support seek()', {
+    throw new ModuleError('Iterator does not implement seek()', {
       code: 'LEVEL_NOT_SUPPORTED'
     })
   }

@@ -251,12 +251,12 @@ test('sublevel manifest and parent db', function (t) {
   t.test('sublevel inherits manifest from parent db', function (t) {
     const parent = new AbstractLevel({
       encodings: { utf8: true },
-      seek: true,
+      explicitSnapshots: true,
       foo: true
     })
     const sub = parent.sublevel('')
     t.is(sub.supports.foo, true, 'AbstractSublevel inherits from parent')
-    t.is(sub.supports.seek, true, 'AbstractSublevel inherits from parent')
+    t.is(sub.supports.explicitSnapshots, true, 'AbstractSublevel inherits from parent')
     t.end()
   })
 

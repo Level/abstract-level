@@ -597,8 +597,6 @@ The optional `options` object may contain:
 
 If range options like `gt` were passed to `db.iterator()` and `target` does not fall within that range, the iterator will reach its natural end.
 
-**Note:** Not all implementations support `seek()`. Consult `db.supports.seek` or the [support matrix](https://github.com/Level/supports#seek-boolean).
-
 #### `iterator.close()`
 
 Free up underlying resources. Returns a promise. Closing the iterator is an idempotent operation, such that calling `close()` more than once is allowed and makes no difference.
@@ -1349,14 +1347,14 @@ When a sublevel prefix contains characters outside of the supported byte range.
 
 #### `LEVEL_NOT_SUPPORTED`
 
-When a module needs a certain feature, typically as indicated by `db.supports`, but that feature is not available on a database argument or other. For example, some kind of plugin may depend on `seek()`:
+When a module needs a certain feature, typically as indicated by `db.supports`, but that feature is not available on a database argument or other. For example, some kind of plugin may depend on snapshots:
 
 ```js
 const ModuleError = require('module-error')
 
 module.exports = function plugin (db) {
-  if (!db.supports.seek) {
-    throw new ModuleError('Database must support seeking', {
+  if (!db.supports.explicitSnapshots) {
+    throw new ModuleError('Database must support snapshots', {
       code: 'LEVEL_NOT_SUPPORTED'
     })
   }
@@ -1767,7 +1765,7 @@ The default `_all()` is a functional default that makes repeated calls to `_next
 
 #### `iterator._seek(target, options)`
 
-Seek to the key closest to `target`. The `options` object will always have the following properties: `keyEncoding`. This method is optional. The default will throw an error with code [`LEVEL_NOT_SUPPORTED`](#errors). If supported, set `db.supports.seek` to `true` (via the manifest passed to the database constructor) which also enables relevant tests in the [test suite](#test-suite).
+Seek to the key closest to `target`. The `options` object will always have the following properties: `keyEncoding`. The default `_seek()` will throw an error with code [`LEVEL_NOT_SUPPORTED`](#errors) and must be overridden.
 
 #### `iterator._close()`
 
@@ -1921,7 +1919,7 @@ test('custom test', function (t) {
   // ..
 })
 
-testCommon.supports.seek && test('another test', function (t) {
+testCommon.supports.explicitSnapshots && test('another test', function (t) {
   const db = testCommon.factory()
   // ..
 })
