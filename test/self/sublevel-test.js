@@ -358,6 +358,27 @@ test('opening & closing sublevel', function (t) {
     await sub.close()
   })
 
+  t.test('sublevel is closed by parent', async function (t) {
+    t.plan(4)
+
+    const db = new NoopLevel()
+    await db.open()
+    const sub = db.sublevel('test')
+
+    await db.open()
+    await sub.open()
+
+    const promise = db.close()
+
+    t.is(db.status, 'closing')
+    t.is(sub.status, 'closing')
+
+    await promise
+
+    t.is(db.status, 'closed')
+    t.is(sub.status, 'closed')
+  })
+
   t.test('sublevel rejects operations if parent db is closed', async function (t) {
     t.plan(6)
 
@@ -401,7 +422,8 @@ test('opening & closing sublevel', function (t) {
 
     const promises = [
       db.close().then(async function () {
-        // TODO: implement autoClose option (see AbstractSublevel)
+        // Ideally it'd be 'closed' but it's still 'opening' at this point.
+        // TODO: use a signal to abort the open() to transition to 'closed' faster
         // t.is(sub.status, 'closed')
 
         t.is(db.status, 'closed')
