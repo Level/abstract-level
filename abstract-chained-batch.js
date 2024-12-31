@@ -80,14 +80,14 @@ class AbstractChainedBatch {
     if (keyError != null) throw keyError
     if (valueError != null) throw valueError
 
-    // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
-    const op = Object.assign({}, options, {
+    const op = {
+      ...options,
       type: 'put',
       key,
       value,
       keyEncoding: db.keyEncoding(options.keyEncoding),
       valueEncoding: db.valueEncoding(options.valueEncoding)
-    })
+    }
 
     if (this.#prewriteRun !== null) {
       try {
@@ -135,7 +135,7 @@ class AbstractChainedBatch {
     // If the sublevel is not a descendant then we shouldn't emit events
     if (this.#publicOperations !== null && !siblings) {
       // Clone op before we mutate it for the private API
-      const publicOperation = Object.assign({}, op)
+      const publicOperation = { ...op }
       publicOperation.encodedKey = encodedKey
       publicOperation.encodedValue = encodedValue
 
@@ -149,7 +149,7 @@ class AbstractChainedBatch {
 
       this.#publicOperations.push(publicOperation)
     } else if (this.#legacyOperations !== null && !siblings) {
-      const legacyOperation = Object.assign({}, original)
+      const legacyOperation = { ...original }
 
       legacyOperation.type = 'put'
       legacyOperation.key = key
@@ -189,12 +189,12 @@ class AbstractChainedBatch {
 
     if (keyError != null) throw keyError
 
-    // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
-    const op = Object.assign({}, options, {
+    const op = {
+      ...options,
       type: 'del',
       key,
       keyEncoding: db.keyEncoding(options.keyEncoding)
-    })
+    }
 
     if (this.#prewriteRun !== null) {
       try {
@@ -221,7 +221,7 @@ class AbstractChainedBatch {
 
     if (this.#publicOperations !== null) {
       // Clone op before we mutate it for the private API
-      const publicOperation = Object.assign({}, op)
+      const publicOperation = { ...op }
       publicOperation.encodedKey = encodedKey
 
       if (delegated) {
@@ -232,7 +232,7 @@ class AbstractChainedBatch {
 
       this.#publicOperations.push(publicOperation)
     } else if (this.#legacyOperations !== null) {
-      const legacyOperation = Object.assign({}, original)
+      const legacyOperation = { ...original }
 
       legacyOperation.type = 'del'
       legacyOperation.key = key

@@ -58,7 +58,8 @@ class AbstractLevel extends EventEmitter {
       permanence: manifest.permanence !== false,
 
       encodings: manifest.encodings || {},
-      events: Object.assign({}, manifest.events, {
+      events: {
+        ...manifest.events,
         opening: true,
         open: true,
         closing: true,
@@ -68,7 +69,7 @@ class AbstractLevel extends EventEmitter {
         del: true,
         batch: true,
         clear: true
-      })
+      }
     })
 
     // Monitor event listeners
@@ -332,8 +333,7 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options to the underlying store
     if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-      // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
-      options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
     }
 
     const encodedKey = keyEncoding.encode(key)
@@ -390,7 +390,7 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options
     if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-      options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
     }
 
     const mappedKeys = new Array(keys.length)
@@ -454,11 +454,10 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options to the underlying store
     if (options === this.#defaultOptions.key) {
-      // Avoid Object.assign() for default options
+      // Avoid cloining for default options
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
-      // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
-      options = Object.assign({}, options, { keyEncoding: keyFormat })
+      options = { ...options, keyEncoding: keyFormat }
     }
 
     const encodedKey = keyEncoding.encode(key)
@@ -504,11 +503,10 @@ class AbstractLevel extends EventEmitter {
 
     // Forward encoding options to the underlying store
     if (options === this.#defaultOptions.key) {
-      // Avoid Object.assign() for default options
+      // Avoid cloning for default options
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
-      // Avoid spread operator because of https://bugs.chromium.org/p/chromium/issues/detail?id=1204540
-      options = Object.assign({}, options, { keyEncoding: keyFormat })
+      options = { ...options, keyEncoding: keyFormat }
     }
 
     const mappedKeys = new Array(keys.length)
@@ -565,12 +563,12 @@ class AbstractLevel extends EventEmitter {
     const enableWriteEvent = this.#eventMonitor.write
     const original = options
 
-    // Avoid Object.assign() for default options
+    // Avoid cloning for default options
     // TODO: also apply this tweak to get() and getMany()
     if (options === this.#defaultOptions.entry) {
       options = this.#defaultOptions.entryFormat
     } else if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
-      options = Object.assign({}, options, { keyEncoding: keyFormat, valueEncoding: valueFormat })
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
     }
 
     const encodedKey = keyEncoding.encode(key)
@@ -580,7 +578,8 @@ class AbstractLevel extends EventEmitter {
     await this._put(prefixedKey, encodedValue, options)
 
     if (enableWriteEvent) {
-      const op = Object.assign({}, original, {
+      const op = {
+        ...original,
         type: 'put',
         key,
         value,
@@ -588,7 +587,7 @@ class AbstractLevel extends EventEmitter {
         valueEncoding,
         encodedKey,
         encodedValue
-      })
+      }
 
       this.emit('write', [op])
     } else {
@@ -622,11 +621,11 @@ class AbstractLevel extends EventEmitter {
     const enableWriteEvent = this.#eventMonitor.write
     const original = options
 
-    // Avoid Object.assign() for default options
+    // Avoid cloning for default options
     if (options === this.#defaultOptions.key) {
       options = this.#defaultOptions.keyFormat
     } else if (options.keyEncoding !== keyFormat) {
-      options = Object.assign({}, options, { keyEncoding: keyFormat })
+      options = { ...options, keyEncoding: keyFormat }
     }
 
     const encodedKey = keyEncoding.encode(key)
@@ -635,12 +634,13 @@ class AbstractLevel extends EventEmitter {
     await this._del(prefixedKey, options)
 
     if (enableWriteEvent) {
-      const op = Object.assign({}, original, {
+      const op = {
+        ...original,
         type: 'del',
         key,
         keyEncoding,
         encodedKey
-      })
+      }
 
       this.emit('write', [op])
     } else {
@@ -694,7 +694,7 @@ class AbstractLevel extends EventEmitter {
       // Clone the op so that we can freely mutate it. We can't use a class because the
       // op can have userland properties that we'd have to copy, negating the performance
       // benefits of a class. So use a plain object.
-      const op = Object.assign({}, options, operations[i])
+      const op = { ...options, ...operations[i] }
 
       // Hook functions can modify op but not its type or sublevel, so cache those
       const isPut = op.type === 'put'
@@ -753,7 +753,7 @@ class AbstractLevel extends EventEmitter {
       if (enableWriteEvent && !siblings) {
         // Clone op before we mutate it for the private API
         // TODO (future semver-major): consider sending this shape to private API too
-        publicOperation = Object.assign({}, op)
+        publicOperation = { ...op }
         publicOperation.encodedKey = encodedKey
 
         if (delegated) {
