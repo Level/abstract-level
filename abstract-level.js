@@ -69,7 +69,7 @@ class AbstractLevel extends EventEmitter {
       }
     })
 
-    this.#eventMonitor = new EventMonitor(this, [{ name: 'write' }])
+    this.#eventMonitor = new EventMonitor(this)
     this.#transcoder = new Transcoder(formats(this))
     this.#keyEncoding = this.#transcoder.encoding(keyEncoding || 'utf8')
     this.#valueEncoding = this.#transcoder.encoding(valueEncoding || 'utf8')
