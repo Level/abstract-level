@@ -2,6 +2,39 @@
 
 This document describes breaking changes and how to upgrade. For a complete list of changes including minor and patch releases, please refer to the [changelog](CHANGELOG.md).
 
+## 3.0.0
+
+This release drops supports of Node.js 16. It also started using new JavaScript language features ([`1fdb362`](https://github.com/Level/abstract-level/commit/1fdb362)) which are supported by all target environments of `abstract-level` but may require additional configuration of JavaScript bundlers, for example if `browserify` is used. Third, the `put`, `del` & `batch` events (which were deprecated in `abstract-level` 2.0.0) have been removed in favor of the `write` event.
+
+On to the good news. We have some exciting new features! To start we have "explicit snapshots" which allow you to read previous versions of a database. This will be supported in at least `classic-level` and `memory-level` (see [Level/community#118](https://github.com/Level/community/issues/118)). Here's an example:
+
+```js
+await db.put('example', 'before')
+const snapshot = db.snapshot()
+await db.put('example', 'after')
+await db.get('example', { snapshot })) // Returns 'before'
+await snapshot.close()
+```
+
+In TypeScript (5.2) that last `close()` call can be skipped because we added support of [`Symbol.asyncDispose`](https://github.com/tc39/proposal-explicit-resource-management) on databases, iterators and snapshots:
+
+```ts
+await db.put('example', 'before')
+await using snapshot = db.snapshot()
+await db.put('example', 'after')
+await db.get('example', { snapshot })) // Returns 'before'
+```
+
+Lastly, we added `has()` and `hasMany()` methods to check if keys exist without the cost of fetching values:
+
+```js
+if (await db.has('fruit')) {
+  console.log('We have fruit')
+}
+```
+
+Support of this feature is tracked in [Level/community#142](https://github.com/Level/community/issues/142).
+
 ## 2.0.0
 
 **This release adds [hooks](./README.md#hooks) and drops callbacks, not-found errors and support of Node.js < 16. The guide for this release consists of two sections. One for the public API, relevant to all consumers of `abstract-level` and implementations thereof (`level`, `classic-level`, `memory-level` et cetera) and another for the private API that only implementors should have to read.**
