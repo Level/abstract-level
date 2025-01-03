@@ -239,12 +239,15 @@ exports.batch = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
 
-    db.once('batch', function (operations) {
+    const utf8 = db.keyEncoding('utf8')
+    const json = db.valueEncoding('json')
+
+    db.once('write', function (operations) {
       t.same(operations, [
-        { type: 'put', key: 'a', value: 'a', valueEncoding: 'json' },
-        { type: 'put', key: 'b', value: 'b' },
-        { type: 'put', key: '"c"', value: 'c' },
-        { type: 'del', key: 'c', keyEncoding: 'json', arbitraryOption: true }
+        { type: 'put', key: 'a', value: 'a', keyEncoding: utf8, valueEncoding: json, encodedKey: 'a', encodedValue: '"a"' },
+        { type: 'put', key: 'b', value: 'b', keyEncoding: utf8, valueEncoding: utf8, encodedKey: 'b', encodedValue: 'b' },
+        { type: 'put', key: '"c"', value: 'c', keyEncoding: utf8, valueEncoding: utf8, encodedKey: '"c"', encodedValue: 'c' },
+        { type: 'del', key: 'c', keyEncoding: json, encodedKey: '"c"', arbitraryOption: true }
       ])
     })
 
@@ -265,32 +268,13 @@ exports.batch = function (test, testCommon) {
 }
 
 exports.events = function (test, testCommon) {
-  test('chained batch emits batch event', async function (t) {
-    t.plan(2)
-
-    const db = testCommon.factory()
-    await db.open()
-
-    t.ok(db.supports.events.batch)
-
-    db.on('batch', function (ops) {
-      t.same(ops, [
-        { type: 'put', key: 987, value: 'b', custom: 123 },
-        { type: 'del', key: 216, custom: 999 }
-      ])
-    })
-
-    await db.batch().put(987, 'b', { custom: 123 }).del(216, { custom: 999 }).write()
-    await db.close()
-  })
-
-  test('db.close() on chained batch event', async function (t) {
+  test('db.close() on chained batch write event', async function (t) {
     const db = testCommon.factory()
     await db.open()
 
     let promise
 
-    db.on('batch', function () {
+    db.on('write', function () {
       // Should not interfere with the current write() operation
       promise = db.close()
     })

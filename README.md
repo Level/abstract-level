@@ -856,8 +856,6 @@ Lastly, one way or another, every implementation _must_ support `data` of type S
 
 An `abstract-level` database is an [`EventEmitter`](https://nodejs.org/api/events.html) and emits the events listed below.
 
-The `put`, `del` and `batch` events are deprecated in favor of the `write` event and will be removed in a future version of `abstract-level`. If one or more `write` event listeners exist or if the [`prewrite`](#hook--dbhooksprewrite) hook is in use, either of which implies opting-in to the `write` event, then the deprecated events will not be emitted.
-
 #### `opening`
 
 Emitted when database is opening. Receives 0 arguments:
@@ -974,42 +972,6 @@ The same is true for `db.put()` and `db.del()`.
 #### `clear`
 
 Emitted when a `db.clear()` call completed and entries were thus successfully deleted from the database. Receives a single `options` argument, which is the verbatim `options` argument that was passed to `db.clear(options)` (or an empty object if none) before having encoded range options.
-
-#### `put` (deprecated)
-
-Emitted when a `db.put()` call completed and an entry was thus successfully written to the database. Receives `key` and `value` arguments, which are the verbatim `key` and `value` that were passed to `db.put(key, value)` before having encoded them.
-
-```js
-db.on('put', function (key, value) {
-  console.log('Wrote', key, value)
-})
-```
-
-#### `del` (deprecated)
-
-Emitted when a `db.del()` call completed and an entry was thus successfully deleted from the database. Receives a single `key` argument, which is the verbatim `key` that was passed to `db.del(key)` before having encoded it.
-
-```js
-db.on('del', function (key) {
-  console.log('Deleted', key)
-})
-```
-
-#### `batch` (deprecated)
-
-Emitted when a `db.batch([])` or chained `db.batch().write()` call completed and the data was thus successfully written to the database. Receives a single `operations` argument, which is the verbatim `operations` array that was passed to `db.batch(operations)` before having encoded it, or the equivalent for a chained `db.batch().write()`.
-
-```js
-db.on('batch', function (operations) {
-  for (const op of operations) {
-    if (op.type === 'put') {
-      console.log('Wrote', op.key, op.value)
-    } else {
-      console.log('Deleted', op.key)
-    }
-  }
-})
-```
 
 ### Order Of Operations
 
