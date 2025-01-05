@@ -244,10 +244,10 @@ exports.batch = function (test, testCommon) {
 
     db.once('write', function (operations) {
       t.same(operations, [
-        { type: 'put', key: 'a', value: 'a', keyEncoding: utf8, valueEncoding: json, encodedKey: 'a', encodedValue: '"a"' },
-        { type: 'put', key: 'b', value: 'b', keyEncoding: utf8, valueEncoding: utf8, encodedKey: 'b', encodedValue: 'b' },
-        { type: 'put', key: '"c"', value: 'c', keyEncoding: utf8, valueEncoding: utf8, encodedKey: '"c"', encodedValue: 'c' },
-        { type: 'del', key: 'c', keyEncoding: json, encodedKey: '"c"', arbitraryOption: true }
+        { type: 'put', key: 'a', value: 'a', keyEncoding: utf8, valueEncoding: json, encodedKey: utf8.encode('a'), encodedValue: utf8.encode('"a"') },
+        { type: 'put', key: 'b', value: 'b', keyEncoding: utf8, valueEncoding: utf8, encodedKey: utf8.encode('b'), encodedValue: utf8.encode('b') },
+        { type: 'put', key: '"c"', value: 'c', keyEncoding: utf8, valueEncoding: utf8, encodedKey: utf8.encode('"c"'), encodedValue: utf8.encode('c') },
+        { type: 'del', key: 'c', keyEncoding: json, encodedKey: utf8.encode('"c"'), arbitraryOption: true }
       ])
     })
 
