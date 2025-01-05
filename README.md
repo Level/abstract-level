@@ -382,11 +382,11 @@ for await (const [key, value] of db.iterator()) {
 
 > :pushpin: The key structure is equal to that of [`subleveldown`](https://github.com/Level/subleveldown) which offered sublevels before they were built-in to `abstract-level`. This means that an `abstract-level` sublevel can read sublevels previously created with (and populated by) `subleveldown`.
 
-Internally, sublevels operate on keys that are either a string, Buffer or Uint8Array, depending on parent database and choice of encoding. Which is to say: binary keys are fully supported. The `name` must however always be a string and can only contain ASCII characters.
+Internally, sublevels operate on keys that are either a string, Buffer or Uint8Array, depending on parent database and choice of encoding. Which is to say: binary keys are fully supported. The `name` must however always be a string.
 
 The optional `options` object may contain:
 
-- `separator` (string, default: `'!'`): Character for separating sublevel names from user keys and each other. Must sort before characters used in `name`. An error will be thrown if that's not the case.
+- `separator` (string, default: `'!'`): Character for separating sublevel names from user keys and each other.
 - `keyEncoding` (string or object, default `'utf8'`): encoding to use for keys
 - `valueEncoding` (string or object, default `'utf8'`): encoding to use for values.
 
@@ -1312,10 +1312,6 @@ Data could not be read (from an underlying store) due to a corruption.
 #### `LEVEL_IO_ERROR`
 
 Data could not be read (from an underlying store) due to an input/output error, for example from the filesystem.
-
-#### `LEVEL_INVALID_PREFIX`
-
-When a sublevel prefix contains characters outside of the supported byte range.
 
 #### `LEVEL_NOT_SUPPORTED`
 
