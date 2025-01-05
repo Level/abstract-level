@@ -147,7 +147,7 @@ exports.all = function (test, testCommon) {
 
   for (const deferred of [false, true]) {
     for (const keyEncoding of ['buffer', 'view']) {
-      if (!testCommon.supports.encodings[keyEncoding]) return
+      if (!testCommon.supports.encodings[keyEncoding]) continue
 
       // NOTE: adapted from subleveldown. See https://github.com/Level/subleveldown/issues/87
       test(`iterate sublevel keys with bytes above 196 (${keyEncoding}, deferred: ${deferred})`, async function (t) {
