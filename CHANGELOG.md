@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.0.0] - 2025-01-05
+
+_Would you mind voting in this [community poll](https://github.com/orgs/Level/discussions/143)? Thank you! If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
+
+### Changed
+
+- **Breaking:** use new language features ([#94](https://github.com/Level/abstract-level/issues/94)) ([`1fdb362`](https://github.com/Level/abstract-level/commit/1fdb362)) (Vincent Weevers)
+- **Breaking:** make `iterator.seek()` a mandatory feature ([#105](https://github.com/Level/abstract-level/issues/105)) ([`daf2a88`](https://github.com/Level/abstract-level/commit/daf2a88)) (Vincent Weevers)
+- **Breaking:** change `_checkKey` and `_checkValue` to assertions ([#108](https://github.com/Level/abstract-level/issues/108)) ([`ca3c368`](https://github.com/Level/abstract-level/commit/ca3c368)) (Vincent Weevers)
+
+### Added
+
+- Implement explicit snapshots ([#93](https://github.com/Level/abstract-level/issues/93)) ([`a8485a2`](https://github.com/Level/abstract-level/commit/a8485a2), [`f81d348`](https://github.com/Level/abstract-level/commit/f81d348), [`b5b583c`](https://github.com/Level/abstract-level/commit/b5b583c)) (Vincent Weevers)
+- Implement `has()` and `hasMany()` ([#96](https://github.com/Level/abstract-level/issues/96)) ([`6684039`](https://github.com/Level/abstract-level/commit/6684039)) (Vincent Weevers)
+- Implement `Symbol.asyncDispose` ([#95](https://github.com/Level/abstract-level/issues/95)) ([`eedeed9`](https://github.com/Level/abstract-level/commit/eedeed9)) (Vincent Weevers)
+- Add docs and types for `attachResource()` & `detachResource()` ([#110](https://github.com/Level/abstract-level/issues/110)) ([`5f621d4`](https://github.com/Level/abstract-level/commit/5f621d4)) (Vincent Weevers)
+
+### Removed
+
+- **Breaking:** remove deprecated `put`, `del` & `batch` events ([#104](https://github.com/Level/abstract-level/issues/104)) ([`86bd271`](https://github.com/Level/abstract-level/commit/86bd271), [`7c32d39`](https://github.com/Level/abstract-level/commit/7c32d39)) (Vincent Weevers)
+- **Breaking:** drop support of Node.js 16 ([#103](https://github.com/Level/abstract-level/issues/103)) ([`a05a8ea`](https://github.com/Level/abstract-level/commit/a05a8ea)) (Vincent Weevers)
+
+### Fixed
+
+- Close sublevels upon closing parent db ([#102](https://github.com/Level/abstract-level/issues/102)) ([`9eeb291`](https://github.com/Level/abstract-level/commit/9eeb291)) (Vincent Weevers)
+- Avoid cloning option objects in more places ([#109](https://github.com/Level/abstract-level/issues/109)) ([`efd4175`](https://github.com/Level/abstract-level/commit/efd4175)) (Vincent Weevers)
+- Refactor: use async/await in `closeResources()` ([#107](https://github.com/Level/abstract-level/issues/107)) ([`fdb7864`](https://github.com/Level/abstract-level/commit/fdb7864)) (Vincent Weevers)
+- Refactor: restore use of spread operator ([#106](https://github.com/Level/abstract-level/issues/106)) ([`a5c2e52`](https://github.com/Level/abstract-level/commit/a5c2e52)) (Vincent Weevers)
+- Fix skipped sublevel tests ([`f195d99`](https://github.com/Level/abstract-level/commit/f195d99)) (Vincent Weevers)
+
 ## [2.0.2] - 2024-12-09
 
 ### Fixed
@@ -75,6 +105,8 @@ _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[3.0.0]: https://github.com/Level/abstract-level/releases/tag/v3.0.0
 
 [2.0.2]: https://github.com/Level/abstract-level/releases/tag/v2.0.2
 
