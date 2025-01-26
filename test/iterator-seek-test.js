@@ -293,5 +293,43 @@ exports.seek = function (test, testCommon) {
         })
       }
     })
+
+    // Tests the specific case where an iterator can (theoretically) tell that
+    // a seek() would be out of range by comparing the seek target against
+    // range options, before performing an actual seek. MemoryLevel works this
+    // way for example. Also test the same scenario without an explicit seek()
+    // which should have the same result.
+    for (const reverse of [false, true]) {
+      for (const seek of [true, false]) {
+        const props = `reverse = ${reverse}, seek = ${seek}`
+        const name = `${mode}() seek outside of range options (${props})`
+        const key = 'a'
+
+        test(name, async function (t) {
+          const db = testCommon.factory()
+
+          await db.open()
+          await db.put(key, '123')
+
+          // Pick ranges that exclude the key
+          const ranges = [
+            { gt: 'x', reverse },
+            { gte: 'x', reverse },
+            { lt: '0', reverse },
+            { lte: '0', reverse }
+          ]
+
+          // Test each range
+          for (let i = 0; i < ranges.length; i++) {
+            const iterator = db[mode](ranges[i])
+            if (seek) iterator.seek(key)
+            t.same(await iterator.next(), undefined, `end of iterator ${i}`)
+            await iterator.close()
+          }
+
+          return db.close()
+        })
+      }
+    }
   }
 }
