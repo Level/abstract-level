@@ -206,4 +206,20 @@ exports.all = function (test, testCommon) {
       })
     }
   }
+
+  test('sublevel name with unicode', async function (t) {
+    const db = testCommon.factory()
+    const name = '🐄'
+    const sub = db.sublevel(name)
+
+    // To illustrate why this test matters. We would remove too many
+    // characters from the prefixed key if we use the wrong length.
+    t.is(name.length, 2)
+    t.is(new TextEncoder().encode(name).byteLength, 4)
+
+    await sub.put('a', 'a')
+    t.same(await sub.keys().all(), ['a'], 'correctly removed prefix')
+
+    return db.close()
+  })
 }
