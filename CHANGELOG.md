@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.0.1] - 2025-01-26
+
+### Added
+
+- Test seeking outside of range options ([#113](https://github.com/Level/abstract-level/issues/113)) ([`90ee9b5`](https://github.com/Level/abstract-level/commit/90ee9b5)) (Vincent Weevers)
+
 ## [3.0.0] - 2025-01-05
 
 _Would you mind voting in this [community poll](https://github.com/orgs/Level/discussions/143)? Thank you! If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
@@ -105,6 +111,8 @@ _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[3.0.1]: https://github.com/Level/abstract-level/releases/tag/v3.0.1
 
 [3.0.0]: https://github.com/Level/abstract-level/releases/tag/v3.0.0
 
