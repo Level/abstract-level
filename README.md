@@ -1517,6 +1517,29 @@ Snapshot behavior of `db._getMany()` must be the same as described for `db._get(
 
 The default `_getMany()` returns a promise for an array of values that is equal in length to `keys` and is filled with `undefined`. It must be overridden.
 
+### `db._has(key, options)`
+
+Check if the database has an entry with the given `key`. The `options` object will always have the following properties: `keyEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with a boolean.
+
+The default `_has()` throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error. It is an optional feature at the moment. If implemented then `_hasMany()` must also be implemented. Set `manifest.has` to `true` in order to enable tests:
+
+```js
+class ExampleLevel extends AbstractLevel {
+  constructor (/* ... */) {
+    const manifest = {
+      has: true,
+      // ...
+    }
+
+    super(manifest, options)
+  }
+}
+```
+
+### `db._hasMany(keys, options)`
+
+Check if the database has entries with the given keys. The `keys` argument is guaranteed to be an array. The `options` object will always have the following properties: `keyEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise with an array of booleans.
+
 ### `db._put(key, value, options)`
 
 Add a new entry or overwrite an existing entry. The `options` object will always have the following properties: `keyEncoding` and `valueEncoding`. Must return a promise. If an error occurs, reject the promise. Otherwise resolve the promise, without an argument.
