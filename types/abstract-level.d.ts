@@ -78,11 +78,13 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * Get a value from the database by {@link key}.
    */
   get (key: KDefault): Promise<VDefault | undefined>
+  get<K = KDefault, V = VDefault> (key: K, options: AbstractGetOptions<K, V>): Promise<V | undefined>
 
-  get<K = KDefault, V = VDefault> (
-    key: K,
-    options: AbstractGetOptions<K, V>
-  ): Promise<V | undefined>
+  /**
+   * Synchronously get a value from the database by {@link key}.
+   */
+  getSync (key: KDefault): VDefault | undefined
+  getSync<K = KDefault, V = VDefault> (key: K, options: AbstractGetOptions<K, V>): V | undefined
 
   /**
    * Get multiple values from the database by an array of {@link keys}.

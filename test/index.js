@@ -30,6 +30,10 @@ function suite (options) {
     require('./has-many-test').all(test, testCommon)
   }
 
+  if (testCommon.supports.getSync) {
+    require('./get-sync-test').all(test, testCommon)
+  }
+
   require('./batch-test').all(test, testCommon)
   require('./chained-batch-test').all(test, testCommon)
 
