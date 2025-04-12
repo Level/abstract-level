@@ -11,7 +11,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put('test', testBuffer(), { valueEncoding: 'buffer' })
+
     t.same(await db.get('test', { valueEncoding: 'buffer' }), testBuffer())
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync('test', { valueEncoding: 'buffer' }), testBuffer(), 'sync')
+    }
+
     return db.close()
   })
 
@@ -20,7 +26,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory({ valueEncoding: 'buffer' })
     await db.open()
     await db.put('test', testBuffer())
+
     t.same(await db.get('test'), testBuffer())
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync('test'), testBuffer(), 'sync')
+    }
+
     return db.close()
   })
 
@@ -29,7 +41,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put(testBuffer(), 'test', { keyEncoding: 'buffer' })
+
     t.same(await db.get(testBuffer(), { keyEncoding: 'buffer' }), 'test')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync(testBuffer(), { keyEncoding: 'buffer' }), 'test', 'sync')
+    }
+
     return db.close()
   })
 
@@ -38,7 +56,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put(Buffer.from('foo🐄'), 'test', { keyEncoding: 'utf8' })
+
     t.same(await db.get(Buffer.from('foo🐄'), { keyEncoding: 'utf8' }), 'test')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync(Buffer.from('foo🐄'), { keyEncoding: 'utf8' }), 'test', 'sync')
+    }
+
     return db.close()
   })
 
@@ -47,8 +71,15 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put('test', 'foo🐄', { valueEncoding: 'buffer' })
+
     t.same(await db.get('test', { valueEncoding: 'buffer' }), Buffer.from('foo🐄'))
     t.same(await db.get('test', { valueEncoding: 'utf8' }), 'foo🐄')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync('test', { valueEncoding: 'buffer' }), Buffer.from('foo🐄'), 'sync')
+      t.same(db.getSync('test', { valueEncoding: 'utf8' }), 'foo🐄', 'sync')
+    }
+
     return db.close()
   })
 
@@ -62,11 +93,19 @@ exports.all = function (test, testCommon) {
     const promise1 = db.put(a, a).then(async () => {
       const value = await db.get(Buffer.from(a), enc)
       t.same(value, Buffer.from(a), 'got buffer value')
+
+      if (testCommon.supports.getSync) {
+        t.same(db.getSync(Buffer.from(a), enc), Buffer.from(a), 'got buffer value (sync)')
+      }
     })
 
     const promise2 = db.put(Buffer.from(b), Buffer.from(b), enc).then(async () => {
       const value = await db.get(b)
       t.same(value, b, 'got string value')
+
+      if (testCommon.supports.getSync) {
+        t.same(db.getSync(b), b, 'got string value (sync)')
+      }
     })
 
     await Promise.all([promise1, promise2])
