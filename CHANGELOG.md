@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0] - 2025-04-12
+
+### Added
+
+- Add `getSync()` method ([#114](https://github.com/Level/abstract-level/issues/114)) ([`30f887d`](https://github.com/Level/abstract-level/commit/30f887d)) (Vincent Weevers)
+- Add docs for private `_has()` and `_hasMany()` ([#115](https://github.com/Level/abstract-level/issues/115)) ([`2af4d29`](https://github.com/Level/abstract-level/commit/2af4d29)) (Vincent Weevers)
+
 ## [3.0.1] - 2025-01-26
 
 ### Added
@@ -111,6 +118,8 @@ _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[3.1.0]: https://github.com/Level/abstract-level/releases/tag/v3.1.0
 
 [3.0.1]: https://github.com/Level/abstract-level/releases/tag/v3.0.1
 
