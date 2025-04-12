@@ -9,9 +9,20 @@ function makeTest (test, type, key, value, expectedValue) {
 
   test('put(), get(), del() with ' + type, async function (t) {
     await db.put(key, value)
+
     t.is((await db.get(key)).toString(), stringValue)
+
+    if (db.supports.getSync) {
+      t.is(db.getSync(key).toString(), stringValue)
+    }
+
     await db.del(key)
+
     t.is(await db.get(key), undefined, 'not found')
+
+    if (db.supports.getSync) {
+      t.is(db.getSync(key), undefined, 'not found')
+    }
   })
 }
 

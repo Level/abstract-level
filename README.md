@@ -158,6 +158,10 @@ Get a value from the database by `key`. The optional `options` object may contai
 
 Returns a promise for the value. If the `key` was not found then the value will be `undefined`.
 
+### `db.getSync(key[, options])`
+
+Synchronously get a value from the database by `key`. This blocks the event loop but can be significantly faster than `db.get()`. Options are the same. Returns the value, or `undefined` if not found.
+
 ### `db.getMany(keys[, options])`
 
 Get multiple values from the database by an array of `keys`. The optional `options` object may contain:
@@ -1508,6 +1512,12 @@ Get a value by `key`. The `options` object will always have the following proper
 If the database indicates support of snapshots via `db.supports.implicitSnapshots` then `db._get()` must read from a snapshot of the database. That snapshot (or similar mechanism) must be created synchronously when `db._get()` is called, before asynchronously reading the value. This means it should not see the data of write operations that are scheduled immediately after `db._get()`.
 
 The default `_get()` returns a promise for an `undefined` value. It must be overridden.
+
+### `db._getSync(key, options)`
+
+Synchronously get a value by `key`. Receives the same options as `db._get()`. Must return a value, or `undefined` if not found.
+
+The default `_getSync()` throws a [`LEVEL_NOT_SUPPORTED`](#level_not_supported) error. It should be overridden but support of `_getSync()` is currently opt-in. Set `manifest.getSync` to `true` in order to enable tests.
 
 ### `db._getMany(keys, options)`
 

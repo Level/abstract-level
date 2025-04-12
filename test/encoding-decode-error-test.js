@@ -12,8 +12,8 @@ exports.all = function (test, testCommon) {
   })
 
   // NOTE: adapted from encoding-down
-  test('decode error is wrapped by get() and getMany()', async function (t) {
-    t.plan(4)
+  test('decode error is wrapped by get() and variants', async function (t) {
+    t.plan(testCommon.supports.getSync ? 6 : 4)
 
     const key = testKey()
     const valueEncoding = {
@@ -37,11 +37,20 @@ exports.all = function (test, testCommon) {
       t.is(err.code, 'LEVEL_DECODE_ERROR')
       t.is(err.cause.message, 'decode error xyz')
     }
+
+    if (testCommon.supports.getSync) {
+      try {
+        db.getSync(key, { valueEncoding })
+      } catch (err) {
+        t.is(err.code, 'LEVEL_DECODE_ERROR')
+        t.is(err.cause.message, 'decode error xyz')
+      }
+    }
   })
 
   // NOTE: adapted from encoding-down
-  test('get() and getMany() yield decode error if stored value is invalid', async function (t) {
-    t.plan(4)
+  test('get() and variants yield decode error if stored value is invalid', async function (t) {
+    t.plan(testCommon.supports.getSync ? 6 : 4)
 
     const key = testKey()
     await db.put(key, 'this {} is [] not : json', { valueEncoding: 'utf8' })
@@ -58,6 +67,15 @@ exports.all = function (test, testCommon) {
     } catch (err) {
       t.is(err.code, 'LEVEL_DECODE_ERROR')
       t.is(err.cause.name, 'SyntaxError') // From JSON.parse()
+    }
+
+    if (testCommon.supports.getSync) {
+      try {
+        db.getSync(key, { valueEncoding: 'json' })
+      } catch (err) {
+        t.is(err.code, 'LEVEL_DECODE_ERROR')
+        t.is(err.cause.name, 'SyntaxError') // From JSON.parse()
+      }
     }
   })
 

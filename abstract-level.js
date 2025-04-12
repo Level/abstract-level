@@ -351,6 +351,73 @@ class AbstractLevel extends EventEmitter {
     return undefined
   }
 
+  getSync (key, options) {
+    if (this.status !== 'open') {
+      throw new ModuleError('Database is not open', {
+        code: 'LEVEL_DATABASE_NOT_OPEN'
+      })
+    }
+
+    this._assertValidKey(key)
+
+    // Fast-path for default options (known encoding, no cloning, no snapshot)
+    if (options == null) {
+      const encodedKey = this.#keyEncoding.encode(key)
+      const mappedKey = this.prefixKey(encodedKey, this.#keyEncoding.format, true)
+      const value = this._getSync(mappedKey, this.#defaultOptions.entryFormat)
+
+      try {
+        return value !== undefined ? this.#valueEncoding.decode(value) : undefined
+      } catch (err) {
+        throw new ModuleError('Could not decode value', {
+          code: 'LEVEL_DECODE_ERROR',
+          cause: err
+        })
+      }
+    }
+
+    const snapshot = options.snapshot
+    const keyEncoding = this.keyEncoding(options.keyEncoding)
+    const valueEncoding = this.valueEncoding(options.valueEncoding)
+    const keyFormat = keyEncoding.format
+    const valueFormat = valueEncoding.format
+
+    // Forward encoding options. Avoid cloning if possible.
+    if (options.keyEncoding !== keyFormat || options.valueEncoding !== valueFormat) {
+      options = { ...options, keyEncoding: keyFormat, valueEncoding: valueFormat }
+    }
+
+    const encodedKey = keyEncoding.encode(key)
+    const mappedKey = this.prefixKey(encodedKey, keyFormat, true)
+
+    let value
+
+    // Keep snapshot open during operation
+    snapshot?.ref()
+
+    try {
+      value = this._getSync(mappedKey, options)
+    } finally {
+      // Release snapshot
+      snapshot?.unref()
+    }
+
+    try {
+      return value !== undefined ? valueEncoding.decode(value) : undefined
+    } catch (err) {
+      throw new ModuleError('Could not decode value', {
+        code: 'LEVEL_DECODE_ERROR',
+        cause: err
+      })
+    }
+  }
+
+  _getSync (key, options) {
+    throw new ModuleError('Database does not support getSync()', {
+      code: 'LEVEL_NOT_SUPPORTED'
+    })
+  }
+
   async getMany (keys, options) {
     options = getOptions(options, this.#defaultOptions.entry)
 

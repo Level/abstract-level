@@ -92,7 +92,8 @@ class MinimalLevel extends AbstractLevel {
       encodings: { utf8: true },
       seek: true,
       has: true,
-      explicitSnapshots: true
+      explicitSnapshots: true,
+      getSync: true
     }, options)
 
     this[kEntries] = new Map()
@@ -106,6 +107,11 @@ class MinimalLevel extends AbstractLevel {
     const entries = (options.snapshot || this)[kEntries]
 
     // Is undefined if not found
+    return entries.get(key)
+  }
+
+  _getSync (key, options) {
+    const entries = (options.snapshot || this)[kEntries]
     return entries.get(key)
   }
 

@@ -11,7 +11,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put('test', testBuffer(), { valueEncoding: 'buffer' })
+
     t.same(await db.get('test', { valueEncoding: 'buffer' }), testBuffer())
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync('test', { valueEncoding: 'buffer' }), testBuffer(), 'sync')
+    }
+
     return db.close()
   })
 
@@ -20,7 +26,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory({ valueEncoding: 'buffer' })
     await db.open()
     await db.put('test', testBuffer())
+
     t.same(await db.get('test'), testBuffer())
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync('test'), testBuffer(), 'sync')
+    }
+
     return db.close()
   })
 
@@ -29,7 +41,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put(testBuffer(), 'test', { keyEncoding: 'buffer' })
+
     t.same(await db.get(testBuffer(), { keyEncoding: 'buffer' }), 'test')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync(testBuffer(), { keyEncoding: 'buffer' }), 'test', 'sync')
+    }
+
     return db.close()
   })
 
@@ -38,7 +56,13 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put(Buffer.from('foo🐄'), 'test', { keyEncoding: 'utf8' })
+
     t.same(await db.get(Buffer.from('foo🐄'), { keyEncoding: 'utf8' }), 'test')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync(Buffer.from('foo🐄'), { keyEncoding: 'utf8' }), 'test', 'sync')
+    }
+
     return db.close()
   })
 
@@ -47,8 +71,15 @@ exports.all = function (test, testCommon) {
     const db = testCommon.factory()
     await db.open()
     await db.put('test', 'foo🐄', { valueEncoding: 'buffer' })
+
     t.same(await db.get('test', { valueEncoding: 'buffer' }), Buffer.from('foo🐄'))
     t.same(await db.get('test', { valueEncoding: 'utf8' }), 'foo🐄')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync('test', { valueEncoding: 'buffer' }), Buffer.from('foo🐄'), 'sync')
+      t.same(db.getSync('test', { valueEncoding: 'utf8' }), 'foo🐄', 'sync')
+    }
+
     return db.close()
   })
 
@@ -62,11 +93,19 @@ exports.all = function (test, testCommon) {
     const promise1 = db.put(a, a).then(async () => {
       const value = await db.get(Buffer.from(a), enc)
       t.same(value, Buffer.from(a), 'got buffer value')
+
+      if (testCommon.supports.getSync) {
+        t.same(db.getSync(Buffer.from(a), enc), Buffer.from(a), 'got buffer value (sync)')
+      }
     })
 
     const promise2 = db.put(Buffer.from(b), Buffer.from(b), enc).then(async () => {
       const value = await db.get(b)
       t.same(value, b, 'got string value')
+
+      if (testCommon.supports.getSync) {
+        t.same(db.getSync(b), b, 'got string value (sync)')
+      }
     })
 
     await Promise.all([promise1, promise2])
@@ -218,11 +257,9 @@ exports.all = function (test, testCommon) {
       const db = testCommon.factory({ keyEncoding })
       await db.open()
 
+      // These are equal when compared as strings but not when compared as buffers
       const one = Buffer.from('80', 'hex')
       const two = Buffer.from('c0', 'hex')
-
-      t.ok(two.toString() === one.toString(), 'would be equal when not byte-aware')
-      t.ok(two.compare(one) > 0, 'but greater when byte-aware')
 
       await db.put(one, 'one')
       t.is(await db.get(one), 'one', 'value one ok')
@@ -232,6 +269,65 @@ exports.all = function (test, testCommon) {
 
       return db.close()
     })
+
+    if (testCommon.supports.getSync) {
+      test(`storage is byte-aware (${keyEncoding} encoding) (sync)`, async function (t) {
+        const db = testCommon.factory({ keyEncoding })
+        await db.open()
+
+        // These are equal when compared as strings but not when compared as buffers
+        const one = Buffer.from('80', 'hex')
+        const two = Buffer.from('c0', 'hex')
+
+        await db.put(one, 'one')
+        t.is(db.getSync(one), 'one', 'value one ok')
+
+        await db.put(two, 'two')
+        t.is(db.getSync(one), 'one', 'value one did not change')
+
+        return db.close()
+      })
+    }
+
+    test(`respects buffer offset and length (${keyEncoding} encoding)`, async function (t) {
+      const db = testCommon.factory({ keyEncoding })
+      await db.open()
+
+      const a = Buffer.from('000102', 'hex')
+      const b = a.subarray(1) // 0102
+      const c = a.subarray(0, 1) // 00
+
+      await db.put(a, 'a')
+      await db.put(b, 'b')
+      await db.put(c, 'c')
+
+      t.is(await db.get(a), 'a', 'value a ok')
+      t.is(await db.get(b), 'b', 'value b ok')
+      t.is(await db.get(c), 'c', 'value c ok')
+
+      return db.close()
+    })
+
+    if (testCommon.supports.getSync) {
+      test(`respects buffer offset (${keyEncoding} encoding) (sync)`, async function (t) {
+        const db = testCommon.factory({ keyEncoding })
+        await db.open()
+
+        const a = Buffer.from('000102', 'hex')
+        const b = a.subarray(1) // 0102
+        const c = a.subarray(0, 1) // 00
+
+        await db.put(a, 'a')
+        await db.put(b, 'b')
+        await db.put(c, 'c')
+
+        t.is(db.getSync(a), 'a', 'value a ok')
+        t.is(db.getSync(b), 'b', 'value b ok')
+        t.is(db.getSync(c), 'c', 'value c ok')
+
+        return db.close()
+      })
+    }
   }
 }
 
