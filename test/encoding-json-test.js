@@ -55,6 +55,12 @@ exports.all = function (test, testCommon) {
     await db.batch(operations)
     await Promise.all([...entries.map(testGet), testIterator()])
 
+    if (testCommon.supports.getSync) {
+      for (const entry of entries) {
+        t.same(db.getSync(entry.key), entry.value)
+      }
+    }
+
     return db.close()
 
     async function testGet (entry) {

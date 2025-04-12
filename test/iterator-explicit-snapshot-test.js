@@ -18,8 +18,6 @@ exports.get = function (test, testCommon) {
   const { testFresh, testClose } = testFactory(test, testCommon)
 
   testFresh('get() changed entry from snapshot', async function (t, db) {
-    t.plan(3)
-
     await db.put('abc', 'before')
     const snapshot = db.snapshot()
     await db.put('abc', 'after')
@@ -28,12 +26,16 @@ exports.get = function (test, testCommon) {
     t.is(await db.get('abc', { snapshot }), 'before')
     t.is(await db.get('other', { snapshot }), undefined)
 
+    if (testCommon.supports.getSync) {
+      t.is(db.getSync('abc'), 'after')
+      t.is(db.getSync('abc', { snapshot }), 'before')
+      t.is(db.getSync('other', { snapshot }), undefined)
+    }
+
     return snapshot.close()
   })
 
   testFresh('get() deleted entry from snapshot', async function (t, db) {
-    t.plan(3)
-
     await db.put('abc', 'before')
     const snapshot = db.snapshot()
     await db.del('abc')
@@ -42,17 +44,26 @@ exports.get = function (test, testCommon) {
     t.is(await db.get('abc', { snapshot }), 'before')
     t.is(await db.get('other', { snapshot }), undefined)
 
+    if (testCommon.supports.getSync) {
+      t.is(db.getSync('abc'), undefined)
+      t.is(db.getSync('abc', { snapshot }), 'before')
+      t.is(db.getSync('other', { snapshot }), undefined)
+    }
+
     return snapshot.close()
   })
 
   testFresh('get() non-existent entry from snapshot', async function (t, db) {
-    t.plan(2)
-
     const snapshot = db.snapshot()
     await db.put('abc', 'after')
 
     t.is(await db.get('abc'), 'after')
     t.is(await db.get('abc', { snapshot }), undefined)
+
+    if (testCommon.supports.getSync) {
+      t.is(db.getSync('abc'), 'after')
+      t.is(db.getSync('abc', { snapshot }), undefined)
+    }
 
     return snapshot.close()
   })
@@ -60,8 +71,6 @@ exports.get = function (test, testCommon) {
   testFresh('get() entries from multiple snapshots', async function (t, db) {
     const snapshots = []
     const iterations = 100
-
-    t.plan(iterations)
 
     for (let i = 0; i < iterations; i++) {
       await db.put('number', i.toString())
@@ -73,6 +82,10 @@ exports.get = function (test, testCommon) {
       const value = i.toString()
 
       t.is(await db.get('number', { snapshot }), value)
+
+      if (testCommon.supports.getSync) {
+        t.is(db.getSync('number', { snapshot }), value)
+      }
     }
 
     return Promise.all(snapshots.map(x => x.close()))
@@ -90,12 +103,22 @@ exports.get = function (test, testCommon) {
     // Closing one snapshot should not affect the other
     t.is(await db.get('abc', { snapshot: snapshot2 }), 'before')
 
+    if (testCommon.supports.getSync) {
+      t.is(db.getSync('abc', { snapshot: snapshot2 }), 'before')
+    }
+
     return snapshot2.close()
   })
 
   testClose('get()', async function (db, snapshot) {
     return db.get('xyz', { snapshot })
   })
+
+  if (testCommon.supports.getSync) {
+    testClose('getSync()', async function (db, snapshot) {
+      return db.getSync('xyz', { snapshot })
+    })
+  }
 }
 
 exports.getMany = function (test, testCommon) {

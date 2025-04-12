@@ -53,7 +53,6 @@ exports.tearDown = function (test, testCommon) {
   })
 }
 
-// TODO: test encodings, snapshots
 exports.all = function (test, testCommon) {
   exports.setUp(test, testCommon)
   exports.args(test, testCommon)

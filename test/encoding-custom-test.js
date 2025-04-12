@@ -81,6 +81,12 @@ exports.all = function (test, testCommon) {
       t.same(await db.get(entry.key), entry.value)
     }
 
+    if (testCommon.supports.getSync) {
+      for (const entry of entries) {
+        t.same(db.getSync(entry.key), entry.value)
+      }
+    }
+
     return db.close()
   }
 }

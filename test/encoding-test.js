@@ -59,6 +59,7 @@ exports.all = function (test, testCommon) {
       if (!deferred) await db.open()
       await db.put(1, 2)
       t.is(await db.get(1), '2')
+      testCommon.supports.getSync && t.is(db.getSync(1), '2')
       return db.close()
     })
   }
@@ -68,7 +69,12 @@ exports.all = function (test, testCommon) {
     const key = testKey()
     const data = { thisis: 'json' }
     await db.put(key, JSON.stringify(data), { valueEncoding: 'utf8' })
+
     t.same(await db.get(key, { valueEncoding: 'json' }), data, 'got parsed object')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync(key, { valueEncoding: 'json' }), data, 'got parsed object (sync)')
+    }
   })
 
   // NOTE: adapted from encoding-down
@@ -76,7 +82,12 @@ exports.all = function (test, testCommon) {
     const data = { thisis: 'json' }
     const key = testKey()
     await db.put(key, data, { valueEncoding: 'json' })
+
     t.same(await db.get(key, { valueEncoding: 'utf8' }), JSON.stringify(data), 'got unparsed JSON string')
+
+    if (testCommon.supports.getSync) {
+      t.same(db.getSync(key, { valueEncoding: 'utf8' }), JSON.stringify(data), 'got unparsed JSON string (sync)')
+    }
   })
 
   // NOTE: adapted from encoding-down
