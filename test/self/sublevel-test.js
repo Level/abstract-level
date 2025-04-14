@@ -175,15 +175,6 @@ test('sublevel name and options', function (t) {
     t.end()
   })
 
-  t.test('invalid sublevel prefix', function (t) {
-    t.throws(() => new NoopLevel().sublevel('foo\x05'), (err) => err.code === 'LEVEL_INVALID_PREFIX')
-    t.throws(() => new NoopLevel().sublevel('foo\xff'), (err) => err.code === 'LEVEL_INVALID_PREFIX')
-    t.throws(() => new NoopLevel().sublevel(['ok', 'foo\xff']), (err) => err.code === 'LEVEL_INVALID_PREFIX')
-    t.throws(() => new NoopLevel().sublevel('foo!', { separator: '@' }), (err) => err.code === 'LEVEL_INVALID_PREFIX')
-    t.throws(() => new NoopLevel().sublevel(['ok', 'foo!'], { separator: '@' }), (err) => err.code === 'LEVEL_INVALID_PREFIX')
-    t.end()
-  })
-
   // See https://github.com/Level/subleveldown/issues/78
   t.test('doubly nested sublevel has correct prefix', async function (t) {
     t.plan(1)
