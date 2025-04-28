@@ -23,7 +23,8 @@ jobs:
       - name: Codecov
         uses: codecov/codecov-action@v5
         with:
-          file: coverage/lcov.info
+          files: coverage/lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
   browsers:
     name: Browsers
     if: ${{ github.actor != 'dependabot[bot]' }}
