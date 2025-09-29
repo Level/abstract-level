@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AbstractLevel } from './abstract-level'
 import { AbstractSnapshot } from './abstract-snapshot'
 
@@ -38,5 +39,5 @@ export interface AbstractResource extends AsyncDisposable {
   /**
    * Close the resource. Identical in functionality to {@link close}.
    */
-  [Symbol.asyncDispose](): Promise<void>
+  [Symbol.asyncDispose] (): Promise<void>
 }

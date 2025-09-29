@@ -2,8 +2,7 @@ import * as Transcoder from 'level-transcoder'
 import { AbstractSublevel } from './abstract-sublevel'
 import { AbstractResource } from './interfaces'
 
-export class AbstractChainedBatch<TDatabase, KDefault, VDefault>
-  implements AbstractResource {
+export class AbstractChainedBatch<TDatabase, KDefault, VDefault> implements AbstractResource {
   constructor (db: TDatabase)
 
   /**
@@ -59,7 +58,7 @@ export class AbstractChainedBatch<TDatabase, KDefault, VDefault>
   /**
    * Close the batch.
    */
-  [Symbol.asyncDispose](): Promise<void>
+  [Symbol.asyncDispose] (): Promise<void>
 }
 
 /**
@@ -120,7 +119,6 @@ export interface AbstractChainedBatchDelOptions<TDatabase, K> {
 /**
  * Options for the {@link AbstractChainedBatch.write} method.
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
 export interface AbstractChainedBatchWriteOptions {
   // There are no abstract options but implementations may add theirs.
 }

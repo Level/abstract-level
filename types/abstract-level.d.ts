@@ -72,7 +72,7 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
   /**
    * Close the database.
    */
-  [Symbol.asyncDispose](): Promise<void>
+  [Symbol.asyncDispose] (): Promise<void>
 
   /**
    * Get a value from the database by {@link key}.
@@ -321,12 +321,12 @@ declare class AbstractLevel<TFormat, KDefault = string, VDefault = string>
    * resources like iterators and sublevels, and is publicly exposed for custom
    * resources.
    */
-  attachResource(resource: AbstractResource): void
+  attachResource (resource: AbstractResource): void
 
   /**
    * Stop tracking the given {@link resource}.
    */
-  detachResource(resource: AbstractResource): void
+  detachResource (resource: AbstractResource): void
 }
 
 export { AbstractLevel }
