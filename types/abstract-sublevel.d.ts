@@ -43,7 +43,11 @@ declare class AbstractSublevel<TDatabase, TFormat, KDefault, VDefault>
   /**
    * Root database. A read-only property.
    */
-  get db (): AbstractLevel<any, any, any>
+  get db(): TDatabase extends AbstractSublevel<any, any, any, any>
+    ? TDatabase["db"]
+      : TDatabase extends AbstractLevel<any, any, any>
+        ? TDatabase
+        : AbstractLevel<any, any, any>
 }
 
 /**
