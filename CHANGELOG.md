@@ -1,5 +1,11 @@
 # Changelog
 
+## [3.1.1] - 2025-09-29
+
+### Fixed
+
+- Make `AbstractSublevel#db` type more specific ([`cc290ed`](https://github.com/Level/abstract-level/commit/cc290ed)) (Shark that walks like a man)
+
 ## [3.1.0] - 2025-04-12
 
 ### Added
@@ -118,6 +124,8 @@ _If you are upgrading, please see [`UPGRADING.md`](UPGRADING.md)._
 ## [1.0.0] - 2022-01-30
 
 _:seedling: Initial release. If you are upgrading from `abstract-leveldown` please see [`UPGRADING.md`](UPGRADING.md)_
+
+[3.1.1]: https://github.com/Level/abstract-level/releases/tag/v3.1.1
 
 [3.1.0]: https://github.com/Level/abstract-level/releases/tag/v3.1.0
 
