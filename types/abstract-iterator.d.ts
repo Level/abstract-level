@@ -91,7 +91,7 @@ declare class CommonIterator<TDatabase, T> implements AbstractResource {
   /**
    * Close the iterator.
    */
-  [Symbol.asyncDispose](): Promise<void>
+  [Symbol.asyncDispose] (): Promise<void>
 }
 
 export class AbstractIterator<TDatabase, K, V> extends CommonIterator<TDatabase, [K, V]> {

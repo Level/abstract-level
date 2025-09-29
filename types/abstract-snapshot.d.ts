@@ -26,5 +26,5 @@ export class AbstractSnapshot implements AbstractResource {
   /**
    * Close the snapshot.
    */
-  [Symbol.asyncDispose](): Promise<void>
+  [Symbol.asyncDispose] (): Promise<void>
 }

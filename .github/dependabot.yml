@@ -5,8 +5,8 @@ updates:
     schedule:
       interval: monthly
     ignore:
-      - dependency-name: standard
-      - dependency-name: ts-standard
+      - dependency-name: neostandard
+      - dependency-name: eslint
       - dependency-name: "@types/node"
       - dependency-name: voxpelli/tsconfig
       - dependency-name: typescript
